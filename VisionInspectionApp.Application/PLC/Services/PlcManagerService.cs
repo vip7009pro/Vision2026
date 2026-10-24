@@ -471,7 +471,22 @@ public sealed class PlcManagerService : IPlcManagerService, IDisposable
         string trimmed = address.Trim();
         string upper = trimmed.ToUpperInvariant();
 
-        // 1. Bit prefixes - Luôn luôn là Bool vì PLC MC Protocol không thể đọc Float/Dword trên bit đơn
+        // 1. Word prefixes - Ưu tiên nhận diện trước để tránh MW bị nhầm thành M (Bit), SD bị nhầm thành S (Bit)
+        if (upper.StartsWith("MW") || upper.StartsWith("IW") || upper.StartsWith("QW") ||
+            upper.StartsWith("SW") || upper.StartsWith("ZR") || upper.StartsWith("TN") ||
+            upper.StartsWith("CN") || upper.StartsWith("SD") || upper.StartsWith("3X") ||
+            upper.StartsWith("4X") || upper.StartsWith("HOLDING") || upper.StartsWith("INPUT") ||
+            (upper.StartsWith("D") && !upper.StartsWith("DX") && !upper.StartsWith("DY")) ||
+            upper.StartsWith("W") || upper.StartsWith("R") || upper.StartsWith("Z"))
+        {
+            if (valueHint is PlcDataType pdtW) return pdtW;
+            if (valueHint is float || valueHint is double) return PlcDataType.Float;
+            if (valueHint is int || valueHint is uint) return PlcDataType.Int32;
+            if (valueHint is string) return PlcDataType.String;
+            return PlcDataType.Int16;
+        }
+
+        // 2. Bit prefixes - Luôn luôn là Bool vì PLC MC Protocol không thể đọc Float/Dword trên bit đơn
         if (upper.StartsWith("SM") || upper.StartsWith("TS") || upper.StartsWith("TC") ||
             upper.StartsWith("SS") || upper.StartsWith("SC") || upper.StartsWith("CS") ||
             upper.StartsWith("CC") || upper.StartsWith("DX") || upper.StartsWith("DY") ||
@@ -484,22 +499,12 @@ public sealed class PlcManagerService : IPlcManagerService, IDisposable
             return PlcDataType.Bool;
         }
 
-        // 2. Nếu có hint rõ ràng từ tham số (PlcDataType hoặc object type)
+        // 3. Nếu có hint rõ ràng từ tham số (PlcDataType hoặc object type)
         if (valueHint is PlcDataType pdt) return pdt;
         if (valueHint is bool) return PlcDataType.Bool;
         if (valueHint is short || valueHint is ushort || valueHint is int || valueHint is uint) return PlcDataType.Int16;
         if (valueHint is float || valueHint is double) return PlcDataType.Float;
         if (valueHint is string) return PlcDataType.String;
-
-        // 3. Mặc định cho Word register
-        if (upper.StartsWith("MW") || upper.StartsWith("IW") || upper.StartsWith("QW") ||
-            upper.StartsWith("SW") || upper.StartsWith("ZR") || upper.StartsWith("TN") ||
-            upper.StartsWith("CN") || upper.StartsWith("SD") || upper.StartsWith("3X") ||
-            upper.StartsWith("4X") || upper.StartsWith("HOLDING") || upper.StartsWith("INPUT") ||
-            upper.StartsWith("D") || upper.StartsWith("W") || upper.StartsWith("R") || upper.StartsWith("Z"))
-        {
-            return PlcDataType.Int16;
-        }
 
         return PlcDataType.Bool;
     }
@@ -549,7 +554,7 @@ public sealed class PlcManagerService : IPlcManagerService, IDisposable
             EnsureTagAddress(IndustrialConfig.Handshake.PlcId, IndustrialConfig.Handshake.PlcAckTagName, PlcDataType.Bool);
 
             // Heartbeat
-            if (IndustrialConfig.Heartbeat != null && IndustrialConfig.Heartbeat.IsEnabled)
+            if (IndustrialConfig.Heartbeat != null && (IndustrialConfig.Heartbeat.IsEnabled || !string.IsNullOrWhiteSpace(IndustrialConfig.Heartbeat.PlcHeartbeatTagName) || !string.IsNullOrWhiteSpace(IndustrialConfig.Heartbeat.VisionHeartbeatTagName)))
             {
                 EnsureTagAddress(IndustrialConfig.Heartbeat.PlcId, IndustrialConfig.Heartbeat.VisionHeartbeatTagName, PlcDataType.Bool);
                 EnsureTagAddress(IndustrialConfig.Heartbeat.PlcId, IndustrialConfig.Heartbeat.PlcHeartbeatTagName, PlcDataType.Bool);
@@ -557,7 +562,7 @@ public sealed class PlcManagerService : IPlcManagerService, IDisposable
             }
 
             // Motion
-            if (IndustrialConfig.Motion != null && IndustrialConfig.Motion.IsEnabled)
+            if (IndustrialConfig.Motion != null && (IndustrialConfig.Motion.IsEnabled || !string.IsNullOrWhiteSpace(IndustrialConfig.Motion.EncoderTagName) || !string.IsNullOrWhiteSpace(IndustrialConfig.Motion.SpeedTagName)))
             {
                 EnsureTagAddress(IndustrialConfig.Motion.PlcId, IndustrialConfig.Motion.EncoderTagName, PlcDataType.Int32);
                 EnsureTagAddress(IndustrialConfig.Motion.PlcId, IndustrialConfig.Motion.SpeedTagName, PlcDataType.Float);

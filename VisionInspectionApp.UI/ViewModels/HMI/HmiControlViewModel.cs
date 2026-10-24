@@ -58,7 +58,15 @@ public partial class HmiControlViewModel : ObservableObject
         }
     }
 
-    public string EffectiveReadAddress => !string.IsNullOrWhiteSpace(Model.ReadTagName) ? Model.ReadTagName : "";
+    public string EffectiveReadAddress
+    {
+        get
+        {
+            if (!string.IsNullOrWhiteSpace(Model.ReadTagName)) return Model.ReadTagName;
+            if (!Model.UseSeparateWriteAddress && !string.IsNullOrWhiteSpace(Model.WriteTagName)) return Model.WriteTagName;
+            return "";
+        }
+    }
     public string EffectiveWriteAddress => Model.UseSeparateWriteAddress && !string.IsNullOrWhiteSpace(Model.WriteTagName)
         ? Model.WriteTagName
         : EffectiveReadAddress;
@@ -269,7 +277,7 @@ public partial class HmiControlViewModel : ObservableObject
 
         if (tagMatch)
         {
-            System.Windows.Application.Current?.Dispatcher?.BeginInvoke(new Action(() =>
+            DispatchOnUiThread(() =>
             {
                 bool targetIsOn = false;
                 string targetDisplay = "";
@@ -340,7 +348,20 @@ public partial class HmiControlViewModel : ObservableObject
 
                 if (IsOn != targetIsOn) IsOn = targetIsOn;
                 if (CurrentDisplayValue != targetDisplay) CurrentDisplayValue = targetDisplay;
-            }), System.Windows.Threading.DispatcherPriority.Background);
+            });
+        }
+    }
+
+    private void DispatchOnUiThread(Action action)
+    {
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher != null && !dispatcher.CheckAccess())
+        {
+            dispatcher.BeginInvoke(action, System.Windows.Threading.DispatcherPriority.Background);
+        }
+        else
+        {
+            action();
         }
     }
 
@@ -384,6 +405,41 @@ public partial class HmiControlViewModel : ObservableObject
         {
             if (!string.IsNullOrWhiteSpace(EffectiveReadAddress)) EnsureDirectAddressRegistered(EffectiveReadAddress);
             if (!string.IsNullOrWhiteSpace(EffectiveWriteAddress)) EnsureDirectAddressRegistered(EffectiveWriteAddress);
+            RefreshCurrentValueFromPlc();
+        }
+    }
+
+    /// <summary>
+    /// Tự động nạp giá trị hiện tại của tag từ PLC Cache hoặc đọc trực tiếp từ PLC ngay khi mở/chạy HMI
+    /// </summary>
+    public void RefreshCurrentValueFromPlc()
+    {
+        string readAddr = EffectiveReadAddress;
+        if (string.IsNullOrWhiteSpace(readAddr) || _plcService == null) return;
+
+        EnsureDirectAddressRegistered(readAddr);
+
+        // 1. Kiểm tra ngay trong Cache của PLC Service (nếu PollingEngine đã quét hoặc đã có giá trị)
+        var cachedVal = _plcService.GetTagValue(EffectiveReadPlcId, readAddr);
+        if (cachedVal != null && cachedVal.CurrentValue != null)
+        {
+            OnPlcTagUpdated(EffectiveReadPlcId, readAddr, cachedVal.CurrentValue);
+        }
+        else
+        {
+            // 2. Nếu chưa có trong cache và driver đang online, nạp tức thì bất đồng bộ từ PLC
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    var val = await _plcService.ReadTagValueAsync(EffectiveReadPlcId, readAddr);
+                    if (val != null)
+                    {
+                        OnPlcTagUpdated(EffectiveReadPlcId, readAddr, val);
+                    }
+                }
+                catch { }
+            });
         }
     }
 

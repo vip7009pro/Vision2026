@@ -13,11 +13,22 @@ using VisionInspectionApp.UI.ViewModels.HMI;
 
 namespace VisionInspectionApp.UI.ViewModels;
 
-public class HmiFileItem
+public class HmiFileItem : IEquatable<HmiFileItem>
 {
     public string FilePath { get; set; } = string.Empty;
     public string DisplayName => Path.GetFileName(FilePath);
     public override string ToString() => DisplayName;
+
+    public bool Equals(HmiFileItem? other)
+    {
+        if (other is null) return false;
+        if (ReferenceEquals(this, other)) return true;
+        return string.Equals(FilePath, other.FilePath, StringComparison.OrdinalIgnoreCase);
+    }
+
+    public override bool Equals(object? obj) => Equals(obj as HmiFileItem);
+
+    public override int GetHashCode() => StringComparer.OrdinalIgnoreCase.GetHashCode(FilePath ?? string.Empty);
 }
 
 public sealed partial class ToolEditorViewModel
@@ -28,6 +39,9 @@ public sealed partial class ToolEditorViewModel
 
     [ObservableProperty]
     private bool _isHmiPanelVisible = false;
+
+    [ObservableProperty]
+    private bool _isHmiRunning = true;
 
     [ObservableProperty]
     private GridLength _previewImageRowHeight = new(1, GridUnitType.Star);
@@ -59,6 +73,18 @@ public sealed partial class ToolEditorViewModel
         ? new SolidColorBrush((Color)ColorConverter.ConvertFromString("#0288D1"))
         : new SolidColorBrush((Color)ColorConverter.ConvertFromString("#455A64"));
 
+    public string HmiLiveBadgeText => IsHmiRunning ? "LIVE (RUN)" : "ĐÃ DỪNG (STOP)";
+    public string HmiLiveBadgeBackground => IsHmiRunning ? "#1510B981" : "#15EF4444";
+    public string HmiLiveBadgeBorder => IsHmiRunning ? "#10B981" : "#EF4444";
+    public string HmiLiveBadgeForeground => IsHmiRunning ? "#10B981" : "#EF4444";
+    public string HmiLiveBadgeDot => IsHmiRunning ? "🟢 " : "⏹️ ";
+
+    public string HmiRunStopButtonText => IsHmiRunning ? "⏹️ Dừng HMI" : "▶️ Chạy HMI";
+    public string HmiRunStopButtonBackground => IsHmiRunning ? "#C62828" : "#10B981";
+    public string HmiRunStopButtonToolTip => IsHmiRunning
+        ? "Dừng vận hành HMI giám sát (ngắt polling thời gian thực & khóa tương tác an toàn)"
+        : "Kích hoạt HMI giám sát thời gian thực với PLC";
+
     public Brush HmiMonitorScreenBackgroundBrush
     {
         get
@@ -75,9 +101,6 @@ public sealed partial class ToolEditorViewModel
         }
     }
 
-    /// <summary>
-    /// Khởi tạo module HMI giám sát trên cột Preview của Tool Editor
-    /// </summary>
     /// <summary>
     /// Khởi tạo module HMI giám sát trên cột Preview của Tool Editor
     /// </summary>
@@ -98,20 +121,25 @@ public sealed partial class ToolEditorViewModel
             _handshakeStateMachine.OnResetQueueRequested += HandshakeStateMachine_OnResetQueueRequested;
         }
 
-        RefreshAvailableHmiFiles();
-
-        // Khôi phục đường dẫn tệp HMI đã lưu lần trước nhưng CHƯA nạp/chạy khi HMI đang Ẩn
         string savedHmiPath = _globalSettingsService.Settings.ToolEditorSelectedHmiPath;
+        RefreshAvailableHmiFiles(savedHmiPath);
+
+        // Khôi phục đường dẫn tệp HMI đã lưu lần trước hoặc file có sẵn trong danh mục
         if (!string.IsNullOrWhiteSpace(savedHmiPath) && File.Exists(savedHmiPath))
         {
             SelectedHmiFilePath = Path.GetFullPath(savedHmiPath);
             var existing = AvailableHmiFileItems.FirstOrDefault(x => string.Equals(x.FilePath, SelectedHmiFilePath, StringComparison.OrdinalIgnoreCase));
-            if (existing != null)
+            if (existing == null)
             {
-                _isSelectingHmiInternal = true;
-                SelectedHmiFileItem = existing;
-                _isSelectingHmiInternal = false;
+                existing = new HmiFileItem { FilePath = SelectedHmiFilePath };
+                AvailableHmiFileItems.Insert(0, existing);
             }
+            _isSelectingHmiInternal = true;
+            SelectedHmiFileItem = existing;
+            _isSelectingHmiInternal = false;
+
+            // Nạp ngay tệp của người dùng để triệt tiêu các control mẫu
+            _hmiMonitorViewModel.LoadFromFile(SelectedHmiFilePath);
         }
         else if (AvailableHmiFileItems.Count > 0)
         {
@@ -119,7 +147,13 @@ public sealed partial class ToolEditorViewModel
             _isSelectingHmiInternal = true;
             SelectedHmiFileItem = AvailableHmiFileItems[0];
             _isSelectingHmiInternal = false;
+
+            _hmiMonitorViewModel.LoadFromFile(SelectedHmiFilePath);
         }
+
+        // Khôi phục trạng thái Ẩn/Hiện đã lưu trong cài đặt
+        _isHmiPanelVisible = _globalSettingsService.Settings.ToolEditorIsHmiVisible;
+        _isHmiRunning = true;
 
         UpdateHmiLayoutVisuals();
     }
@@ -138,6 +172,14 @@ public sealed partial class ToolEditorViewModel
         UpdateHmiLayoutVisuals();
         OnPropertyChanged(nameof(HmiPanelToggleButtonText));
         OnPropertyChanged(nameof(HmiPanelToggleButtonBackground));
+
+        // Lưu trạng thái Ẩn/Hiện vào settings để nhớ cho phiên làm việc tiếp theo
+        if (_globalSettingsService != null)
+        {
+            var settings = _globalSettingsService.Settings;
+            settings.ToolEditorIsHmiVisible = value;
+            _globalSettingsService.UpdateSettings(settings);
+        }
     }
 
     partial void OnSelectedHmiFileItemChanged(HmiFileItem? value)
@@ -168,8 +210,17 @@ public sealed partial class ToolEditorViewModel
                     SelectHmiFile(AvailableHmiFileItems[0].FilePath);
                 }
 
-                _hmiMonitorViewModel.IsRunMode = true;
-                _plcManagerService?.AcquirePollingLock("HmiToolEditor");
+                if (IsHmiRunning)
+                {
+                    _hmiMonitorViewModel.IsRunMode = true;
+                    _plcManagerService?.AcquirePollingLock("HmiToolEditor");
+                    _hmiMonitorViewModel.RefreshAllControlsFromPlc();
+                }
+                else
+                {
+                    _hmiMonitorViewModel.StopRunMode();
+                    _plcManagerService?.ReleasePollingLock("HmiToolEditor");
+                }
             }
         }
         else
@@ -184,11 +235,19 @@ public sealed partial class ToolEditorViewModel
             }
             _plcManagerService?.ReleasePollingLock("HmiToolEditor");
         }
+
+        NotifyHmiRunStateChanged();
     }
 
-    public void RefreshAvailableHmiFiles()
+    public void RefreshAvailableHmiFiles(string? preselectFilePath = null)
     {
         var foundPaths = new System.Collections.Generic.HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        // 0. Tệp được yêu cầu nạp trước hoặc đã lưu trong cấu hình
+        if (!string.IsNullOrWhiteSpace(preselectFilePath) && File.Exists(preselectFilePath))
+        {
+            foundPaths.Add(Path.GetFullPath(preselectFilePath));
+        }
 
         // 1. Thư mục Thư viện HMI Global
         try
@@ -253,6 +312,66 @@ public sealed partial class ToolEditorViewModel
     }
 
     [RelayCommand]
+    private void StopHmiMonitor()
+    {
+        IsHmiRunning = false;
+        if (_hmiMonitorViewModel != null)
+        {
+            _hmiMonitorViewModel.StopRunMode();
+        }
+        _plcManagerService?.ReleasePollingLock("HmiToolEditor");
+        NotifyHmiRunStateChanged();
+        StatusBarText = "⏹️ [HMI Monitor] Đã dừng HMI giám sát (Khóa tương tác & ngắt polling).";
+    }
+
+    [RelayCommand]
+    private void StartHmiMonitor()
+    {
+        IsHmiRunning = true;
+        if (_hmiMonitorViewModel != null)
+        {
+            if (!string.IsNullOrWhiteSpace(SelectedHmiFilePath) && File.Exists(SelectedHmiFilePath))
+            {
+                if (_hmiMonitorViewModel.Controls.Count == 0 || !string.Equals(_hmiMonitorViewModel.CurrentFilePath, SelectedHmiFilePath, StringComparison.OrdinalIgnoreCase))
+                {
+                    _hmiMonitorViewModel.LoadFromFile(SelectedHmiFilePath);
+                }
+            }
+            _hmiMonitorViewModel.IsRunMode = true;
+            _plcManagerService?.AcquirePollingLock("HmiToolEditor");
+            _hmiMonitorViewModel.RefreshAllControlsFromPlc();
+        }
+        NotifyHmiRunStateChanged();
+        StatusBarText = $"▶️ [HMI Monitor] Đang chạy HMI giám sát: '{SelectedHmiFileName}'";
+    }
+
+    [RelayCommand]
+    private void ToggleHmiRunMonitor()
+    {
+        if (IsHmiRunning)
+        {
+            StopHmiMonitor();
+        }
+        else
+        {
+            StartHmiMonitor();
+        }
+    }
+
+    private void NotifyHmiRunStateChanged()
+    {
+        OnPropertyChanged(nameof(IsHmiRunning));
+        OnPropertyChanged(nameof(HmiLiveBadgeText));
+        OnPropertyChanged(nameof(HmiLiveBadgeBackground));
+        OnPropertyChanged(nameof(HmiLiveBadgeBorder));
+        OnPropertyChanged(nameof(HmiLiveBadgeForeground));
+        OnPropertyChanged(nameof(HmiLiveBadgeDot));
+        OnPropertyChanged(nameof(HmiRunStopButtonText));
+        OnPropertyChanged(nameof(HmiRunStopButtonBackground));
+        OnPropertyChanged(nameof(HmiRunStopButtonToolTip));
+    }
+
+    [RelayCommand]
     private void ToggleHmiPanelVisibility()
     {
         IsHmiPanelVisible = !IsHmiPanelVisible;
@@ -306,9 +425,11 @@ public sealed partial class ToolEditorViewModel
         if (IsHmiPanelVisible)
         {
             _hmiMonitorViewModel?.LoadFromFile(SelectedHmiFilePath);
-            if (_hmiMonitorViewModel != null)
+            if (_hmiMonitorViewModel != null && IsHmiRunning)
             {
                 _hmiMonitorViewModel.IsRunMode = true;
+                _plcManagerService?.AcquirePollingLock("HmiToolEditor");
+                _hmiMonitorViewModel.RefreshAllControlsFromPlc();
             }
         }
 
@@ -337,9 +458,11 @@ public sealed partial class ToolEditorViewModel
         }
 
         _hmiMonitorViewModel?.LoadFromFile(SelectedHmiFilePath);
-        if (_hmiMonitorViewModel != null)
+        if (_hmiMonitorViewModel != null && IsHmiPanelVisible && IsHmiRunning)
         {
             _hmiMonitorViewModel.IsRunMode = true;
+            _plcManagerService?.AcquirePollingLock("HmiToolEditor");
+            _hmiMonitorViewModel.RefreshAllControlsFromPlc();
         }
         OnPropertyChanged(nameof(SelectedHmiDisplayName));
         OnPropertyChanged(nameof(HmiMonitorScreenBackgroundBrush));

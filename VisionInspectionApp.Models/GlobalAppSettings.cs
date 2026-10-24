@@ -26,6 +26,9 @@ public sealed class GlobalAppSettings
     // Đường dẫn tệp thiết kế HMI (.hmi) được chọn để hiển thị tại hàng dưới cột Preview Tool Editor (nhớ khi mở lại app)
     public string ToolEditorSelectedHmiPath { get; set; } = string.Empty;
 
+    // Trạng thái hiển thị hàng HMI giám sát trên Tool Editor (nhớ khi mở lại app)
+    public bool ToolEditorIsHmiVisible { get; set; } = false;
+
     // OTA Update Settings (Local Server / GitHub Releases)
     public OtaSettings Ota { get; set; } = new();
 }

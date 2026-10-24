@@ -101,6 +101,7 @@ class Program
         if (args.Length > 0 && (args[0].Equals("hmi", StringComparison.OrdinalIgnoreCase) || args[0].Equals("hmi-test", StringComparison.OrdinalIgnoreCase)))
         {
             HmiDesignerPersistenceTests.RunAllTests();
+            HmiStateAndLifecycleTests.RunAllTests();
             return;
         }
 
@@ -175,6 +176,7 @@ class Program
         MvpShapeMatch2PreprocessTests.RunAllTests();
         ContourCompareTests.RunAllTests();
         HmiDesignerPersistenceTests.RunAllTests();
+        HmiStateAndLifecycleTests.RunAllTests();
         PlcSignalTypeTests.RunAllTestsAsync().GetAwaiter().GetResult();
         PlcHandshakePersistenceTests.RunAllTests();
     }

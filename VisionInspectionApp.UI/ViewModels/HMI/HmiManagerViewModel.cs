@@ -389,6 +389,66 @@ public partial class HmiManagerViewModel : ObservableObject
     partial void OnIsRunModeChanged(bool value)
     {
         OnPropertyChanged(nameof(WindowTitle));
+
+        if (_plcService != null)
+        {
+            if (value)
+            {
+                _plcService.AcquirePollingLock("HmiRunMode");
+            }
+            else
+            {
+                _plcService.ReleasePollingLock("HmiRunMode");
+            }
+        }
+
+        var controlsCopy = Controls.ToArray();
+        foreach (var ctrl in controlsCopy)
+        {
+            ctrl.IsRunMode = value;
+            if (value)
+            {
+                if (!string.IsNullOrWhiteSpace(ctrl.EffectiveReadAddress))
+                {
+                    ctrl.EnsureDirectAddressRegistered(ctrl.EffectiveReadAddress);
+                }
+                if (!string.IsNullOrWhiteSpace(ctrl.EffectiveWriteAddress))
+                {
+                    ctrl.EnsureDirectAddressRegistered(ctrl.EffectiveWriteAddress);
+                }
+                ctrl.RefreshCurrentValueFromPlc();
+            }
+        }
+
+        if (value)
+        {
+            StatusMessage = "▶ ĐANG VẬN HÀNH (RUN MODE) - Màn hình HMI đang tương tác thời gian thực với PLC.";
+            StatusBrush = Brushes.ForestGreen;
+
+            // Kích hoạt thêm một lượt làm tươi sau nhịp ngắn để cập nhật đầy đủ mọi tag
+            _ = Task.Run(async () =>
+            {
+                await Task.Delay(200);
+                DispatchOnUiThread(RefreshAllControlsFromPlc);
+            });
+        }
+        else
+        {
+            StatusMessage = "⏸ CHẾ ĐỘ THIẾT KẾ (PAUSE) - Tự do di chuyển, căn chỉnh & thay đổi thuộc tính phần tử.";
+            StatusBrush = Brushes.DodgerBlue;
+        }
+    }
+
+    /// <summary>
+    /// Làm tươi giá trị của toàn bộ các control trong HMI từ PLC Service
+    /// </summary>
+    public void RefreshAllControlsFromPlc()
+    {
+        var controlsCopy = Controls.ToArray();
+        foreach (var ctrl in controlsCopy)
+        {
+            ctrl.RefreshCurrentValueFromPlc();
+        }
     }
 
     partial void OnSelectedControlChanged(HmiControlViewModel? value)
@@ -480,67 +540,11 @@ public partial class HmiManagerViewModel : ObservableObject
     private void ToggleRunMode()
     {
         IsRunMode = !IsRunMode;
-
-        if (_plcService != null)
-        {
-            if (IsRunMode)
-            {
-                _plcService.AcquirePollingLock("HmiRunMode");
-
-                // Ensure all HMI control addresses are registered in PLC polling list
-                foreach (var ctrl in Controls)
-                {
-                    ctrl.IsRunMode = true;
-                    if (!string.IsNullOrWhiteSpace(ctrl.EffectiveReadAddress))
-                    {
-                        ctrl.EnsureDirectAddressRegistered(ctrl.EffectiveReadAddress);
-                    }
-                    if (!string.IsNullOrWhiteSpace(ctrl.EffectiveWriteAddress))
-                    {
-                        ctrl.EnsureDirectAddressRegistered(ctrl.EffectiveWriteAddress);
-                    }
-                }
-            }
-            else
-            {
-                _plcService.ReleasePollingLock("HmiRunMode");
-                foreach (var ctrl in Controls)
-                {
-                    ctrl.IsRunMode = false;
-                }
-            }
-        }
-        else
-        {
-            foreach (var ctrl in Controls)
-            {
-                ctrl.IsRunMode = IsRunMode;
-            }
-        }
-
-        if (IsRunMode)
-        {
-            StatusMessage = "▶ ĐANG VẬN HÀNH (RUN MODE) - Màn hình HMI đang tương tác thời gian thực với PLC.";
-            StatusBrush = Brushes.ForestGreen;
-        }
-        else
-        {
-            StatusMessage = "⏸ CHẾ ĐỘ THIẾT KẾ (PAUSE) - Tự do di chuyển, căn chỉnh & thay đổi thuộc tính phần tử.";
-            StatusBrush = Brushes.DodgerBlue;
-        }
     }
 
     public void StopRunMode()
     {
-        if (IsRunMode)
-        {
-            IsRunMode = false;
-        }
-        _plcService?.ReleasePollingLock("HmiRunMode");
-        foreach (var ctrl in Controls)
-        {
-            ctrl.IsRunMode = false;
-        }
+        IsRunMode = false;
     }
 
     [RelayCommand]
@@ -775,7 +779,21 @@ public partial class HmiManagerViewModel : ObservableObject
             Controls.Clear();
             foreach (var m in ScreenConfig.Controls)
             {
-                Controls.Add(new HmiControlViewModel(m, _plcService, ScreenConfig) { IsRunMode = IsRunMode });
+                var ctrlVm = new HmiControlViewModel(m, _plcService, ScreenConfig) { IsRunMode = IsRunMode };
+                Controls.Add(ctrlVm);
+                if (IsRunMode)
+                {
+                    ctrlVm.RefreshCurrentValueFromPlc();
+                }
+            }
+
+            if (IsRunMode)
+            {
+                _ = Task.Run(async () =>
+                {
+                    await Task.Delay(200);
+                    DispatchOnUiThread(RefreshAllControlsFromPlc);
+                });
             }
 
             SelectControl(Controls.FirstOrDefault());

@@ -5298,26 +5298,50 @@
                             <DockPanel LastChildFill="True">
                                 <!-- Right Buttons -->
                                 <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center">
+                                    <Button Command="{Binding ToggleHmiRunMonitorCommand}"
+                                            Content="{Binding HmiRunStopButtonText}"
+                                            Background="{Binding HmiRunStopButtonBackground}"
+                                            Foreground="White"
+                                            FontWeight="Bold"
+                                            FontSize="11"
+                                            Padding="8,3"
+                                            Margin="0,0,4,0"
+                                            BorderThickness="0"
+                                            ToolTip="{Binding HmiRunStopButtonToolTip}" />
                                     <Button Content="📂 Chọn .HMI" Command="{Binding BrowseHmiFileCommand}" Margin="0,0,4,0" Padding="8,3" FontSize="11" FontWeight="SemiBold" ToolTip="Chọn tệp thiết kế HMI (.hmi) khác từ máy tính" />
                                     <Button Content="🔄 Tải lại" Command="{Binding ReloadHmiCommand}" Margin="0,0,4,0" Padding="8,3" FontSize="11" ToolTip="Tải lại giao diện HMI từ đĩa" />
                                     <Button Content="🛠️ Thiết Kế" Command="{Binding OpenHmiManagerCommand}" Margin="0,0,4,0" Padding="8,3" FontSize="11" Background="#6A1B9A" Foreground="White" BorderThickness="0" ToolTip="Mở cửa sổ HMI Designer để chỉnh sửa giao diện &amp; gán địa chỉ PLC" />
                                     <Button Content="✕" Command="{Binding CloseHmiPanelCommand}" Padding="6,2" FontSize="11" FontWeight="Bold" Background="#C62828" Foreground="White" BorderThickness="0" ToolTip="Ẩn hàng HMI giám sát" />
                                 </StackPanel>
 
-                                <!-- Left Title & Quick File Selector -->
+                                <!-- Left Title & Quick File Selector & Run/Stop Controls -->
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                     <TextBlock Text="🖥️ HMI:" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center" Margin="0,0,6,0" />
                                     <ComboBox ItemsSource="{Binding AvailableHmiFileItems}"
                                               SelectedItem="{Binding SelectedHmiFileItem, Mode=TwoWay}"
+                                              SelectedValuePath="FilePath"
                                               DisplayMemberPath="DisplayName"
-                                              Width="200" MaxDropDownHeight="200" FontSize="11" VerticalAlignment="Center"
+                                              Width="200" MaxDropDownHeight="220" FontSize="11" VerticalAlignment="Center"
                                               ToolTip="Chọn nhanh các tệp HMI có sẵn trong hệ thống" />
-                                    <Border Margin="8,0,0,0" Background="#1510B981" BorderBrush="#10B981" BorderThickness="1" CornerRadius="4" Padding="6,2" VerticalAlignment="Center">
+                                    <!-- Badge trạng thái động RUN / STOP -->
+                                    <Border Margin="8,0,0,0" Background="{Binding HmiLiveBadgeBackground}" BorderBrush="{Binding HmiLiveBadgeBorder}" BorderThickness="1" CornerRadius="4" Padding="6,2" VerticalAlignment="Center">
                                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                            <TextBlock Text="🟢 " FontSize="9" VerticalAlignment="Center" />
-                                            <TextBlock Text="LIVE (RUN)" FontWeight="Bold" FontSize="10" Foreground="#10B981" VerticalAlignment="Center" />
+                                            <TextBlock Text="{Binding HmiLiveBadgeDot}" FontSize="9" VerticalAlignment="Center" />
+                                            <TextBlock Text="{Binding HmiLiveBadgeText}" FontWeight="Bold" FontSize="10" Foreground="{Binding HmiLiveBadgeForeground}" VerticalAlignment="Center" />
                                         </StackPanel>
                                     </Border>
+                                    <!-- Nút Chạy/Dừng HMI ngay cạnh Badge LIVE -->
+                                    <Button Command="{Binding ToggleHmiRunMonitorCommand}"
+                                            Content="{Binding HmiRunStopButtonText}"
+                                            Background="{Binding HmiRunStopButtonBackground}"
+                                            Foreground="White"
+                                            FontWeight="Bold"
+                                            FontSize="11"
+                                            Padding="8,2"
+                                            Margin="6,0,0,0"
+                                            BorderThickness="0"
+                                            Cursor="Hand"
+                                            ToolTip="{Binding HmiRunStopButtonToolTip}" />
                                 </StackPanel>
                             </DockPanel>
                         </Border>
