@@ -7,14 +7,44 @@ Hỗ trợ Camera GigE/USB3/USB/RTSP, nạp ảnh tệp/thư mục, bản vẽ k
 ## 2. Trạng thái mã nguồn gần nhất
 - **Phiên bản hiện tại**: .NET 8 WPF, x64/x86 Multi-targeting, C# 12.
 - **Biên dịch**: 0 Errors toàn solution (`VisionInspectionApp.slnx`) cả Debug lẫn Release.
-- **Kiểm thử tự động**: PASSED 100% (5/5 test HMI State & Lifecycle, 4/4 test HMI Designer Persistence & DINT 32-bit, 4/4 test PLC Conflict & HMI Isolation, 7/7 test PLC Handshake, 5/5 test Reset Queue & HMI, 5/5 test PLC Signal Types, 11/11 test SurfaceCompare & Caliper, 8/8 test ContourCompare, 12/12 test Tool Calib Factor, 15/15 test OQC Scanner Live View, 8/8 test MvpShapeMatch2).
+- **Kiểm thử tự động**: PASSED 100% (7/7 test ToolEditor Column Resize & Full-Width, 5/5 test HMI State & Lifecycle, 4/4 test HMI Designer Persistence & DINT 32-bit, 4/4 test PLC Conflict & HMI Isolation, 7/7 test PLC Handshake, 5/5 test Reset Queue & HMI, 5/5 test PLC Signal Types, 11/11 test SurfaceCompare & Caliper, 8/8 test ContourCompare, 12/12 test Tool Calib Factor, 15/15 test OQC Scanner Live View, 8/8 test MvpShapeMatch2).
 - **Cấu hình chuẩn xưởng CMS_VINA**: 
   - Database: `CMS_VINA` (192.168.1.2:6789)
   - OQC Server API: `https://192.168.1.192/vision_upload.php`
   - OTA Update Server: `http://192.168.1.192/update/version.json` & `http://192.168.1.192/ota_server.php`
   - PLC Handshake: `PLC_2` (Mitsubishi FX5U: Ready `M101`, Busy `M102`, Done `M103`, Pass `M104` RisingEdge 20ms, NG `M105` RisingEdge 20ms, PlcAck `""` Non-blocking, Queue In `M200`).
 
-## 3. Hoàn thành Task 418: Tự Động Nạp Trạng Thái Hiện Tại Của Tag HMI Khi Load/Run, Khắc Phục Lỗi Mất Tên File/Không Tương Tác Được & Bổ Sung Nút Stop HMI
+## 3. Hoàn thành Task 419: Tự Động Co Giãn Full Width 4 Cột Trên Tab Tool Editor Khi Ẩn/Hiện Cột
+1. **Bối cảnh & 4 Nguyên nhân gốc rễ**:
+   - *Nguyên nhân 1 (Pixel Width thay vì Star)*: Cột 0 (Toolbox) định nghĩa `new GridLength(340)` fixed pixel. Khi Cột 2 (Canvas) hoặc Cột 6 (Debug) bị ẩn, Toolbox vẫn giữ nguyên 340px, không tự co giãn chia sẻ không gian trống.
+   - *Nguyên nhân 2 (Preview Column không có dynamic binding)*: Cột 4 (Preview) bị hardcode `Width="4.5*"` trong XAML mà không có binding thích ứng và không có cơ chế tái phân bổ tỷ lệ Star khi số lượng cột thay đổi.
+   - *Nguyên nhân 3 (GridSplitter ghi đè Local Value và cắt đứt Binding)*: Khi người dùng kéo `GridSplitter`, WPF Grid gán Local Value dạng Pixel trực tiếp vào `ColumnDefinition.WidthProperty`, cắt đứt OneWay binding. Khi bấm nút ToggleButton ẩn cột, ViewModel cập nhật Width=0 nhưng giao diện không nhận được, khiến cột bị ẩn thành khoảng trống rỗng có kích thước pixel cũ, còn các cột còn lại bị ghim cứng không co giãn được.
+   - *Nguyên nhân 4 (Splitter Cột 5 thiếu Visibility binding)*: `SplitterDebug` trước đây thiếu binding Visibility nên vẫn chiếm diện tích khi Debug ẩn.
+2. **Các điểm sửa đổi cốt lõi**:
+   - `ToolEditorViewModel.cs`:
+     - Chuyển `ToolboxColumnWidth` sang Star (`new GridLength(2.0, GridUnitType.Star)`) khi hiện, `0` khi ẩn; `ToolboxColumnMinWidth` = 220 khi hiện, 0 khi ẩn.
+     - Chuẩn hóa `CanvasColumnWidth` (`3.5*`), `PreviewColumnWidth` (`4.5*`), `DebugColumnWidth` (`3.2*`) và các SplitterWidth, ColumnMinWidth tương ứng.
+   - `ToolEditorView.xaml`:
+     - Đặt tên cho Grid (`EditorMainGrid`) và 7 `ColumnDefinition` (`ColToolbox`, `ColToolboxSplitter`, `ColCanvas`, `ColCanvasSplitter`, `ColPreview`, `ColDebugSplitter`, `ColDebug`).
+     - Đăng ký `DragCompleted="MainSplitter_DragCompleted"` cho cả 3 Splitter (`SplitterToolbox`, `SplitterCanvas`, `SplitterDebug`).
+     - Bổ sung `Visibility="{Binding IsDebugColumnVisible, Converter={StaticResource BoolToVis}}"` cho `SplitterDebug`.
+     - Bổ sung nút ToggleButton `◧` (Ẩn/Hiện Toolbox) vào thanh công cụ Cột Preview (Cột 3) để người dùng có trọn bộ 3 nút `[◧ Toolbox, ▦ Canvas, ▤ Debug]` ngay tại trung tâm, điều khiển được cả khi Cột Canvas đã bị ẩn.
+   - `ToolEditorView.xaml.cs`:
+     - Quản lý lưu giữ tỷ lệ `_savedToolboxStar`, `_savedCanvasStar`, `_savedPreviewStar`, `_savedDebugStar`.
+     - Khi người dùng kéo Splitter nhả chuột (`DragCompleted`), tự động đọc `ActualWidth` của các cột đang hiển thị và chuẩn hóa lại thành `Star`, loại bỏ hoàn toàn các giá trị Pixel cục bộ do GridSplitter gán vào DependencyProperty Width.
+     - Lắng nghe `PropertyChanged` của ViewModel: khi cột thay đổi trạng thái Hiện/Ẩn, gọi `ApplyColumnLayout` để các cột còn hiển thị luôn là Star và lấp đầy 100% chiều rộng Grid (Full Width).
+3. **Kiểm thử tự động**:
+   - Tạo bộ test `ToolEditorColumnResizeTests.cs` (7/7 test PASSED 100%):
+     1. Khởi tạo 4 cột đều là `GridUnitType.Star`.
+     2. Ẩn cột Canvas (Cột 2): Width=0, MinWidth=0, các cột khác giữ Star.
+     3. Ẩn cột Debug (Cột 4): Width=0, MinWidth=0, các cột khác giữ Star.
+     4. Ẩn cột Toolbox (Cột 1): Width=0, MinWidth=0, các cột khác giữ Star.
+     5. Ẩn cả 3 cột (Toolbox, Canvas, Debug): Preview chiếm trọn 100% full width.
+     6. Sự kiện PropertyChanged bắn ra đầy đủ cho tất cả thuộc tính layout liên quan.
+     7. Phục hồi hoàn hảo tỷ lệ Star và MinWidth khi bật lại các cột.
+   - Toàn bộ solution biên dịch 0 Errors, toàn bộ test suite hồi quy PASSED 100%.
+
+## 4. Hoàn thành Task 418: Tự Động Nạp Trạng Thái Hiện Tại Của Tag HMI Khi Load/Run, Khắc Phục Lỗi Mất Tên File/Không Tương Tác Được & Bổ Sung Nút Stop HMI
 1. **Bối cảnh & 3 Nguyên nhân gốc rễ**:
    - *Nguyên nhân 1 (Không tự load trạng thái ban đầu của tag)*:
      - `HmiControlViewModel` chỉ thụ động chờ sự kiện `OnPlcTagUpdated` khi `PlcPollingEngine` bắn `OnTagChanged`.

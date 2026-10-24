@@ -38,15 +38,19 @@ namespace VisionInspectionApp.UI.ViewModels
         [ObservableProperty]
         private bool _isDebugColumnVisible = true;
 
-        public GridLength ToolboxColumnWidth => IsToolboxColumnVisible ? new GridLength(340) : new GridLength(0);
+        public GridLength ToolboxColumnWidth => IsToolboxColumnVisible ? new GridLength(2.0, GridUnitType.Star) : new GridLength(0);
         public GridLength ToolboxSplitterWidth => IsToolboxColumnVisible ? new GridLength(4) : new GridLength(0);
-        public double ToolboxColumnMinWidth => IsToolboxColumnVisible ? 260 : 0;
+        public double ToolboxColumnMinWidth => IsToolboxColumnVisible ? 220 : 0;
+
         public GridLength CanvasColumnWidth => IsCanvasColumnVisible ? new GridLength(3.5, GridUnitType.Star) : new GridLength(0);
         public GridLength CanvasSplitterWidth => IsCanvasColumnVisible ? new GridLength(4) : new GridLength(0);
-        public double CanvasColumnMinWidth => IsCanvasColumnVisible ? 240 : 0;
-        public GridLength DebugColumnWidth => IsDebugColumnVisible ? new GridLength(3.5, GridUnitType.Star) : new GridLength(0);
+        public double CanvasColumnMinWidth => IsCanvasColumnVisible ? 200 : 0;
+
+        public GridLength PreviewColumnWidth => new GridLength(4.5, GridUnitType.Star);
+
+        public GridLength DebugColumnWidth => IsDebugColumnVisible ? new GridLength(3.2, GridUnitType.Star) : new GridLength(0);
         public GridLength DebugSplitterWidth => IsDebugColumnVisible ? new GridLength(4) : new GridLength(0);
-        public double DebugColumnMinWidth => IsDebugColumnVisible ? 280 : 0;
+        public double DebugColumnMinWidth => IsDebugColumnVisible ? 220 : 0;
 
         partial void OnIsToolboxColumnVisibleChanged(bool value)
         {

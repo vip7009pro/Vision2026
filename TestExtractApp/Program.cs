@@ -6,6 +6,12 @@ class Program
 {
     static void Main(string[] args)
     {
+        if (args.Length > 0 && (args[0].Equals("column", StringComparison.OrdinalIgnoreCase) || args[0].Equals("column-resize", StringComparison.OrdinalIgnoreCase) || args[0].Equals("editor-column", StringComparison.OrdinalIgnoreCase)))
+        {
+            ToolEditorColumnResizeTests.RunAllTests();
+            return;
+        }
+
         if (args.Length > 0 && (args[0].Equals("reset-queue", StringComparison.OrdinalIgnoreCase) || args[0].Equals("hmi-queue", StringComparison.OrdinalIgnoreCase)))
         {
             PlcResetQueueAndHmiTests.RunAllTests();
@@ -179,5 +185,6 @@ class Program
         HmiStateAndLifecycleTests.RunAllTests();
         PlcSignalTypeTests.RunAllTestsAsync().GetAwaiter().GetResult();
         PlcHandshakePersistenceTests.RunAllTests();
+        ToolEditorColumnResizeTests.RunAllTests();
     }
 }

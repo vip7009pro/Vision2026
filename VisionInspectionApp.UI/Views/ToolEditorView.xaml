@@ -624,15 +624,15 @@
         </DockPanel>
 
 
-        <Grid Grid.Row="2" Margin="0,4,0,0">
+        <Grid x:Name="EditorMainGrid" Grid.Row="2" Margin="0,4,0,0">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="{Binding ToolboxColumnWidth}" MinWidth="{Binding ToolboxColumnMinWidth}" />
-                <ColumnDefinition Width="{Binding ToolboxSplitterWidth}" />
-                <ColumnDefinition Width="{Binding CanvasColumnWidth}" MinWidth="{Binding CanvasColumnMinWidth}" />
-                <ColumnDefinition Width="{Binding CanvasSplitterWidth}" />
-                <ColumnDefinition Width="4.5*" MinWidth="300" />
-                <ColumnDefinition Width="{Binding DebugSplitterWidth}" />
-                <ColumnDefinition Width="{Binding DebugColumnWidth}" MinWidth="{Binding DebugColumnMinWidth}" />
+                <ColumnDefinition x:Name="ColToolbox" Width="{Binding ToolboxColumnWidth}" MinWidth="{Binding ToolboxColumnMinWidth}" />
+                <ColumnDefinition x:Name="ColToolboxSplitter" Width="{Binding ToolboxSplitterWidth}" />
+                <ColumnDefinition x:Name="ColCanvas" Width="{Binding CanvasColumnWidth}" MinWidth="{Binding CanvasColumnMinWidth}" />
+                <ColumnDefinition x:Name="ColCanvasSplitter" Width="{Binding CanvasSplitterWidth}" />
+                <ColumnDefinition x:Name="ColPreview" Width="{Binding PreviewColumnWidth}" MinWidth="250" />
+                <ColumnDefinition x:Name="ColDebugSplitter" Width="{Binding DebugSplitterWidth}" />
+                <ColumnDefinition x:Name="ColDebug" Width="{Binding DebugColumnWidth}" MinWidth="{Binding DebugColumnMinWidth}" />
             </Grid.ColumnDefinitions>
 
             <Border Grid.Column="0" BorderBrush="{DynamicResource DarkBorderBrush}" BorderThickness="1" Padding="2" Margin="0,0,1,0"
@@ -4993,8 +4993,9 @@
                 </Grid>
             </Border>
 
-            <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="{DynamicResource DarkBorderBrush}"
-                          Visibility="{Binding IsToolboxColumnVisible, Converter={StaticResource BoolToVis}}" />
+            <GridSplitter x:Name="SplitterToolbox" Grid.Column="1" Width="5" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="{DynamicResource DarkBorderBrush}"
+                          Visibility="{Binding IsToolboxColumnVisible, Converter={StaticResource BoolToVis}}"
+                          DragCompleted="MainSplitter_DragCompleted" />
 
             <Border Grid.Column="2" BorderBrush="{DynamicResource DarkBorderBrush}" BorderThickness="1" Padding="8" Margin="0,0,8,0"
                     Visibility="{Binding IsCanvasColumnVisible, Converter={StaticResource BoolToVis}}">
@@ -5181,8 +5182,9 @@
                 </Grid>
             </Border>
 
-            <GridSplitter Grid.Column="3" Width="4" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="{DynamicResource DarkBorderBrush}"
-                          Visibility="{Binding IsCanvasColumnVisible, Converter={StaticResource BoolToVis}}" />
+            <GridSplitter x:Name="SplitterCanvas" Grid.Column="3" Width="4" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="{DynamicResource DarkBorderBrush}"
+                          Visibility="{Binding IsCanvasColumnVisible, Converter={StaticResource BoolToVis}}"
+                          DragCompleted="MainSplitter_DragCompleted" />
 
             <!-- Column 4: Split Preview & HMI Container (2 Hàng: Hàng trên Preview, Hàng dưới HMI) -->
             <Grid Grid.Column="4">
@@ -5229,8 +5231,9 @@
                             </StackPanel>
 
                             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                                <ToggleButton Content="▦" IsChecked="{Binding IsCanvasColumnVisible, Mode=TwoWay}" Margin="0,0,6,0" Padding="0" Width="26" Height="24" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}" ToolTip="Ẩn hoặc hiện cột Canvas" VerticalAlignment="Center" />
-                                <ToggleButton Content="▤" IsChecked="{Binding IsDebugColumnVisible, Mode=TwoWay}" Margin="0,0,10,0" Padding="0" Width="26" Height="24" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}" ToolTip="Ẩn hoặc hiện cột Debug" VerticalAlignment="Center" />
+                                <ToggleButton Content="◧" IsChecked="{Binding IsToolboxColumnVisible, Mode=TwoWay}" Margin="0,0,6,0" Padding="0" Width="26" Height="24" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}" ToolTip="Ẩn hoặc hiện cột Toolbox (Cột 1)" VerticalAlignment="Center" />
+                                <ToggleButton Content="▦" IsChecked="{Binding IsCanvasColumnVisible, Mode=TwoWay}" Margin="0,0,6,0" Padding="0" Width="26" Height="24" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}" ToolTip="Ẩn hoặc hiện cột Canvas (Cột 2)" VerticalAlignment="Center" />
+                                <ToggleButton Content="▤" IsChecked="{Binding IsDebugColumnVisible, Mode=TwoWay}" Margin="0,0,10,0" Padding="0" Width="26" Height="24" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}" ToolTip="Ẩn hoặc hiện cột Debug (Cột 4)" VerticalAlignment="Center" />
                                 <CheckBox Content="Render Canvas" IsChecked="{Binding EnableCanvasRendering, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,10,0" FontWeight="SemiBold" VerticalAlignment="Center" ToolTip="Bật/Tắt hoàn toàn việc chuyển đổi và vẽ ảnh + overlay lên Canvas (tối đa hóa hiệu năng cho ảnh 20MP)" />
                                 <CheckBox Content="Show Results" IsChecked="{Binding ShowResultOverlay, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,10,0" VerticalAlignment="Center" />
                                 <CheckBox Content="Show ROI" IsChecked="{Binding ShowRoisInSelectedPreview, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,10,0" VerticalAlignment="Center" />
@@ -5387,7 +5390,9 @@
             </Grid>
 
             <!-- Column 5: GridSplitter -->
-            <GridSplitter Grid.Column="5" Width="4" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="{DynamicResource DarkBorderBrush}" />
+            <GridSplitter x:Name="SplitterDebug" Grid.Column="5" Width="4" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="{DynamicResource DarkBorderBrush}"
+                          Visibility="{Binding IsDebugColumnVisible, Converter={StaticResource BoolToVis}}"
+                          DragCompleted="MainSplitter_DragCompleted" />
 
             <!-- Column 6: Integrated Live Inspection Dashboard & Details -->
             <Border Grid.Column="6" BorderBrush="{DynamicResource DarkBorderBrush}" BorderThickness="1" Padding="6"

@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -56,7 +57,17 @@ public partial class ToolEditorView : UserControl
         EditorCanvas.PreviewMouseLeftButtonUp += EditorCanvas_PreviewMouseLeftButtonUp;
 
         DataContextChanged += ToolEditorView_DataContextChanged;
-        Loaded += (s, e) => Dispatcher.BeginInvoke(DispatcherPriority.ContextIdle, AutoFitAndCenterGraph);
+        Loaded += (s, e) =>
+        {
+            Dispatcher.BeginInvoke(DispatcherPriority.ContextIdle, AutoFitAndCenterGraph);
+            Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () =>
+            {
+                if (DataContext is ToolEditorViewModel vm)
+                {
+                    ApplyColumnLayout(vm);
+                }
+            });
+        };
     }
 
     private void ToolEditorView_PreviewKeyDown(object sender, KeyEventArgs e)
@@ -201,13 +212,120 @@ public partial class ToolEditorView : UserControl
         if (_subscribedVm != null)
         {
             _subscribedVm.RequestAutoFitGraph -= OnRequestAutoFitGraph;
+            _subscribedVm.PropertyChanged -= OnViewModelPropertyChanged;
         }
 
         if (e.NewValue is ToolEditorViewModel vm)
         {
             _subscribedVm = vm;
             _subscribedVm.RequestAutoFitGraph += OnRequestAutoFitGraph;
+            _subscribedVm.PropertyChanged += OnViewModelPropertyChanged;
             Dispatcher.BeginInvoke(DispatcherPriority.ContextIdle, AutoFitAndCenterGraph);
+            Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () => ApplyColumnLayout(vm));
+        }
+    }
+
+    private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(ToolEditorViewModel.IsToolboxColumnVisible)
+            or nameof(ToolEditorViewModel.IsCanvasColumnVisible)
+            or nameof(ToolEditorViewModel.IsDebugColumnVisible))
+        {
+            if (DataContext is ToolEditorViewModel vm)
+            {
+                ApplyColumnLayout(vm);
+            }
+        }
+    }
+
+    // ==================== TỰ ĐỘNG CO GIÃN CÁC CỘT (FULL WIDTH RESIZE) ====================
+    private double _savedToolboxStar = 340.0;
+    private double _savedCanvasStar = 450.0;
+    private double _savedPreviewStar = 650.0;
+    private double _savedDebugStar = 450.0;
+
+    private void MainSplitter_DragCompleted(object sender, DragCompletedEventArgs e)
+    {
+        NormalizeColumnWidthsToStar();
+    }
+
+    private void NormalizeColumnWidthsToStar()
+    {
+        if (DataContext is not ToolEditorViewModel vm) return;
+
+        // Lưu kích thước thực tế sau khi người dùng kéo splitter
+        if (vm.IsToolboxColumnVisible && ColToolbox.ActualWidth > 30)
+            _savedToolboxStar = ColToolbox.ActualWidth;
+
+        if (vm.IsCanvasColumnVisible && ColCanvas.ActualWidth > 30)
+            _savedCanvasStar = ColCanvas.ActualWidth;
+
+        if (ColPreview.ActualWidth > 30)
+            _savedPreviewStar = ColPreview.ActualWidth;
+
+        if (vm.IsDebugColumnVisible && ColDebug.ActualWidth > 30)
+            _savedDebugStar = ColDebug.ActualWidth;
+
+        // Ép lại các cột đang hiển thị thành Star tương ứng với kích thước vừa kéo
+        // loại bỏ hoàn toàn các giá trị Pixel cục bộ do GridSplitter gán vào DependencyProperty Width
+        ApplyColumnLayout(vm);
+    }
+
+    private void ApplyColumnLayout(ToolEditorViewModel vm)
+    {
+        // 1. Cột Toolbox (Cột 0 & Splitter Cột 1)
+        if (vm.IsToolboxColumnVisible)
+        {
+            ColToolbox.MinWidth = 220;
+            ColToolbox.Width = new GridLength(Math.Max(100, _savedToolboxStar), GridUnitType.Star);
+            ColToolboxSplitter.Width = new GridLength(4);
+            if (SplitterToolbox != null) SplitterToolbox.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            if (ColToolbox.ActualWidth > 30) _savedToolboxStar = ColToolbox.ActualWidth;
+            ColToolbox.MinWidth = 0;
+            ColToolbox.Width = new GridLength(0);
+            ColToolboxSplitter.Width = new GridLength(0);
+            if (SplitterToolbox != null) SplitterToolbox.Visibility = Visibility.Collapsed;
+        }
+
+        // 2. Cột Canvas (Cột 2 & Splitter Cột 3)
+        if (vm.IsCanvasColumnVisible)
+        {
+            ColCanvas.MinWidth = 200;
+            ColCanvas.Width = new GridLength(Math.Max(100, _savedCanvasStar), GridUnitType.Star);
+            ColCanvasSplitter.Width = new GridLength(4);
+            if (SplitterCanvas != null) SplitterCanvas.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            if (ColCanvas.ActualWidth > 30) _savedCanvasStar = ColCanvas.ActualWidth;
+            ColCanvas.MinWidth = 0;
+            ColCanvas.Width = new GridLength(0);
+            ColCanvasSplitter.Width = new GridLength(0);
+            if (SplitterCanvas != null) SplitterCanvas.Visibility = Visibility.Collapsed;
+        }
+
+        // 3. Cột Preview (Cột 4 - Luôn hiển thị)
+        ColPreview.MinWidth = 250;
+        ColPreview.Width = new GridLength(Math.Max(100, _savedPreviewStar), GridUnitType.Star);
+
+        // 4. Cột Debug (Cột 6 & Splitter Cột 5)
+        if (vm.IsDebugColumnVisible)
+        {
+            ColDebug.MinWidth = 220;
+            ColDebug.Width = new GridLength(Math.Max(100, _savedDebugStar), GridUnitType.Star);
+            ColDebugSplitter.Width = new GridLength(4);
+            if (SplitterDebug != null) SplitterDebug.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            if (ColDebug.ActualWidth > 30) _savedDebugStar = ColDebug.ActualWidth;
+            ColDebug.MinWidth = 0;
+            ColDebug.Width = new GridLength(0);
+            ColDebugSplitter.Width = new GridLength(0);
+            if (SplitterDebug != null) SplitterDebug.Visibility = Visibility.Collapsed;
         }
     }
 
