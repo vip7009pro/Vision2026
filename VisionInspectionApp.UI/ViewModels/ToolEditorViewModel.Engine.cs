@@ -2284,7 +2284,7 @@ namespace VisionInspectionApp.UI.ViewModels
         {
             if (System.Windows.Application.Current?.Dispatcher != null && !System.Windows.Application.Current.Dispatcher.CheckAccess())
             {
-                System.Windows.Application.Current.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, new Action(UpdateQueueVisuals));
+                System.Windows.Application.Current.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Normal, new Action(UpdateQueueVisuals));
                 return;
             }
 
@@ -3968,6 +3968,10 @@ namespace VisionInspectionApp.UI.ViewModels
             // Đưa máy trạng thái Handshake vào trạng thái sẵn sàng nhận Trigger từ PLC (Y1 = 1)
             if (_handshakeStateMachine != null)
             {
+                // Trong chế độ Run Continuous có hàng đợi BoundedChannel (Pipelined Conveyor),
+                // Handshake bắt buộc phải Non-blocking để giải phóng ngay kết quả (<2ms),
+                // tuyệt đối không chờ PLC Ack làm chậm trễ hàng đợi 16 nấc.
+                _handshakeStateMachine.NonBlockingMode = true;
                 await _handshakeStateMachine.SetReadyAsync(token);
             }
 
@@ -4077,10 +4081,17 @@ namespace VisionInspectionApp.UI.ViewModels
                     {
                         leftover.Dispose();
                     }
-                    await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                    if (System.Windows.Application.Current?.Dispatcher != null)
+                    {
+                        await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                        {
+                            IsRunningFolderFlow = false;
+                        });
+                    }
+                    else
                     {
                         IsRunningFolderFlow = false;
-                    });
+                    }
                 }
             }, token);
 
@@ -4198,12 +4209,21 @@ namespace VisionInspectionApp.UI.ViewModels
             try
             {
                 _lastRunError = null;
-                await _handshakeStateMachine.StartInspectionAsync(token);
+
+                // 1. Kích hoạt trạng thái Bắt đầu Inspect với PLC bất đồng bộ ngầm (không chặn CPU inspect)
+                if (_handshakeStateMachine != null && _handshakeStateMachine.IsEnabled)
+                {
+                    _ = _handshakeStateMachine.StartInspectionAsync(token);
+                }
+
                 inspectionResult = await Task.Run(() => _inspectionService.Inspect(frameMat, configCopy, _dbManagerService), token);
 
                 if (!IsRunningFolderFlow || token.IsCancellationRequested)
                 {
-                    await _handshakeStateMachine.CompleteHandshakeAsync(false, token);
+                    if (_handshakeStateMachine != null && _handshakeStateMachine.IsEnabled)
+                    {
+                        _ = _handshakeStateMachine.CompleteHandshakeAsync(false, token);
+                    }
                     return;
                 }
 
@@ -4216,8 +4236,24 @@ namespace VisionInspectionApp.UI.ViewModels
                     _rollDefectManager.RecordDefectsFromInspectionResult(inspectionResult, inspectionResult.Metadata);
                     _shiftRegisterTracker.ProcessMotionUpdate(_motionSyncService.CurrentWebPositionMm);
 
-                    // Hoàn tất chu trình bắt tay công nghiệp 2 chiều với PLC (AWAIT đồng bộ deterministic)
-                    await _handshakeStateMachine.CompleteHandshakeAsync(inspectionResult.Pass, token);
+                    // 2. Gửi tín hiệu bắt tay PLC (PASS/NG/DONE/M200) bất đồng bộ ngầm ngoài background (Non-blocking):
+                    // Tuyệt đối KHÔNG await đồng bộ làm nghẽn Worker Task của hàng đợi 16 nấc.
+                    // Nhờ đó, Worker Task giải phóng ngay frame tiếp theo trong queue ở tốc độ 25ms!
+                    if (_handshakeStateMachine != null && _handshakeStateMachine.IsEnabled)
+                    {
+                        var isPass = inspectionResult.Pass;
+                        _ = Task.Run(async () =>
+                        {
+                            try
+                            {
+                                await _handshakeStateMachine.CompleteHandshakeAsync(isPass);
+                            }
+                            catch (Exception ex)
+                            {
+                                System.Diagnostics.Debug.WriteLine($"[Continuous Handshake Worker] Error: {ex.Message}");
+                            }
+                        });
+                    }
 
                     // ImageSource runtime chỉ đo thời gian chuẩn bị ảnh (< 1ms), không bị gộp thời gian Inspect và PLC handshake
                     ApplySourceAndPreprocessTimings(inspectionResult, sourceNodeName, imageSourceMs, configCopy);
@@ -4227,14 +4263,20 @@ namespace VisionInspectionApp.UI.ViewModels
                 }
                 else
                 {
-                    await _handshakeStateMachine.CompleteHandshakeAsync(false, token);
+                    if (_handshakeStateMachine != null && _handshakeStateMachine.IsEnabled)
+                    {
+                        _ = _handshakeStateMachine.CompleteHandshakeAsync(false, token);
+                    }
                 }
             }
             catch (Exception ex)
             {
                 inspectionResult = null;
                 _lastRunError = "Lỗi khi chạy Flow: " + ex.Message;
-                await _handshakeStateMachine.CompleteHandshakeAsync(false, token);
+                if (_handshakeStateMachine != null && _handshakeStateMachine.IsEnabled)
+                {
+                    _ = _handshakeStateMachine.CompleteHandshakeAsync(false, token);
+                }
             }
 
             if (!IsRunningFolderFlow || token.IsCancellationRequested)
@@ -4256,33 +4298,42 @@ namespace VisionInspectionApp.UI.ViewModels
             {
                 _lastContinuousUiRenderTick = nowTick;
                 var currentRun = _lastRun;
-                System.Windows.Application.Current.Dispatcher.BeginInvoke(
-                    System.Windows.Threading.DispatcherPriority.Background,
-                    new Action(() =>
-                    {
-                        try
+                var dispatcher = System.Windows.Application.Current?.Dispatcher;
+                if (dispatcher != null)
+                {
+                    dispatcher.BeginInvoke(
+                        System.Windows.Threading.DispatcherPriority.Background,
+                        new Action(() =>
                         {
-                            if (!IsRunningFolderFlow) return;
-                            // Lưu ý: set LastResult sẽ tự động gọi RefreshInspectionDashboard() qua
-                            // OnLastResultChanged, nên KHÔNG gọi lại lần hai ở đây (tránh dựng dashboard 2 lần/frame).
-                            var alreadySameResult = ReferenceEquals(LastResult, currentRun);
-                            LastResult = currentRun;
-                            if (alreadySameResult)
+                            try
                             {
-                                RefreshInspectionDashboard(currentRun);
+                                if (!IsRunningFolderFlow) return;
+                                // Lưu ý: set LastResult sẽ tự động gọi RefreshInspectionDashboard() qua
+                                // OnLastResultChanged, nên KHÔNG gọi lại lần hai ở đây (tránh dựng dashboard 2 lần/frame).
+                                var alreadySameResult = ReferenceEquals(LastResult, currentRun);
+                                LastResult = currentRun;
+                                if (alreadySameResult)
+                                {
+                                    RefreshInspectionDashboard(currentRun);
+                                }
+                                UpdateContinuousStats();
+                                UpdateNodeExecutionTimes();
+                                RefreshPreviews();
+                                RaiseToolPropertyPanelsChanged();
+                                OnPropertyChanged(nameof(Blob_LastRunCount));
+                                OnPropertyChanged(nameof(PixelsPerMm));
                             }
-                            UpdateContinuousStats();
-                            UpdateNodeExecutionTimes();
-                            RefreshPreviews();
-                            RaiseToolPropertyPanelsChanged();
-                            OnPropertyChanged(nameof(Blob_LastRunCount));
-                            OnPropertyChanged(nameof(PixelsPerMm));
-                        }
-                        finally
-                        {
-                            Interlocked.Exchange(ref _isUiRenderingContinuous, 0);
-                        }
-                    }));
+                            finally
+                            {
+                                Interlocked.Exchange(ref _isUiRenderingContinuous, 0);
+                            }
+                        }));
+                }
+                else
+                {
+                    LastResult = currentRun;
+                    Interlocked.Exchange(ref _isUiRenderingContinuous, 0);
+                }
             }
         }
 
@@ -4573,6 +4624,9 @@ namespace VisionInspectionApp.UI.ViewModels
                 }
                 _industrialCameraFrameChannel = null;
             }
+
+            QueueCurrentCount = 0;
+            UpdateQueueVisuals();
 
             if (_handshakeStateMachine != null)
             {

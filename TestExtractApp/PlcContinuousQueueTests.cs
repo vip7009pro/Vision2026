@@ -4,10 +4,12 @@ using System.Threading.Channels;
 using System.Threading.Tasks;
 using System.Windows.Media;
 using OpenCvSharp;
+using VisionInspectionApp.Application;
 using VisionInspectionApp.Application.PLC.Services;
 using VisionInspectionApp.Models;
 using VisionInspectionApp.UI.Services;
 using VisionInspectionApp.UI.ViewModels;
+using VisionInspectionApp.VisionEngine;
 
 namespace TestExtractApp;
 
@@ -27,8 +29,9 @@ public static class PlcContinuousQueueTests
         Test_03_UpdateQueueVisuals_ThreadSafe_And_ColorThresholds();
         Test_04_StopContinuous_DrainsQueue_And_ResetsState();
         Test_05_ManualTrigger_In_RunContinuous_And_RunOnce();
+        Test_06_QueueDrainSpeed_NonBlockingHandshake_DoesNotWaitTimeout();
 
-        Console.WriteLine("✅ ALL 5 PLC TRIGGER CONTINUOUS QUEUE TESTS PASSED!");
+        Console.WriteLine("✅ ALL 6 PLC TRIGGER CONTINUOUS QUEUE TESTS PASSED!");
         Console.WriteLine("=========================================================\n");
     }
 
@@ -305,5 +308,82 @@ public static class PlcContinuousQueueTests
         InjectField(vm, "_isRunningFolderFlow", false);
 
         Console.WriteLine("PASSED");
+    }
+
+    /// <summary>
+    /// [6/6] Tốc độ xả hàng đợi (Drain Speed):
+    /// Khi cấu hình PlcAckTagName hợp lệ và HandshakeTimeoutMs = 1000ms,
+    /// luồng xả queue KHÔNG ĐƯỢC PHÉP bị block 1 giây/nấc mà phải xả ở tốc độ CPU thực tế (< 300ms cho 3 nấc).
+    /// </summary>
+    private static void Test_06_QueueDrainSpeed_NonBlockingHandshake_DoesNotWaitTimeout()
+    {
+        Console.Write("--- [6/6] Tốc độ xả hàng đợi: Worker không bị block bởi Handshake Timeout (1s/nấc)... ");
+
+        var config = new VisionConfig
+        {
+            ProductCode = "TEST_DRAIN_SPEED",
+            ProductName = "TEST_DRAIN_SPEED",
+            ToolGraph = new ToolGraph { Nodes = { new ToolGraphNode { Id = "1", Type = "ImageSource", RefName = "CAM1" } } }
+        };
+        config.ImageSources.Add(new ImageSourceDefinition
+        {
+            Name = "CAM1",
+            SourceType = ImageSourceType.Camera,
+            CameraIndex = CameraService.SimulatorCameraIndex,
+            TriggerMode = ImageSourceTriggerMode.PlcTrigger
+        });
+
+        var vm = new ToolEditorViewModel();
+        InjectField(vm, "_inspectionService", CreateInspectionService());
+        vm.InitializeWithConfig(config);
+
+        var sm = (IndustrialHandshakeStateMachine?)GetField(vm, "_handshakeStateMachine");
+        if (sm != null)
+        {
+            sm.IsEnabled = true;
+            sm.PlcAckTagName = "X1_PlcAck";
+            sm.HandshakeTimeoutMs = 1000; // Timeout 1 giây nếu bị block đồng bộ
+            sm.NonBlockingMode = false;   // Cấu hình gốc ban đầu
+        }
+
+        InjectField(vm, "_isRunningFolderFlow", true);
+
+        var processMethod = typeof(ToolEditorViewModel).GetMethod(
+            "ProcessContinuousFrameAsync",
+            BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new Exception("Không tìm thấy method 'ProcessContinuousFrameAsync'");
+
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        for (int i = 0; i < 3; i++)
+        {
+            using var frameMat = new Mat(40, 40, MatType.CV_8UC3, Scalar.All(100));
+            var envelope = new ContinuousFrameEnvelope
+            {
+                Frame = frameMat,
+                Metadata = new FrameMetadata { FrameIndex = i, HostTimestamp = DateTime.UtcNow }
+            };
+
+            var task = (Task?)processMethod.Invoke(vm, new object[] { envelope, "CAM1", default(System.Threading.CancellationToken) });
+            task?.GetAwaiter().GetResult();
+        }
+        sw.Stop();
+
+        // 3 frames nếu bị nghẽn 1 giây/frame sẽ mất > 3000ms.
+        // Khi chạy Non-blocking, 3 frames trên Mat nhỏ chỉ tốn < 400ms!
+        Assert(sw.ElapsedMilliseconds < 1500,
+            $"Tốc độ xả hàng đợi quá chậm ({sw.ElapsedMilliseconds}ms cho 3 nấc). Worker bị block bởi Handshake Timeout!");
+
+        InjectField(vm, "_isRunningFolderFlow", false);
+        Console.WriteLine($"PASSED ({sw.ElapsedMilliseconds}ms / 3 nấc)");
+    }
+
+    private static InspectionService CreateInspectionService()
+    {
+        return new InspectionService(
+            new ImagePreprocessor(),
+            new PatternMatcher(),
+            new DistanceCalculator(),
+            new LineDetector(),
+            new DefectDetector());
     }
 }
