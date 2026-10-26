@@ -298,6 +298,10 @@ namespace VisionInspectionApp.UI.ViewModels
             NewGraphCommand = new RelayCommand(NewGraph);
             CloseJobCommand = new RelayCommand(CloseJob);
             ToggleToolOrientationCommand = new RelayCommand(ToggleToolOrientation);
+            RunFlowCommand = new RelayCommand(OnRunFlowClicked);
+            RunOnceCommand = new RelayCommand(OnRunOnceClicked);
+            RunContinuousCommand = new RelayCommand(OnRunContinuousClicked);
+            ManualTriggerCommand = new RelayCommand(OnManualTriggerClicked);
         }
 
         public ToolEditorViewModel(IConfigService configService, ConfigStoreOptions storeOptions, SharedImageContext sharedImage, ImagePreprocessor preprocessor, LineDetector lineDetector, IInspectionService inspectionService, CameraService cameraService, IJobService jobService, UndoRedoManager undoManager, Application.PLC.Services.IPlcManagerService plcManagerService, Application.DB.Services.IDbManagerService dbManagerService, IRecentJobsService? recentJobsService = null, LightingControllerService? lightingControllerService = null, IServiceProvider? serviceProvider = null)
@@ -468,6 +472,7 @@ namespace VisionInspectionApp.UI.ViewModels
             RunFlowCommand = new RelayCommand(OnRunFlowClicked);
             RunOnceCommand = new RelayCommand(OnRunOnceClicked);
             RunContinuousCommand = new RelayCommand(OnRunContinuousClicked);
+            ManualTriggerCommand = new RelayCommand(OnManualTriggerClicked);
             RoiSelectedCommand = new RelayCommand<object?>(OnRoiSelected);
             RoiEditedCommand = new RelayCommand<RoiSelection?>(OnRoiEdited);
             RoiDeletedCommand = new RelayCommand<string?>(OnRoiDeleted);

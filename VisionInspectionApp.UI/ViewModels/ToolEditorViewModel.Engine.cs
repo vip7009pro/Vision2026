@@ -2282,6 +2282,12 @@ namespace VisionInspectionApp.UI.ViewModels
 
         public void UpdateQueueVisuals()
         {
+            if (System.Windows.Application.Current?.Dispatcher != null && !System.Windows.Application.Current.Dispatcher.CheckAccess())
+            {
+                System.Windows.Application.Current.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, new Action(UpdateQueueVisuals));
+                return;
+            }
+
             int count = Math.Clamp(_queueCurrentCount, 0, QueueCapacity);
             QueueStatusText = $"{count}/{QueueCapacity}";
             IsQueueActive = count > 0 || IsRunningContinuous;
@@ -2845,6 +2851,7 @@ namespace VisionInspectionApp.UI.ViewModels
         public ICommand RunFlowCommand { get; internal set; }
         public ICommand RunOnceCommand { get; internal set; }
         public ICommand RunContinuousCommand { get; internal set; }
+        public ICommand ManualTriggerCommand { get; internal set; }
         public ICommand RoiSelectedCommand { get; internal set; }
         public ICommand RoiEditedCommand { get; internal set; }
         public ICommand RoiDeletedCommand { get; internal set; }
@@ -3412,7 +3419,7 @@ namespace VisionInspectionApp.UI.ViewModels
 
                     if (value)
                     {
-                        _plcManagerService.AcquirePollingLock("RunContinuousMode");
+                        _plcManagerService?.AcquirePollingLock("RunContinuousMode");
                         ProcessedImageCount = 0;
                         _continuousStopwatch.Restart();
                         _continuousStatsTimer?.Start();
@@ -3420,7 +3427,7 @@ namespace VisionInspectionApp.UI.ViewModels
                     }
                     else
                     {
-                        _plcManagerService.ReleasePollingLock("RunContinuousMode");
+                        _plcManagerService?.ReleasePollingLock("RunContinuousMode");
                         _continuousStopwatch.Reset();
                         _continuousStatsTimer?.Stop();
                         ProcessedImageCount = 0;
@@ -3605,6 +3612,11 @@ namespace VisionInspectionApp.UI.ViewModels
                         StartFolderFlow(imgSourceDef, files);
                         return;
                     }
+                    else if (imgSourceDef.SourceType == ImageSourceType.Camera)
+                    {
+                        _ = StartContinuousCameraFlow(imgSourceDef);
+                        return;
+                    }
                     else if (imgSourceDef.TriggerMode == ImageSourceTriggerMode.PlcTrigger)
                     {
                         IsRunningFolderFlow = true;
@@ -3618,11 +3630,6 @@ namespace VisionInspectionApp.UI.ViewModels
                         StatusBarText = $"Đang chạy liên tục chế độ PLC Trigger ({imgSourceDef.PlcTriggerPlcId}.{imgSourceDef.PlcTriggerTagName})...";
                         return;
                     }
-                    else if (imgSourceDef.SourceType == ImageSourceType.Camera)
-                    {
-                        _ = StartContinuousCameraFlow(imgSourceDef);
-                        return;
-                    }
                     else if (imgSourceDef.SourceType == ImageSourceType.File || imgSourceDef.SourceType == ImageSourceType.Url || imgSourceDef.SourceType == ImageSourceType.Pdf)
                     {
                         StartFileContinuousFlow(imgSourceDef);
@@ -3632,6 +3639,49 @@ namespace VisionInspectionApp.UI.ViewModels
             }
 
             RunFlow();
+        }
+
+        /// <summary>
+        /// Kích phát xung Trigger thủ công (Giả lập Trigger) phục vụ kiểm thử hàng đợi Queue (16 nấc).
+        /// Khi đang Run Continuous: Bắn Software Trigger hoặc chụp ảnh đưa thẳng vào BoundedChannel 16 nấc.
+        /// Khi chưa Run Continuous: Tự động chạy 1 lần Flow (RunOnce) để người dùng kiểm thử.
+        /// </summary>
+        public void OnManualTriggerClicked()
+        {
+            var channel = _industrialCameraFrameChannel;
+            if (IsRunningFolderFlow && channel != null)
+            {
+                var imageSourceNode = Nodes.FirstOrDefault(n => string.Equals(n.Type, "ImageSource", StringComparison.OrdinalIgnoreCase));
+                var imgSourceDef = _config?.ImageSources.FirstOrDefault(x => string.Equals(x.Name, imageSourceNode?.RefName, StringComparison.OrdinalIgnoreCase));
+
+                System.Diagnostics.Debug.WriteLine("[ManualTrigger] Kích phát Trigger thủ công vào hàng đợi 16 nấc BoundedChannel!");
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        bool triggered = _cameraService != null && await _cameraService.ExecuteSoftwareTriggerAsync();
+                        if (!triggered && _cameraService != null)
+                        {
+                            var camIdx = imgSourceDef?.CameraIndex ?? 0;
+                            var rtsp = string.IsNullOrWhiteSpace(imgSourceDef?.RtspUrl) ? null : imgSourceDef.RtspUrl;
+                            var snapMat = await _cameraService.CaptureSnapshotAsync(camIdx, rtsp);
+                            if (snapMat != null && !snapMat.Empty())
+                            {
+                                _continuousFrameHandler?.Invoke(this, snapMat);
+                                snapMat.Dispose();
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[ManualTrigger] Lỗi kích phát chụp ảnh: {ex.Message}");
+                    }
+                });
+                return;
+            }
+
+            // Nếu chưa chạy Continuous: chạy 1 lượt Flow bình thường
+            OnRunOnceClicked();
         }
 
         private string GetEffectiveProductName()
@@ -3830,7 +3880,11 @@ namespace VisionInspectionApp.UI.ViewModels
             bool isIndustrial = IsIndustrialCameraSource(sourceDef);
             bool isSimulator = CameraService.IsSimulator(sourceDef.CameraIndex, sourceDef.RtspUrl);
 
-            if (isIndustrial)
+            if (sourceDef.TriggerMode == ImageSourceTriggerMode.PlcTrigger)
+            {
+                StatusBarText = $"Đang chạy liên tục: Chờ PLC Trigger ({sourceDef.PlcTriggerPlcId}.{sourceDef.PlcTriggerTagName})...";
+            }
+            else if (isIndustrial)
             {
                 if (sourceDef.TriggerMode == ImageSourceTriggerMode.LineTrigger)
                 {
@@ -3867,7 +3921,7 @@ namespace VisionInspectionApp.UI.ViewModels
             }
 
             // 1. Khởi động Camera stream/grabbing nếu chưa chạy (MỞ + GRAB TRƯỚC)
-            if (!_cameraService.IsRunning)
+            if (_cameraService != null && !_cameraService.IsRunning)
             {
                 var allDevices = CameraDriverFactory.ScanAllDevices();
                 CameraDeviceInfo? targetDevice = null;
@@ -3888,28 +3942,34 @@ namespace VisionInspectionApp.UI.ViewModels
             }
 
             // Đảm bảo camera đang grabbing (bắt buộc cho SoftTrigger continuous)
-            if (_cameraService.ActiveDriver != null && !_cameraService.ActiveDriver.IsGrabbing)
+            if (_cameraService?.ActiveDriver != null && !_cameraService.ActiveDriver.IsGrabbing)
             {
                 await _cameraService.ActiveDriver.StartGrabbingAsync();
             }
 
             // 2. Áp dụng tham số TriggerMode/Source SAU KHI camera đã mở + grabbing
             //    Điều này đảm bảo lệnh TriggerMode=On được gửi xuống thiết bị thực tế hoặc Simulator
-            var p = _cameraService.CurrentParameters.Clone();
-            if (sourceDef.TriggerMode == ImageSourceTriggerMode.LineTrigger)
+            if (_cameraService != null)
             {
-                p.TriggerMode = CameraTriggerMode.On;
-                p.TriggerSource = CameraTriggerSource.Line0;
+                var p = _cameraService.CurrentParameters.Clone();
+                if (sourceDef.TriggerMode == ImageSourceTriggerMode.LineTrigger)
+                {
+                    p.TriggerMode = CameraTriggerMode.On;
+                    p.TriggerSource = CameraTriggerSource.Line0;
+                }
+                else
+                {
+                    p.TriggerMode = CameraTriggerMode.On;
+                    p.TriggerSource = CameraTriggerSource.Software;
+                }
+                await _cameraService.ApplyParametersAsync(p);
             }
-            else
-            {
-                p.TriggerMode = CameraTriggerMode.On;
-                p.TriggerSource = CameraTriggerSource.Software;
-            }
-            await _cameraService.ApplyParametersAsync(p);
 
             // Đưa máy trạng thái Handshake vào trạng thái sẵn sàng nhận Trigger từ PLC (Y1 = 1)
-            await _handshakeStateMachine.SetReadyAsync(token);
+            if (_handshakeStateMachine != null)
+            {
+                await _handshakeStateMachine.SetReadyAsync(token);
+            }
 
             // 3. Khởi tạo Pipeline Hàng Đợi (Bounded Channel) Thống Nhất cho Tất Cả Chế Độ
             var channelOptions = new BoundedChannelOptions(QueueCapacity)
@@ -3958,11 +4018,17 @@ namespace VisionInspectionApp.UI.ViewModels
                     Interlocked.Increment(ref _droppedContinuousFramesCount);
                 }
 
-                // KHÔNG gọi UpdateContinuousStats() ở đây nữa:
-                // hàm này tự BeginInvoke 1 action lên UI Dispatcher cho MỖI frame chụp, gây ngập
-                // Dispatcher khi UI đang bận. Đã có _continuousStatsTimer (100ms) cập nhật định kỳ.
+                int inQueue = channel.Reader.Count;
+                if (_queueCurrentCount != inQueue)
+                {
+                    QueueCurrentCount = inQueue;
+                }
             };
-            _cameraService.FrameCaptured += _continuousFrameHandler;
+
+            if (_cameraService != null)
+            {
+                _cameraService.FrameCaptured += _continuousFrameHandler;
+            }
 
             // 4. Khởi chạy Worker Task xử lý kiểm tra (Inspection Engine) tuần tự từ Queue
             _ = Task.Run(async () =>
@@ -3977,6 +4043,12 @@ namespace VisionInspectionApp.UI.ViewModels
                             {
                                 envelope.Dispose();
                                 break;
+                            }
+
+                            int remainingInQueue = channel.Reader.Count;
+                            if (_queueCurrentCount != remainingInQueue)
+                            {
+                                QueueCurrentCount = remainingInQueue;
                             }
 
                             try
@@ -4016,6 +4088,15 @@ namespace VisionInspectionApp.UI.ViewModels
             if (sourceDef.TriggerMode == ImageSourceTriggerMode.LineTrigger)
             {
                 // Ở chế độ LineTrigger: Cảm biến phần cứng tự kích phát xung khi có phôi chạy qua
+            }
+            else if (sourceDef.TriggerMode == ImageSourceTriggerMode.PlcTrigger)
+            {
+                // Ở chế độ PlcTrigger: Kích phát qua tín hiệu PLC Tag trong OnPlcTagChangedForTrigger
+                _plcManagerService?.EnsureTagRegistered(sourceDef.PlcTriggerPlcId, sourceDef.PlcTriggerTagName, VisionInspectionApp.Models.PlcDataType.Bool, $"Trigger Tag ({sourceDef.PlcTriggerTagName})", "Trigger");
+                if (_plcManagerService != null && !_plcManagerService.IsPollingActive)
+                {
+                    _ = Task.Run(() => _plcManagerService.StartPollingAsync());
+                }
             }
             else
             {
@@ -4329,13 +4410,44 @@ namespace VisionInspectionApp.UI.ViewModels
             if (isTriggered)
             {
                 var now = DateTime.Now;
-                if ((now - _lastPlcTriggerTime).TotalMilliseconds < 100)
+                if ((now - _lastPlcTriggerTime).TotalMilliseconds < 15)
                 {
-                    return; // Skip duplicate rapid triggers (100ms debouncing)
+                    return; // Skip duplicate rapid triggers (15ms debouncing chống rung tiếp điểm cơ khí/relay)
                 }
                 _lastPlcTriggerTime = now;
 
-                System.Diagnostics.Debug.WriteLine($"PLC Trigger fired: Tag '{e.TagName}' on PLC '{e.PlcId}' changed from '{e.OldValue}' to '{e.NewValue}'. Running Job Flow!");
+                System.Diagnostics.Debug.WriteLine($"PLC Trigger fired: Tag '{e.TagName}' on PLC '{e.PlcId}' changed from '{e.OldValue}' to '{e.NewValue}'.");
+
+                var channel = _industrialCameraFrameChannel;
+                if (IsRunningFolderFlow && channel != null)
+                {
+                    // Chạy kích phát chụp ảnh bất đồng bộ trên luồng nền (ThreadPool),
+                    // KHÔNG BAO GIỜ Invoke lên UI Dispatcher Thread!
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            bool triggered = await _cameraService.ExecuteSoftwareTriggerAsync();
+                            if (!triggered)
+                            {
+                                // Fallback snapshot nếu driver không kích hoạt qua lệnh software trigger command
+                                var snapMat = await _cameraService.CaptureSnapshotAsync(imgSourceDef.CameraIndex, string.IsNullOrWhiteSpace(imgSourceDef.RtspUrl) ? null : imgSourceDef.RtspUrl);
+                                if (snapMat != null && !snapMat.Empty())
+                                {
+                                    _continuousFrameHandler?.Invoke(this, snapMat);
+                                    snapMat.Dispose();
+                                }
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[PLC Trigger Continuous] Error: {ex.Message}");
+                        }
+                    });
+                    return;
+                }
+
+                // Fallback nếu không ở chế độ Continuous (ví dụ kích phát đơn lẻ ngoài Run Continuous)
                 System.Windows.Application.Current?.Dispatcher?.InvokeAsync(async () =>
                 {
                     ClearImageSourceCache(imgSourceDef.Name);
@@ -4441,9 +4553,12 @@ namespace VisionInspectionApp.UI.ViewModels
             // sai MmPerPixel) thì các item chờ sẽ không bao giờ được dequeue => phình bộ nhớ vô hạn.
             try { _shiftRegisterTracker.Reset(); } catch { }
 
-            _ = _inspectionLogService.EndSessionAsync();
+            if (_inspectionLogService != null)
+            {
+                _ = _inspectionLogService.EndSessionAsync();
+            }
 
-            if (_continuousFrameHandler != null)
+            if (_continuousFrameHandler != null && _cameraService != null)
             {
                 _cameraService.FrameCaptured -= _continuousFrameHandler;
                 _continuousFrameHandler = null;
@@ -4459,7 +4574,10 @@ namespace VisionInspectionApp.UI.ViewModels
                 _industrialCameraFrameChannel = null;
             }
 
-            _ = _handshakeStateMachine.SetIdleAsync();
+            if (_handshakeStateMachine != null)
+            {
+                _ = _handshakeStateMachine.SetIdleAsync();
+            }
 
             try
             {
@@ -4472,7 +4590,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 _folderFlowCts = null;
             }
 
-            if (_cameraService.ActiveDriver != null && _cameraService.ActiveDriver.IsOpened && _cameraService.CurrentParameters.TriggerMode != CameraTriggerMode.Off)
+            if (_cameraService?.ActiveDriver != null && _cameraService.ActiveDriver.IsOpened && _cameraService.CurrentParameters?.TriggerMode != CameraTriggerMode.Off)
             {
                 var p = _cameraService.CurrentParameters.Clone();
                 p.TriggerMode = CameraTriggerMode.Off;

@@ -7,14 +7,36 @@ Hỗ trợ Camera GigE/USB3/USB/RTSP, nạp ảnh tệp/thư mục, bản vẽ k
 ## 2. Trạng thái mã nguồn gần nhất
 - **Phiên bản hiện tại**: .NET 8 WPF, x64/x86 Multi-targeting, C# 12.
 - **Biên dịch**: 0 Errors toàn solution (`VisionInspectionApp.slnx`) cả Debug lẫn Release.
-- **Kiểm thử tự động**: PASSED 100% (7/7 test ToolEditor Column Resize & Full-Width, 5/5 test HMI State & Lifecycle, 4/4 test HMI Designer Persistence & DINT 32-bit, 4/4 test PLC Conflict & HMI Isolation, 7/7 test PLC Handshake, 5/5 test Reset Queue & HMI, 5/5 test PLC Signal Types, 11/11 test SurfaceCompare & Caliper, 8/8 test ContourCompare, 12/12 test Tool Calib Factor, 15/15 test OQC Scanner Live View, 8/8 test MvpShapeMatch2).
+- **Kiểm thử tự động**: PASSED 100% (5/5 test PlcContinuousQueue 16 Slots, 7/7 test ToolEditor Column Resize & Full-Width, 5/5 test HMI State & Lifecycle, 4/4 test HMI Designer Persistence & DINT 32-bit, 4/4 test PLC Conflict & HMI Isolation, 7/7 test PLC Handshake, 5/5 test Reset Queue & HMI, 5/5 test PLC Signal Types, 11/11 test SurfaceCompare & Caliper, 8/8 test ContourCompare, 12/12 test Tool Calib Factor, 15/15 test OQC Scanner Live View, 8/8 test MvpShapeMatch2).
 - **Cấu hình chuẩn xưởng CMS_VINA**: 
   - Database: `CMS_VINA` (192.168.1.2:6789)
   - OQC Server API: `https://192.168.1.192/vision_upload.php`
   - OTA Update Server: `http://192.168.1.192/update/version.json` & `http://192.168.1.192/ota_server.php`
   - PLC Handshake: `PLC_2` (Mitsubishi FX5U: Ready `M101`, Busy `M102`, Done `M103`, Pass `M104` RisingEdge 20ms, NG `M105` RisingEdge 20ms, PlcAck `""` Non-blocking, Queue In `M200`).
 
-## 3. Hoàn thành Task 419: Tự Động Co Giãn Full Width 4 Cột Trên Tab Tool Editor Khi Ẩn/Hiện Cột
+## 3. Hoàn thành Task 420: Tích Hợp Chế Độ PLC Trigger Vào Pipeline Bounded Channel 16 Nấc Bất Đồng Bộ Tool Editor
+1. **Bối cảnh & 3 Nguyên nhân gốc rễ**:
+   - *Nguyên nhân 1 (Rẽ nhánh bỏ rơi BoundedChannel 16 nấc)*: Khi `TriggerMode == PlcTrigger`, hàm `OnRunContinuousClicked()` rẽ nhánh riêng, không gọi `StartContinuousCameraFlow()`, khiến `_industrialCameraFrameChannel` là `null`, thanh 16 nấc luôn đọc 0/16 không bao giờ tăng.
+   - *Nguyên nhân 2 (Nghẽn UI Dispatcher & Render đồng bộ RefreshPreviewsNow)*: `OnPlcTagChangedForTrigger` gọi `Dispatcher.InvokeAsync(RunFlowAsync)`, ném toàn bộ việc điều phối lên UI thread. Sau khi Inspect xong, `RefreshPreviewsNow()` giải mã và dựng lại toàn bộ Overlay/Canvas đồng bộ ngốn 100-200ms trên UI thread, làm đơ giật giao diện.
+   - *Nguyên nhân 3 (Drop mất frame khi trigger nhanh)*: Cờ chống tái nhập `_isExecutingRunFlow` trong `RunFlowAsync` và debounce cứng 100ms chặn nuốt mọi xung trigger gửi đến dồn dập.
+2. **Các điểm sửa đổi cốt lõi**:
+   - `ToolEditorViewModel.Engine.cs`:
+     - `OnRunContinuousClicked`: Ưu tiên `SourceType == Camera` chạy qua `StartContinuousCameraFlow` cho mọi kiểu trigger (kể cả Simulator và Camera thật).
+     - `StartContinuousCameraFlow`: Hỗ trợ `sourceDef.TriggerMode == PlcTrigger`, đăng ký tag PLC và kích hoạt Polling, đặt camera TriggerMode=On (Software), khởi tạo BoundedChannel 16 nấc và Worker Task chạy ngầm với UI Throttling 120ms.
+     - Cập nhật tức thời `QueueCurrentCount = channel.Reader.Count` khi enqueue và dequeue, bổ sung Dispatcher check bảo vệ đa luồng cho `UpdateQueueVisuals()`.
+     - `OnPlcTagChangedForTrigger`: Giảm debounce xuống 15ms (chống rung tiếp điểm), kích phát chụp ảnh bất đồng bộ trên luồng nền (ThreadPool) và nạp vào channel, triệt tiêu hoàn toàn `InvokeAsync` lên UI Dispatcher.
+     - `ManualTriggerCommand` & `OnManualTriggerClicked`: Bổ sung nút Trigger tay giả lập màu cam hổ phách `#D97706` đặt ngay cạnh nút `Chạy liên tục`. Khi Run Continuous, nhấn nút sẽ nạp frame trực tiếp vào BoundedChannel 16 slot ngoài background để kiểm thử trực quan nấc nhảy queue; khi Idle kích hoạt Run Once.
+     - `StopContinuousFlow`: Bổ sung null check an toàn cho các service.
+3. **Kiểm thử tự động**:
+   - Tạo bộ test `PlcContinuousQueueTests.cs` (5/5 test PASSED 100%):
+     1. Khởi tạo Run Continuous ở chế độ PLC Trigger dùng BoundedChannel 16 nấc.
+     2. Kích phát dồn dập (rapid triggers) làm đầy hàng đợi 16 nấc tuần tự chính xác (0/16 -> 1/16 -> 3/16).
+     3. An toàn đa luồng UpdateQueueVisuals và ngưỡng màu (Emerald / Amber / Ruby).
+     4. Dừng luồng (Stop) giải phóng sạch hàng đợi, không rò rỉ bộ nhớ native Mat.
+     5. Nút 'Trigger tay' (ManualTriggerCommand) hoạt động chuẩn xác cả khi Run Continuous (nạp BoundedChannel) và Idle (Run Once).
+   - Toàn bộ solution biên dịch 0 Errors, toàn bộ test suite hồi quy PASSED 100%.
+
+## 4. Hoàn thành Task 419: Tự Động Co Giãn Full Width 4 Cột Trên Tab Tool Editor Khi Ẩn/Hiện Cột
 1. **Bối cảnh & 4 Nguyên nhân gốc rễ**:
    - *Nguyên nhân 1 (Pixel Width thay vì Star)*: Cột 0 (Toolbox) định nghĩa `new GridLength(340)` fixed pixel. Khi Cột 2 (Canvas) hoặc Cột 6 (Debug) bị ẩn, Toolbox vẫn giữ nguyên 340px, không tự co giãn chia sẻ không gian trống.
    - *Nguyên nhân 2 (Preview Column không có dynamic binding)*: Cột 4 (Preview) bị hardcode `Width="4.5*"` trong XAML mà không có binding thích ứng và không có cơ chế tái phân bổ tỷ lệ Star khi số lượng cột thay đổi.
@@ -94,6 +116,7 @@ Hỗ trợ Camera GigE/USB3/USB/RTSP, nạp ảnh tệp/thư mục, bản vẽ k
 - Kiểm thử tự động `PlcConflictAndHmiIsolationTests.cs` (4/4 test PASSED 100%).
 
 ## 5. Các sự kiện & thay đổi gần đây
+- Rà soát luồng chạy tự động (Run Continuous) & Trigger PLC trong Tool Editor: Xác định 5 nguyên nhân gốc rễ gây nghẽn UI Dispatcher, drop trigger và làm tê liệt hàng đợi 16 nấc.
 - Task 418: Tự động nạp trạng thái hiện tại của Tag HMI khi Load/Run, khắc phục lỗi mất tên file/không tương tác được & thêm nút Stop HMI; kiểm thử 5/5 PASSED 100%.
 - Task 417: Khắc phục triệt để tranh chấp kết nối PLC làm đổi trạng thái xanh/đỏ liên tục & cô lập hoàn toàn HMI Tool Editor; kiểm thử 4/4 PASSED 100%.
 - Task 416: Khắc phục triệt để lỗi Thread Ownership làm ngắt kết nối PLC Ethernet & chuẩn hóa chế độ bỏ PLC Ack / Non-blocking; kiểm thử 7/7 PASSED 100%.

@@ -1,5 +1,21 @@
 # ROADMAP.md — Lộ trình phát triển & Trạng thái nhiệm vụ
 
+- [x] Task 420: Tích Hợp Chế Độ PLC Trigger Vào Pipeline Bounded Channel 16 Nấc Bất Đồng Bộ Tool Editor:
+  - [x] **Nguyên nhân gốc rễ**:
+    - *Nguyên nhân 1 (Rẽ nhánh bỏ rơi BoundedChannel 16 nấc)*: Khi `TriggerMode == PlcTrigger`, `OnRunContinuousClicked()` rẽ nhánh riêng, không gọi `StartContinuousCameraFlow()`, khiến `_industrialCameraFrameChannel` là `null`, thanh 16 nấc luôn đọc 0/16 không bao giờ tăng.
+    - *Nguyên nhân 2 (Nghẽn UI Dispatcher & Render đồng bộ RefreshPreviewsNow)*: `OnPlcTagChangedForTrigger` gọi `Dispatcher.InvokeAsync(RunFlowAsync)`, ném toàn bộ việc điều phối lên UI thread. Sau khi Inspect xong, `RefreshPreviewsNow()` giải mã và dựng lại toàn bộ Overlay/Canvas đồng bộ ngốn 100-200ms trên UI thread, làm đơ giật giao diện.
+    - *Nguyên nhân 3 (Drop mất frame khi trigger nhanh)*: Cờ chống tái nhập `_isExecutingRunFlow` trong `RunFlowAsync` và debounce cứng 100ms chặn nuốt mọi xung trigger gửi đến dồn dập.
+  - [x] **Giải pháp triệt để**:
+    - [ToolEditorViewModel.Engine.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.Engine.cs):
+      - `OnRunContinuousClicked`: Ưu tiên `SourceType == Camera` chạy qua `StartContinuousCameraFlow` cho mọi kiểu trigger (kể cả Simulator và Camera thật).
+      - `StartContinuousCameraFlow`: Hỗ trợ `sourceDef.TriggerMode == PlcTrigger`, đăng ký tag PLC và kích hoạt Polling, đặt camera TriggerMode=On (Software), khởi tạo BoundedChannel 16 nấc và Worker Task chạy ngầm với UI Throttling 120ms.
+      - Cập nhật tức thời `QueueCurrentCount = channel.Reader.Count` khi enqueue và dequeue, bổ sung Dispatcher check bảo vệ đa luồng cho `UpdateQueueVisuals()`.
+      - `OnPlcTagChangedForTrigger`: Giảm debounce xuống 15ms (chống rung tiếp điểm), kích phát chụp ảnh bất đồng bộ trên luồng nền (ThreadPool) và nạp vào channel, triệt tiêu hoàn toàn `InvokeAsync` lên UI Dispatcher.
+      - `ManualTriggerCommand` & `OnManualTriggerClicked`: Bổ sung nút bấm giả lập trigger tay (màu hổ phách `#D97706` đặt ngay cạnh nút Chạy liên tục). Khi đang Run Continuous, hàm nạp frame trực tiếp vào BoundedChannel 16 slot ngầm để người dùng kiểm thử trực quan nấc nhảy của queue; khi đang Idle thì kích hoạt Run Once.
+      - `StopContinuousFlow`: Bổ sung null check an toàn cho các service.
+    - [ToolEditorView.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/ToolEditorView.xaml): Đặt nút `⚡ Trigger tay` cạnh nút `Chạy liên tục`.
+    - [PlcContinuousQueueTests.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/PlcContinuousQueueTests.cs): Bộ kiểm thử tự động 5/5 test PASSED 100%.
+
 - [x] Task 419: Tự Động Co Giãn Full Width 4 Cột Trên Tab Tool Editor Khi Ẩn/Hiện Cột:
   - [x] **Nguyên nhân gốc rễ**:
     - *Nguyên nhân 1 (Pixel Width thay vì Star)*: Cột 0 (Toolbox) định nghĩa `new GridLength(340)` fixed pixel thay vì Star. Khi Cột 2 (Canvas) hoặc Cột 4 (Debug) bị ẩn, Toolbox vẫn giữ nguyên 340px, không thể tự co giãn theo không gian được giải phóng.

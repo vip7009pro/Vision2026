@@ -113,6 +113,13 @@
                 <Button Command="{Binding RunContinuousCommand}" Margin="0,0,4,0" Padding="10,4" Background="{Binding RunContinuousButtonBackgroundBrush}" Foreground="White" BorderThickness="0" ToolTip="{Binding RunContinuousButtonToolTip}">
                     <StackPanel Orientation="Horizontal"><TextBlock Text="{Binding RunContinuousButtonIcon}" Margin="0,0,5,0"/><TextBlock Text="Chạy liên tục"/></StackPanel>
                 </Button>
+                <!-- Nút Giả lập Trigger thủ công (Test Queue khi Run Continuous) -->
+                <Button Command="{Binding ManualTriggerCommand}" Margin="0,0,4,0" Padding="10,4" Background="#D97706" Foreground="White" BorderThickness="0" ToolTip="⚡ Bắn Trigger thủ công (Giả lập Trigger để test hàng đợi Queue 16 nấc)">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="⚡" Margin="0,0,4,0" FontWeight="Bold"/>
+                        <TextBlock Text="Trigger tay"/>
+                    </StackPanel>
+                </Button>
                 <Button Command="{Binding OpenCalibrationDialogCommand}" Margin="0,0,4,0" Padding="8,4" Background="#E65100" Foreground="White" BorderThickness="0" ToolTip="Hiệu chuẩn tỉ lệ Pixels/mm">
                     <StackPanel Orientation="Horizontal"><TextBlock Text="📐" Margin="0,0,5,0"/><TextBlock Text="Hiệu chuẩn"/></StackPanel>
                 </Button>

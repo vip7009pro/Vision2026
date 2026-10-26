@@ -12,6 +12,12 @@ class Program
             return;
         }
 
+        if (args.Length > 0 && (args[0].Equals("plc-queue", StringComparison.OrdinalIgnoreCase) || args[0].Equals("continuous-queue", StringComparison.OrdinalIgnoreCase) || args[0].Equals("plc-continuous", StringComparison.OrdinalIgnoreCase)))
+        {
+            PlcContinuousQueueTests.RunAllTests();
+            return;
+        }
+
         if (args.Length > 0 && (args[0].Equals("reset-queue", StringComparison.OrdinalIgnoreCase) || args[0].Equals("hmi-queue", StringComparison.OrdinalIgnoreCase)))
         {
             PlcResetQueueAndHmiTests.RunAllTests();
