@@ -1680,6 +1680,7 @@ namespace VisionInspectionApp.UI.ViewModels
             OnPropertyChanged(nameof(SelectedRunValue));
             OnPropertyChanged(nameof(SelectedRunPass));
             OnPropertyChanged(nameof(SelectedRunText));
+            OnPropertyChanged(nameof(ShowCodeDetectionSection));
             OnPropertyChanged(nameof(AvailableBlobPolarities));
             OnPropertyChanged(nameof(Blob_Polarity));
             OnPropertyChanged(nameof(Blob_Threshold));
@@ -3950,6 +3951,12 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (string.Equals(SelectedNode.Type, "Diameter", StringComparison.OrdinalIgnoreCase))
                 {
                     var d = _lastRun.Diameters.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
+                    return d?.Pass;
+                }
+
+                if (string.Equals(SelectedNode.Type, "CodeDetection", StringComparison.OrdinalIgnoreCase))
+                {
+                    var d = _lastRun.CodeDetections?.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
                     return d?.Pass;
                 }
 

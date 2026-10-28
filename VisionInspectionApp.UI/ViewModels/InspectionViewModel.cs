@@ -61,7 +61,20 @@ public sealed partial class InspectionViewModel : ObservableObject
         bool Pass,
         string Unit = "mm");
 
-    public sealed record CodeDetectionRow(string Name, bool Found, string Text);
+    public sealed record CodeDetectionRow(
+        string Name,
+        bool Found,
+        string Text,
+        bool Pass = true,
+        string ExpectedSpec = "")
+    {
+        public string StatusText => Pass ? "PASS" : "NG";
+        public Brush StatusBrush => Pass ? Brushes.ForestGreen : Brushes.Crimson;
+        public Brush StatusBgBrush => Pass ? new SolidColorBrush(Color.FromRgb(0xDC, 0xED, 0xC8)) : new SolidColorBrush(Color.FromRgb(0xFF, 0xCD, 0xD2));
+        public string DetailText => !Found
+            ? "⚠️ Không đọc được mã"
+            : (!Pass && !string.IsNullOrWhiteSpace(ExpectedSpec) ? $"⚠️ Không khớp Spec: '{ExpectedSpec}'" : (string.IsNullOrWhiteSpace(ExpectedSpec) ? "Đọc thành công" : $"Khớp Spec: '{ExpectedSpec}'"));
+    }
 
     /// <summary>Combo item for switching SurfaceCompare debug previews.</summary>
     public sealed record SurfaceCompareDebugPick(int Index, string DisplayName);
@@ -254,6 +267,22 @@ public sealed partial class InspectionViewModel : ObservableObject
             if (!cc.Pass)
             {
                 reasons.Add($"• Contour Compare NG: {cc.Name} (MatchScore: {cc.MatchScore:0.####}, MaxDist: {cc.MaxDistancePx:0.##}px)");
+            }
+        }
+
+        // 6. Kiểm tra CodeDetections
+        if (result.CodeDetections != null)
+        {
+            foreach (var cd in result.CodeDetections.Where(x => !x.Pass))
+            {
+                if (!cd.Found)
+                {
+                    reasons.Add($"• CodeDetection NG: {cd.Name} (Không đọc được mã)");
+                }
+                else
+                {
+                    reasons.Add($"• CodeDetection NG: {cd.Name} ('{cd.Text}' không khớp tiêu chuẩn '{cd.ExpectedSpec}')");
+                }
             }
         }
 
@@ -1033,6 +1062,24 @@ public sealed partial class InspectionViewModel : ObservableObject
                     "pcs"));
             }
         }
+
+        if (LastResult.CodeDetections != null)
+        {
+            foreach (var cd in LastResult.CodeDetections)
+            {
+                SpecResults.Add(new SpecResultRow(
+                    "CodeDetection",
+                    cd.Name,
+                    cd.Found ? (string.IsNullOrEmpty(cd.Text) ? "(Empty)" : cd.Text) : "(Not Found)",
+                    string.IsNullOrWhiteSpace(cd.ExpectedSpec) ? "(Any)" : cd.ExpectedSpec,
+                    cd.Found ? 1.0 : 0.0,
+                    1.0,
+                    0.0,
+                    0.0,
+                    cd.Pass,
+                    "code"));
+            }
+        }
     }
 
 
@@ -1056,11 +1103,8 @@ public sealed partial class InspectionViewModel : ObservableObject
 
 
         foreach (var cdt in LastResult.CodeDetections)
-
         {
-
-            CodeDetectionResults.Add(new CodeDetectionRow(cdt.Name, cdt.Found, cdt.Text));
-
+            CodeDetectionResults.Add(new CodeDetectionRow(cdt.Name, cdt.Found, cdt.Text, cdt.Pass, cdt.ExpectedSpec));
         }
 
     }

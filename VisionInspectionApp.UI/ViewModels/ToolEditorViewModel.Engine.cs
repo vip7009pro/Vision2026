@@ -6309,12 +6309,27 @@ namespace VisionInspectionApp.UI.ViewModels
             {
                 if (!cdt.Found)
                 {
+                    var cdtDef = config?.CodeDetections?.FirstOrDefault(x => string.Equals(x.Name, cdt.Name, StringComparison.OrdinalIgnoreCase));
+                    if (cdtDef is not null && cdtDef.SearchRoi.Width > 0 && cdtDef.SearchRoi.Height > 0)
+                    {
+                        dst.Add(new OverlayRectItem
+                        {
+                            X = cdtDef.SearchRoi.X,
+                            Y = cdtDef.SearchRoi.Y,
+                            Width = cdtDef.SearchRoi.Width,
+                            Height = cdtDef.SearchRoi.Height,
+                            Angle = cdtDef.SearchRoi.Angle,
+                            Stroke = Brushes.Crimson,
+                            Label = $"{cdt.Name}: NG (Not Found)"
+                        });
+                    }
                     continue;
                 }
     
                 var bb = cdt.BoundingBox;
                 if (bb.Width > 0 && bb.Height > 0)
                 {
+                    var strokeBrush = cdt.Pass ? Brushes.Lime : Brushes.Crimson;
                     dst.Add(new OverlayRectItem
                     {
                         X = bb.X,
@@ -6322,8 +6337,8 @@ namespace VisionInspectionApp.UI.ViewModels
                         Width = bb.Width,
                         Height = bb.Height,
                         Angle = cdt.Angle,
-                        Stroke = Brushes.Lime,
-                        Label = $"{cdt.Name}: {cdt.Text}"
+                        Stroke = strokeBrush,
+                        Label = $"{cdt.Name}: {cdt.Text}{(cdt.Pass ? "" : " [NG]")}"
                     });
                 }
             }

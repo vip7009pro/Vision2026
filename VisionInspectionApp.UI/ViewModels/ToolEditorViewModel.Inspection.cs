@@ -28,8 +28,23 @@ namespace VisionInspectionApp.UI.ViewModels
             bool Pass,
             string Unit = "mm");
 
-        public sealed record CodeDetectionRow(string Name, bool Found, string Text);
+        public sealed record CodeDetectionRow(
+            string Name,
+            bool Found,
+            string Text,
+            bool Pass = true,
+            string ExpectedSpec = "")
+        {
+            public string StatusText => Pass ? "PASS" : "NG";
+            public Brush StatusBrush => Pass ? Brushes.ForestGreen : Brushes.Crimson;
+            public Brush StatusBgBrush => Pass ? FrozenBrush(0xDC, 0xED, 0xC8) : FrozenBrush(0xFF, 0xCD, 0xD2);
+            public string DetailText => !Found
+                ? "⚠️ Không đọc được mã"
+                : (!Pass && !string.IsNullOrWhiteSpace(ExpectedSpec) ? $"⚠️ Không khớp Spec: '{ExpectedSpec}'" : (string.IsNullOrWhiteSpace(ExpectedSpec) ? "Đọc thành công" : $"Khớp Spec: '{ExpectedSpec}'"));
+        }
         public sealed record OcrResultRow(string Name, bool Pass, string Text, double Confidence);
+
+        public bool ShowCodeDetectionSection => IsCodeDetectionNode || CodeDetectionResults.Count > 0;
 
         public sealed record SurfaceCompareDebugPick(int Index, string DisplayName);
 
@@ -528,9 +543,16 @@ namespace VisionInspectionApp.UI.ViewModels
 
                 if (res.CodeDetections is not null)
                 {
-                    foreach (var cd in res.CodeDetections.Where(x => !x.Found))
+                    foreach (var cd in res.CodeDetections.Where(x => !x.Pass))
                     {
-                        reasons.Add($"• Lỗi CodeDetection '{cd.Name}': Không đọc được mã");
+                        if (!cd.Found)
+                        {
+                            reasons.Add($"• Lỗi CodeDetection '{cd.Name}': Không đọc được mã (Barcode/QR)");
+                        }
+                        else
+                        {
+                            reasons.Add($"• Lỗi CodeDetection '{cd.Name}': Mã đọc được '{cd.Text}' không khớp tiêu chuẩn '{cd.ExpectedSpec}'");
+                        }
                     }
                 }
 
@@ -548,6 +570,11 @@ namespace VisionInspectionApp.UI.ViewModels
                     {
                         reasons.Add($"• Lỗi ColorDiff '{cd.Name}': ΔE = {cd.DeltaE:F2} > Ngưỡng tối đa {cd.MaxDeltaE:F2}");
                     }
+                }
+
+                if (reasons.Count == 0)
+                {
+                    reasons.Add("• Không đạt tiêu chí đánh giá chung (Một hoặc nhiều tool/điều kiện trong Flow bị NG).");
                 }
 
                 NgReasonsText = string.Join("\n", reasons);
@@ -875,17 +902,45 @@ namespace VisionInspectionApp.UI.ViewModels
                         "pcs"));
                 }
             }
+
+            if (res.CodeDetections is not null)
+            {
+                foreach (var cd in res.CodeDetections)
+                {
+                    SpecResults.Add(new SpecResultRow(
+                        "CodeDetection",
+                        cd.Name,
+                        cd.Found ? (string.IsNullOrEmpty(cd.Text) ? "(Empty)" : cd.Text) : "(Not Found)",
+                        string.IsNullOrWhiteSpace(cd.ExpectedSpec) ? "(Any)" : cd.ExpectedSpec,
+                        cd.Found ? 1.0 : 0.0,
+                        1.0,
+                        0.0,
+                        0.0,
+                        cd.Pass,
+                        "code"));
+                }
+            }
         }
 
         private void RefreshCodeDetectionResults(InspectionResult? res)
         {
             CodeDetectionResults.Clear();
-            if (res?.CodeDetections is null) return;
+            if (res?.CodeDetections is null)
+            {
+                OnPropertyChanged(nameof(ShowCodeDetectionSection));
+                return;
+            }
 
             foreach (var item in res.CodeDetections)
             {
-                CodeDetectionResults.Add(new CodeDetectionRow(item.Name, item.Found, item.Text ?? "-"));
+                CodeDetectionResults.Add(new CodeDetectionRow(
+                    item.Name,
+                    item.Found,
+                    item.Text ?? "-",
+                    item.Pass,
+                    item.ExpectedSpec ?? ""));
             }
+            OnPropertyChanged(nameof(ShowCodeDetectionSection));
         }
 
         private void RefreshOcrResults(InspectionResult? res)

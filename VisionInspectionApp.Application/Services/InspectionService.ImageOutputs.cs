@@ -877,7 +877,7 @@ public partial class InspectionService
 
             if (cdt.Found)
             {
-                var col = green;
+                var col = cdt.Pass ? green : red;
                 if (cdt.BoundingBox.Width > 0 && cdt.BoundingBox.Height > 0)
                 {
                     if (Math.Abs(cdt.Angle) > 0.001)
@@ -890,7 +890,15 @@ public partial class InspectionService
                     }
                 }
 
-                Cv2.PutText(mat, $"{cdt.Name}: {cdt.Text}", new Point(cdt.BoundingBox.X, Math.Max(ScalePx(15), cdt.BoundingBox.Y - ScalePx(5))), HersheyFonts.HersheySimplex, fontScaleNormal, col, fontThickNormal, LineTypes.AntiAlias);
+                Cv2.PutText(mat, $"{cdt.Name}: {cdt.Text}{(cdt.Pass ? "" : " [NG]")}", new Point(cdt.BoundingBox.X, Math.Max(ScalePx(15), cdt.BoundingBox.Y - ScalePx(5))), HersheyFonts.HersheySimplex, fontScaleNormal, col, fontThickNormal, LineTypes.AntiAlias);
+            }
+            else
+            {
+                if (cdtDef is not null && cdtDef.SearchRoi.Width > 0 && cdtDef.SearchRoi.Height > 0)
+                {
+                    DrawRotatedRoi(mat, cdtDef.SearchRoi, red, 2);
+                    Cv2.PutText(mat, $"{cdt.Name}: NG (Not Found)", new Point(cdtDef.SearchRoi.X, Math.Max(ScalePx(15), cdtDef.SearchRoi.Y - ScalePx(5))), HersheyFonts.HersheySimplex, fontScaleNormal, red, fontThickNormal, LineTypes.AntiAlias);
+                }
             }
         }
 

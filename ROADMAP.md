@@ -1,5 +1,21 @@
 # ROADMAP.md — Lộ trình phát triển & Trạng thái nhiệm vụ
 
+- [x] Task 425: Bổ Sung Chi Tiết Báo Lỗi NG Cho Tool CodeDetection Trong Cột Kết Quả Tool Editor & Inspection View:
+  - [x] **Cập nhật Logic Báo Lỗi NG & Spec** ([ToolEditorViewModel.Inspection.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.Inspection.cs), [InspectionViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/InspectionViewModel.cs)):
+    - Nâng cấp record `CodeDetectionRow` bổ sung `Pass`, `ExpectedSpec`, `StatusText`, `StatusBrush`, `DetailText`.
+    - Bổ sung nạp kết quả từng tool `CodeDetection` vào bảng `SpecResults` (RefA: Chuỗi đọc được, RefB: Chuỗi Spec, Pass: Pass, Value: 1.0/0.0, Unit: "code").
+    - Cải tiến `UpdateResultSummary`: Đổi lọc sang `.Where(x => !x.Pass)`, phân tách rõ ràng 2 trường hợp: không đọc được mã và đọc được nhưng sai Spec, đính kèm tên tool cụ thể vào `NgReasonsText`.
+    - Thêm thuộc tính `ShowCodeDetectionSection => IsCodeDetectionNode || CodeDetectionResults.Count > 0;`.
+  - [x] **Giao Diện Tool Editor & Inspector** ([ToolEditorView.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/ToolEditorView.xaml), [ToolEditorViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.cs)):
+    - Bổ sung `SelectedRunPass` cho node type `"CodeDetection"` để hiển thị đúng trạng thái PASS/NG trên Property Panel.
+    - Chuyển thẻ "📷 ĐỌC MÃ VẠCH / QR DEBUG" sang binding `ShowCodeDetectionSection` để tự động hiển thị khi flow có đọc mã.
+    - Cải tiến DataTemplate đọc mã vạch/QR với badge `[PASS]` / `[NG]`, chuỗi đọc, chuỗi Spec và dòng chi tiết lỗi rõ ràng.
+  - [x] **Hệ Thống Biến & Overlay Engine** ([ConditionEvaluator.VariableRegistry.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/Services/ConditionEvaluator.VariableRegistry.cs), [ToolEditorViewModel.Engine.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.Engine.cs), [InspectionService.ImageOutputs.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/Services/InspectionService.ImageOutputs.cs)):
+    - Đăng ký chuẩn xác các biến `Pass`, `Status`, `Expected`, `PassBit` theo Spec trong ConditionEvaluator.
+    - Vẽ overlay viền Crimson rõ ràng khi NG: Viền SearchRoi đỏ khi không đọc được mã; Viền bounding box đỏ kèm nhãn `[NG]` khi sai Spec.
+  - [x] **Kiểm Thử Tự Động Toàn Diện** ([CodeDetectionResultTests.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/CodeDetectionResultTests.cs)):
+    - 6/6 test PASSED 100%: Kiểm tra Not Found báo lỗi kèm tên tool, đọc sai Spec báo lỗi kèm chuỗi so sánh, đọc đúng Spec PASS, SelectedRunPass phản ánh chuẩn, ConditionEvaluator đăng ký biến chuẩn, InspectionViewModel đồng bộ SpecResults & NgReasons.
+
 - [x] Task 424: Bổ Sung Tool ObjectCounting Trong Tool Editor (Đếm Vật Thể Đa Hướng Hỗn Loạn, Quản Lý Spec & Dung Sai):
   - [x] **Model & Cấu Hình** ([ObjectCountingDefinition.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Models/ObjectCountingDefinition.cs)):
     - Quản lý Search ROI và Template ROI riêng biệt, hỗ trợ đường dẫn lưu ảnh mẫu `TemplateImagePath`.

@@ -611,19 +611,20 @@ public static partial class ConditionEvaluator
                 ["Value"] = cd.Text ?? string.Empty,
                 ["Code"] = cd.Text ?? string.Empty,
                 ["Found"] = cd.Found,
-                ["Pass"] = cd.Found,
-                ["Status"] = cd.Found ? "OK" : "NG",
-                ["PassBit"] = cd.Found ? 1 : 0,
+                ["Pass"] = cd.Pass,
+                ["Status"] = cd.Pass ? "OK" : "NG",
+                ["PassBit"] = cd.Pass ? 1 : 0,
                 ["Angle"] = cd.Angle,
                 ["AngleDeg"] = cd.Angle,
                 ["X"] = (double)cd.BoundingBox.X,
                 ["Y"] = (double)cd.BoundingBox.Y,
                 ["Width"] = (double)cd.BoundingBox.Width,
                 ["Height"] = (double)cd.BoundingBox.Height,
-                ["Time"] = result.Timings.NodeTimings.TryGetValue(cd.Name, out var cdtMs) ? (double)cdtMs : 0.0
+                ["Time"] = result.Timings.NodeTimings.TryGetValue(cd.Name, out var cdtMs) ? (double)cdtMs : 0.0,
+                ["Expected"] = cd.ExpectedSpec ?? string.Empty
             };
 
-            var cdVar = new Variable(cd.Found, found: cd.Found, text: cd.Text ?? string.Empty, rawObject: cd, members: cdMembers);
+            var cdVar = new Variable(cd.Pass, found: cd.Found, text: cd.Text ?? string.Empty, rawObject: cd, members: cdMembers);
             RegisterToolVariable(cd.Name, cdAliases, cdVar);
         }
 

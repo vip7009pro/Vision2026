@@ -4180,6 +4180,22 @@
                                     <TextBlock Text="Đọc được" Width="60" VerticalAlignment="Top" Foreground="{DynamicResource TextMutedBrush}" />
                                     <TextBlock Text="{Binding SelectedRunText, TargetNullValue='-'}" TextWrapping="Wrap" Width="160" FontWeight="SemiBold" Foreground="#2196F3" />
                                 </StackPanel>
+
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                    <TextBlock Text="Kết quả" Width="60" VerticalAlignment="Center" Foreground="{DynamicResource TextMutedBrush}" />
+                                    <TextBlock Text="{Binding SelectedRunPass, Converter={StaticResource OkNgConv}, TargetNullValue='-'}" Width="160" FontWeight="Bold">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Foreground" Value="#4CAF50" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding SelectedRunPass}" Value="False">
+                                                        <Setter Property="Foreground" Value="#E53935" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </StackPanel>
                             </StackPanel>
 
                             <StackPanel Visibility="{Binding IsOcrNode, Converter={StaticResource BoolToVis}}">
@@ -5988,25 +6004,51 @@
 
                             <!-- Code Detection Debugger -->
                             <Border Style="{StaticResource DashCardStyle}" Padding="6"
-                                    Visibility="{Binding IsCodeDetectionNode, Converter={StaticResource BoolToVis}}">
+                                    Visibility="{Binding ShowCodeDetectionSection, Converter={StaticResource BoolToVis}}">
                                 <StackPanel>
                                     <Grid Margin="0,0,0,6">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="4" />
                                             <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
                                         <Border Grid.Column="0" Background="#9C27B0" CornerRadius="2" Margin="0,0,7,0" />
                                         <TextBlock Grid.Column="1" Text="📷 ĐỌC MÃ VẠCH / QR DEBUG" Style="{StaticResource DashHeaderTextStyle}" />
+                                        <TextBlock Grid.Column="2" Text="{Binding CodeDetectionResults.Count, StringFormat='{}{0} tools'}" FontSize="10" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" />
                                     </Grid>
                                     
                                     <ItemsControl ItemsSource="{Binding CodeDetectionResults}" Margin="0,0,0,6">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>
                                                 <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="6" Margin="0,0,0,4" Background="{DynamicResource PanelBackgroundBrush}">
-                                                    <StackPanel>
-                                                        <TextBlock Text="{Binding Name, StringFormat='Name: {0}'}" FontWeight="SemiBold" />
-                                                        <TextBlock Text="{Binding Text, StringFormat='Text: {0}', TargetNullValue='-'}" TextWrapping="Wrap" Foreground="#2E7D32" FontWeight="Bold" />
-                                                    </StackPanel>
+                                                    <Grid>
+                                                        <Grid.RowDefinitions>
+                                                            <RowDefinition Height="Auto" />
+                                                            <RowDefinition Height="Auto" />
+                                                            <RowDefinition Height="Auto" />
+                                                        </Grid.RowDefinitions>
+
+                                                        <!-- Row 0: Tool Name + Status Badge (PASS / NG) -->
+                                                        <Grid Grid.Row="0">
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="*" />
+                                                                <ColumnDefinition Width="Auto" />
+                                                            </Grid.ColumnDefinitions>
+                                                            <TextBlock Grid.Column="0" Text="{Binding Name}" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center" />
+                                                            <Border Grid.Column="1" Background="{Binding StatusBgBrush}" BorderBrush="{Binding StatusBrush}" BorderThickness="1" CornerRadius="3" Padding="6,1" VerticalAlignment="Center">
+                                                                <TextBlock Text="{Binding StatusText}" FontWeight="Bold" FontSize="10" Foreground="{Binding StatusBrush}" />
+                                                            </Border>
+                                                        </Grid>
+
+                                                        <!-- Row 1: Text decoded -->
+                                                        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,4,0,2">
+                                                            <TextBlock Text="Mã đọc được:" FontSize="10.5" Foreground="{DynamicResource TextMutedBrush}" Width="75" VerticalAlignment="Center" />
+                                                            <TextBlock Text="{Binding Text, TargetNullValue='-'}" TextWrapping="Wrap" FontWeight="SemiBold" FontSize="11" Foreground="{Binding StatusBrush}" VerticalAlignment="Center" />
+                                                        </StackPanel>
+
+                                                        <!-- Row 2: Detail text / Expected Spec -->
+                                                        <TextBlock Grid.Row="2" Text="{Binding DetailText}" FontSize="10" Foreground="{Binding StatusBrush}" Margin="0,2,0,0" TextWrapping="Wrap" />
+                                                    </Grid>
                                                 </Border>
                                             </DataTemplate>
                                         </ItemsControl.ItemTemplate>
