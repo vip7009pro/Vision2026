@@ -195,3 +195,29 @@ public sealed record CreateLineResult(string Name, bool Success, double X1, doub
 public sealed record CreateRectResult(string Name, bool Success, double X, double Y, double Width, double Height, double Angle, RectAnchorPosition Anchor, double TopLeftX, double TopLeftY);
 
 public sealed record CreateCircleResult(string Name, bool Success, double CenterX, double CenterY, double Radius);
+
+public sealed record DetectedObject(
+    int Index,
+    Point2d Center,
+    double AngleDeg,
+    double Score,
+    Rect BoundingBox)
+{
+    public double Angle => AngleDeg;
+}
+
+public sealed record ObjectCountingResult(
+    string Name,
+    int FoundCount,
+    int NominalCount,
+    int MinCount,
+    int MaxCount,
+    bool Pass,
+    List<DetectedObject> Objects)
+{
+    public int Count => FoundCount;
+    public int Tolerance => Math.Max(0, (MaxCount - MinCount) / 2);
+    public int ToleranceMinus => Math.Max(0, NominalCount - MinCount);
+    public int TolerancePlus => Math.Max(0, MaxCount - NominalCount);
+}
+

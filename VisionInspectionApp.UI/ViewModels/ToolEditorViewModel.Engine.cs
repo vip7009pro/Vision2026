@@ -1299,6 +1299,31 @@ namespace VisionInspectionApp.UI.ViewModels
                 }
             }
 
+            if (string.Equals(kind, "OC", StringComparison.OrdinalIgnoreCase))
+            {
+                var oc = _config.ObjectCountings?.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
+                if (oc is not null)
+                {
+                    oc.SearchRoi = roi;
+                    if (oc.TemplateRoi.Width <= 0 || oc.TemplateRoi.Height <= 0)
+                    {
+                        oc.TemplateRoi = roi;
+                    }
+                }
+                return;
+            }
+
+            if (string.Equals(kind, "OCT", StringComparison.OrdinalIgnoreCase))
+            {
+                var oc = _config.ObjectCountings?.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
+                if (oc is not null)
+                {
+                    oc.TemplateRoi = roi;
+                    TrySaveObjectCountingTemplateImage(name, roi);
+                }
+                return;
+            }
+
             if (kind.StartsWith("PR", StringComparison.OrdinalIgnoreCase))
             {
                 var preDef = _config.PreprocessNodes.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
@@ -1800,6 +1825,8 @@ namespace VisionInspectionApp.UI.ViewModels
             }
             if (string.Equals(kind, "CC", StringComparison.OrdinalIgnoreCase)) return _config.ContourCompares.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase))?.InspectRoi;
             if (string.Equals(kind, "CCT", StringComparison.OrdinalIgnoreCase)) return _config.ContourCompares.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase))?.TemplateRoi;
+            if (string.Equals(kind, "OC", StringComparison.OrdinalIgnoreCase)) return _config.ObjectCountings?.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase))?.SearchRoi;
+            if (string.Equals(kind, "OCT", StringComparison.OrdinalIgnoreCase)) return _config.ObjectCountings?.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase))?.TemplateRoi;
             if (kind.StartsWith("PR", StringComparison.OrdinalIgnoreCase))
             {
                 var preDef = _config.PreprocessNodes.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
@@ -2094,6 +2121,14 @@ namespace VisionInspectionApp.UI.ViewModels
                     {
                         TrySaveContourCompareTemplateImage(name, roi, sel.Roi);
                     }
+                    RefreshPreviews();
+                    RequestAutoSave();
+                    return;
+                }
+
+                if (string.Equals(kind, "OC", StringComparison.OrdinalIgnoreCase) || string.Equals(kind, "OCT", StringComparison.OrdinalIgnoreCase))
+                {
+                    ApplyRoiForLabel(label, roi);
                     RefreshPreviews();
                     RequestAutoSave();
                     return;
@@ -6816,6 +6851,66 @@ namespace VisionInspectionApp.UI.ViewModels
                     });
                 }
             }
+
+            if (run.ObjectCountings is not null)
+            {
+                foreach (var oc in run.ObjectCountings)
+                {
+                    var ocDef = config?.ObjectCountings?.FirstOrDefault(x => string.Equals(x.Name, oc.Name, StringComparison.OrdinalIgnoreCase));
+                    var strokeColor = oc.Pass ? Brushes.LimeGreen : Brushes.Crimson;
+                    var status = oc.Pass ? "OK" : "NG";
+
+                    if (oc.Objects is not null)
+                    {
+                        for (var i = 0; i < oc.Objects.Count; i++)
+                        {
+                            var obj = oc.Objects[i];
+                            var bb = obj.BoundingBox;
+                            if (bb.Width > 0 && bb.Height > 0)
+                            {
+                                dst.Add(new OverlayRectItem
+                                {
+                                    X = bb.X,
+                                    Y = bb.Y,
+                                    Width = bb.Width,
+                                    Height = bb.Height,
+                                    Angle = obj.Angle,
+                                    Stroke = strokeColor,
+                                    StrokeThickness = 2.0,
+                                    Label = $"#{i + 1} ({obj.Score:P0}, {obj.Angle:0.#}°)"
+                                });
+                            }
+
+                            dst.Add(new OverlayPointItem
+                            {
+                                X = obj.Center.X,
+                                Y = obj.Center.Y,
+                                Radius = 3.0,
+                                Stroke = strokeColor,
+                                Label = string.Empty
+                            });
+                        }
+                    }
+
+                    var lx = 12.0;
+                    var ly = 12.0;
+                    if (ocDef is not null && ocDef.SearchRoi.Width > 0 && ocDef.SearchRoi.Height > 0)
+                    {
+                        lx = ocDef.SearchRoi.X + 4;
+                        ly = ocDef.SearchRoi.Y + 4;
+                    }
+
+                    var text = $"{oc.Name} [{status}]: Đếm được: {oc.Count} (Spec: {oc.NominalCount} ±{oc.Tolerance})";
+                    dst.Add(new OverlayTextItem
+                    {
+                        X = lx,
+                        Y = ly,
+                        Text = text,
+                        Foreground = strokeColor,
+                        Background = new SolidColorBrush(Color.FromArgb(160, 0, 0, 0))
+                    });
+                }
+            }
         }
     
         private void BuildOverlayForNodeFromRun(ToolGraphNodeViewModel node, InspectionResult run, List<OverlayItem> dst)
@@ -7561,6 +7656,68 @@ namespace VisionInspectionApp.UI.ViewModels
                             Label = $"{ocr.Name}: \"{ocr.RecognizedText}\" ({ocr.Confidence:P0})"
                         });
                     }
+                }
+                return;
+            }
+
+            if (string.Equals(node.Type, "ObjectCounting", StringComparison.OrdinalIgnoreCase) || string.Equals(node.Type, "ObjectCouting", StringComparison.OrdinalIgnoreCase))
+            {
+                var oc = run.ObjectCountings?.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                if (oc is not null)
+                {
+                    var ocDef = _config?.ObjectCountings?.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                    var strokeColor = oc.Pass ? Brushes.LimeGreen : Brushes.Crimson;
+                    var status = oc.Pass ? "OK" : "NG";
+
+                    if (oc.Objects is not null)
+                    {
+                        for (var i = 0; i < oc.Objects.Count; i++)
+                        {
+                            var obj = oc.Objects[i];
+                            var bb = obj.BoundingBox;
+                            if (bb.Width > 0 && bb.Height > 0)
+                            {
+                                dst.Add(new OverlayRectItem
+                                {
+                                    X = bb.X,
+                                    Y = bb.Y,
+                                    Width = bb.Width,
+                                    Height = bb.Height,
+                                    Angle = obj.Angle,
+                                    Stroke = strokeColor,
+                                    StrokeThickness = 2.0,
+                                    Label = $"#{i + 1} ({obj.Score:P0}, {obj.Angle:0.#}°)"
+                                });
+                            }
+
+                            dst.Add(new OverlayPointItem
+                            {
+                                X = obj.Center.X,
+                                Y = obj.Center.Y,
+                                Radius = 3.0,
+                                Stroke = strokeColor,
+                                Label = string.Empty
+                            });
+                        }
+                    }
+
+                    var lx = 12.0;
+                    var ly = 12.0;
+                    if (ocDef is not null && ocDef.SearchRoi.Width > 0 && ocDef.SearchRoi.Height > 0)
+                    {
+                        lx = ocDef.SearchRoi.X + 4;
+                        ly = ocDef.SearchRoi.Y + 4;
+                    }
+
+                    var text = $"{oc.Name} [{status}]: Đếm được: {oc.Count} (Spec: {oc.NominalCount} ±{oc.Tolerance})";
+                    dst.Add(new OverlayTextItem
+                    {
+                        X = lx,
+                        Y = ly,
+                        Text = text,
+                        Foreground = strokeColor,
+                        Background = new SolidColorBrush(Color.FromArgb(160, 0, 0, 0))
+                    });
                 }
                 return;
             }

@@ -3080,6 +3080,200 @@
                                 </StackPanel>
                             </StackPanel>
 
+                            <StackPanel Visibility="{Binding IsObjectCountingNode, Converter={StaticResource BoolToVis}}">
+                                <Border Background="{DynamicResource BorderBrush}" Padding="3,1" Margin="0,3,0,0">
+                                    <TextBlock Text="Đếm Vật Thể (Object Counting)" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" />
+                                </Border>
+
+                                <StackPanel Orientation="Horizontal" Margin="0,4,0,4">
+                                    <Button Content="Set Search ROI" Command="{Binding ObjectCounting_SetSearchRoiCommand}" Width="100" Margin="0,0,6,0" ToolTip="Vẽ vùng tìm kiếm các vật thể" />
+                                    <Button Content="Set Template ROI" Command="{Binding ObjectCounting_SetTemplateRoiCommand}" Width="100" ToolTip="Vẽ vùng mẫu vật thể cần dạy" />
+                                </StackPanel>
+                                <Button Content="Dạy Mẫu (Set Template)" Command="{Binding ObjectCounting_SetTemplateCommand}" Margin="0,0,0,6" Height="26" FontWeight="SemiBold" ToolTip="Chốt ghi ảnh template từ vùng Template ROI hiện tại" />
+
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="4" Margin="0,0,0,4" Background="{DynamicResource PanelAltBackgroundBrush}">
+                                    <Grid Height="120">
+                                        <Image Source="{Binding ObjectCounting_TemplatePreviewImage}" Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor" />
+                                        <TextBlock Text="Chưa lưu template (Vẽ Template ROI rồi bấm Dạy Mẫu)" VerticalAlignment="Center" HorizontalAlignment="Center" Foreground="{DynamicResource TextMutedBrush}" FontSize="11" TextWrapping="Wrap" TextAlignment="Center">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding ObjectCounting_TemplatePreviewImage}" Value="{x:Null}">
+                                                            <Setter Property="Visibility" Value="Visible" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </Grid>
+                                </Border>
+                                <TextBlock Text="{Binding ObjectCounting_TemplateInfoText}" FontSize="10" Foreground="{DynamicResource TextMutedBrush}" Margin="0,0,0,6" HorizontalAlignment="Center" TextTrimming="CharacterEllipsis" />
+
+                                <!-- Spec: Số lượng chuẩn (Nominal) -->
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Số lượng chuẩn (Nominal)" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding ObjectCounting_NominalCount, UpdateSourceTrigger=LostFocus}" Margin="2,1" FontSize="11" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
+
+                                <!-- Spec: Dung sai đối xứng (±) -->
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Dung sai (± Tol)" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding ObjectCounting_Tolerance, UpdateSourceTrigger=LostFocus}" Margin="2,1" FontSize="11" ToolTip="Nhập dung sai đối xứng ±. Sẽ tự động gán Tol- và Tol+" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
+
+                                <!-- Spec: Dung sai âm (-) & Dung sai dương (+) -->
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="20" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Tol (- / +)" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding ObjectCounting_ToleranceMinus, UpdateSourceTrigger=LostFocus}" Margin="2,1" FontSize="11" ToolTip="Dung sai âm (Số lượng tối thiểu = Nominal - TolMinus)" />
+                                        </Border>
+                                        <TextBlock Grid.Column="2" Text="/" VerticalAlignment="Center" HorizontalAlignment="Center" Foreground="{DynamicResource TextMutedBrush}" />
+                                        <Border Grid.Column="3" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding ObjectCounting_TolerancePlus, UpdateSourceTrigger=LostFocus}" Margin="2,1" FontSize="11" ToolTip="Dung sai dương (Số lượng tối đa = Nominal + TolPlus)" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
+
+                                <!-- Thuật toán -->
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Thuật toán (Algorithm)" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <ComboBox ItemsSource="{Binding AvailableObjectCountingAlgorithms}" SelectedItem="{Binding ObjectCounting_Algorithm}" Margin="2,1" FontSize="11" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
+
+                                <!-- Min Score -->
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Điểm tối thiểu (Min Score)" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding ObjectCounting_MinScore, UpdateSourceTrigger=LostFocus}" Margin="2,1" FontSize="11" ToolTip="Điểm tương đồng tối thiểu (0.1 - 1.0)" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
+
+                                <!-- Góc xoay: Min Angle / Max Angle -->
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="20" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Góc xoay (Min / Max)" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding ObjectCounting_MinAngle, UpdateSourceTrigger=LostFocus}" Margin="2,1" FontSize="11" ToolTip="Góc quét nhỏ nhất (-180° đến 180°)" />
+                                        </Border>
+                                        <TextBlock Grid.Column="2" Text="→" VerticalAlignment="Center" HorizontalAlignment="Center" Foreground="{DynamicResource TextMutedBrush}" />
+                                        <Border Grid.Column="3" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding ObjectCounting_MaxAngle, UpdateSourceTrigger=LostFocus}" Margin="2,1" FontSize="11" ToolTip="Góc quét lớn nhất (-180° đến 180°)" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
+
+                                <!-- Bước góc quét (Angle Step) -->
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Bước góc (Angle Step)" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding ObjectCounting_AngleStep, UpdateSourceTrigger=LostFocus}" Margin="2,1" FontSize="11" ToolTip="Độ phân giải góc quét (độ), ví dụ 3° hoặc 5°" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
+
+                                <!-- Ngưỡng chồng lấp (Max Overlap IoU) -->
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Khử lặp (Max Overlap)" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding ObjectCounting_MaxOverlap, UpdateSourceTrigger=LostFocus}" Margin="2,1" FontSize="11" ToolTip="Tỉ lệ chồng lấp tối đa giữa 2 vật thể (0.1 - 0.9), tránh đếm lặp" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
+
+                                <!-- Kết quả chạy gần nhất -->
+                                <Border Background="{DynamicResource BorderBrush}" Padding="3,1" Margin="0,6,0,2">
+                                    <TextBlock Text="Kết Quả Kiểm Tra" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" FontSize="11" />
+                                </Border>
+                                <Grid Margin="4,2">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="100" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Số lượng đếm:" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" />
+                                    <TextBlock Grid.Column="1" Text="{Binding ObjectCounting_LastRunCount}" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center" />
+                                </Grid>
+                                <Grid Margin="4,2,4,6">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="100" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Đánh giá Spec:" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" />
+                                    <Border Grid.Column="1" CornerRadius="3" Padding="6,2" HorizontalAlignment="Left" Background="{Binding ObjectCounting_PassColor}">
+                                        <TextBlock Text="{Binding ObjectCounting_PassStatus}" FontWeight="Bold" FontSize="12" Foreground="White" />
+                                    </Border>
+                                </Grid>
+                            </StackPanel>
+
                             <StackPanel Visibility="{Binding IsContourCompareNode, Converter={StaticResource BoolToVis}}">
                                 <Border Background="{DynamicResource BorderBrush}" Padding="3,1" Margin="0,3,0,0">
                                     <TextBlock Text="Contour Compare" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" />

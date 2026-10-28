@@ -163,6 +163,8 @@ namespace VisionInspectionApp.UI.ViewModels
                 outName = "Values";
             else if (string.Equals(Type, "PlcBatchWrite", StringComparison.OrdinalIgnoreCase))
                 outName = "Status";
+            else if (string.Equals(Type, "ObjectCounting", StringComparison.OrdinalIgnoreCase) || string.Equals(Type, "ObjectCouting", StringComparison.OrdinalIgnoreCase))
+                outName = "Count";
             else
                 outName = $"Out{Type}";
             OutPorts.Add(new NodePortViewModel(this, outName, isInput: false));
@@ -193,10 +195,11 @@ namespace VisionInspectionApp.UI.ViewModels
             {
                 InPorts.Add(new NodePortViewModel(this, "Result", isInput: true));
             }
-            else if (string.Equals(Type, "Origin", StringComparison.OrdinalIgnoreCase) || string.Equals(Type, "Point", StringComparison.OrdinalIgnoreCase) || string.Equals(Type, "Line", StringComparison.OrdinalIgnoreCase) || string.Equals(Type, "Caliper", StringComparison.OrdinalIgnoreCase) || string.Equals(Type, "LinePairDetection", StringComparison.OrdinalIgnoreCase) || string.Equals(Type, "EdgePairDetect", StringComparison.OrdinalIgnoreCase) || string.Equals(Type, "CircleFinder", StringComparison.OrdinalIgnoreCase) || string.Equals(Type, "BlobDetection", StringComparison.OrdinalIgnoreCase) || string.Equals(Type, "CodeDetection", StringComparison.OrdinalIgnoreCase) || string.Equals(Type, "OCR", StringComparison.OrdinalIgnoreCase))
+            else if (string.Equals(Type, "Origin", StringComparison.OrdinalIgnoreCase) || string.Equals(Type, "Point", StringComparison.OrdinalIgnoreCase) || string.Equals(Type, "Line", StringComparison.OrdinalIgnoreCase) || string.Equals(Type, "Caliper", StringComparison.OrdinalIgnoreCase) || string.Equals(Type, "LinePairDetection", StringComparison.OrdinalIgnoreCase) || string.Equals(Type, "EdgePairDetect", StringComparison.OrdinalIgnoreCase) || string.Equals(Type, "CircleFinder", StringComparison.OrdinalIgnoreCase) || string.Equals(Type, "BlobDetection", StringComparison.OrdinalIgnoreCase) || string.Equals(Type, "CodeDetection", StringComparison.OrdinalIgnoreCase) || string.Equals(Type, "OCR", StringComparison.OrdinalIgnoreCase) || string.Equals(Type, "ObjectCounting", StringComparison.OrdinalIgnoreCase) || string.Equals(Type, "ObjectCouting", StringComparison.OrdinalIgnoreCase))
             {
                 InPorts.Add(new NodePortViewModel(this, "Image", isInput: true));
             }
+
             else if (string.Equals(Type, "Diameter", StringComparison.OrdinalIgnoreCase))
             {
                 InPorts.Add(new NodePortViewModel(this, "C1", isInput: true));

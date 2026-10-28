@@ -857,6 +857,24 @@ namespace VisionInspectionApp.UI.ViewModels
                     }
                 }
             }
+
+            if (res.ObjectCountings is not null)
+            {
+                foreach (var oc in res.ObjectCountings)
+                {
+                    SpecResults.Add(new SpecResultRow(
+                        "ObjectCounting",
+                        oc.Name,
+                        $"Nominal: {oc.NominalCount}",
+                        $"Tol: -{oc.ToleranceMinus}/+{oc.TolerancePlus}",
+                        oc.FoundCount,
+                        oc.NominalCount,
+                        oc.TolerancePlus,
+                        oc.ToleranceMinus,
+                        oc.Pass,
+                        "pcs"));
+                }
+            }
         }
 
         private void RefreshCodeDetectionResults(InspectionResult? res)

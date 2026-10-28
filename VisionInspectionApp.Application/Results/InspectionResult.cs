@@ -168,6 +168,8 @@ public sealed class InspectionResult
     public List<CreateCircleResult> CreateCircles { get; } = new();
 
     public List<ContourCompareResult> ContourCompares { get; } = new();
+    public List<ObjectCountingResult> ObjectCountings { get; } = new();
+
 
     public List<LinePairDetectionResult> LinePairDetections { get; } = new();
 

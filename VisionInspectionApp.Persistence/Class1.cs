@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using VisionInspectionApp.Application;
 using VisionInspectionApp.Models;
 
@@ -108,7 +108,16 @@ public sealed class JsonConfigService : IConfigService
         {
             NormalizeSurfaceCompareTemplatePathForSave(sc, templateDir);
         }
+
+        if (config.ObjectCountings != null)
+        {
+            foreach (var oc in config.ObjectCountings)
+            {
+                NormalizeObjectCountingTemplatePathForSave(oc, templateDir);
+            }
+        }
     }
+
     private void NormalizePointTemplatePathForSave(PointDefinition point, string templateDir)
     {
         if (string.IsNullOrWhiteSpace(point.TemplateImageFile))
@@ -153,6 +162,28 @@ public sealed class JsonConfigService : IConfigService
         }
     }
 
+    private void NormalizeObjectCountingTemplatePathForSave(ObjectCountingDefinition oc, string templateDir)
+    {
+        if (string.IsNullOrWhiteSpace(oc.TemplateImageFile))
+        {
+            return;
+        }
+
+        var full = Path.IsPathRooted(oc.TemplateImageFile)
+            ? oc.TemplateImageFile
+            : Path.GetFullPath(Path.Combine(templateDir, oc.TemplateImageFile));
+
+        if (full.StartsWith(templateDir, StringComparison.OrdinalIgnoreCase))
+        {
+            var relative = Path.GetRelativePath(templateDir, full);
+            oc.TemplateImageFile = relative;
+        }
+        else
+        {
+            oc.TemplateImageFile = full;
+        }
+    }
+
     private void NormalizeTemplatePathsForLoad(VisionConfig config)
     {
         var templateDir = GetTemplateDirectory(config.ProductCode);
@@ -166,6 +197,14 @@ public sealed class JsonConfigService : IConfigService
         foreach (var sc in config.SurfaceCompares)
         {
             NormalizeSurfaceCompareTemplatePathForLoad(sc, templateDir);
+        }
+
+        if (config.ObjectCountings != null)
+        {
+            foreach (var oc in config.ObjectCountings)
+            {
+                NormalizeObjectCountingTemplatePathForLoad(oc, templateDir);
+            }
         }
     }
 
@@ -194,6 +233,20 @@ public sealed class JsonConfigService : IConfigService
             sc.TemplateImageFile = Path.GetFullPath(Path.Combine(templateDir, sc.TemplateImageFile));
         }
     }
+
+    private void NormalizeObjectCountingTemplatePathForLoad(ObjectCountingDefinition oc, string templateDir)
+    {
+        if (string.IsNullOrWhiteSpace(oc.TemplateImageFile))
+        {
+            return;
+        }
+
+        if (!Path.IsPathRooted(oc.TemplateImageFile))
+        {
+            oc.TemplateImageFile = Path.GetFullPath(Path.Combine(templateDir, oc.TemplateImageFile));
+        }
+    }
+
 
     private static JsonSerializerOptions CreateJsonOptions()
     {

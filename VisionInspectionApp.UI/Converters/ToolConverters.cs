@@ -32,6 +32,7 @@ namespace VisionInspectionApp.UI.Converters
                     "Text" => "\uE8D2", // Text
                     "BlobDetection" => "\uE9A3", // Drops / Blob
                     "SurfaceCompare" => "\uE7B6", // Compare
+                    "ObjectCounting" or "ObjectCouting" => "\uE8EF", // Number / Counting list
                     "CodeDetection" => "\uED14", // QRCode
                     "PlcRead" => "\uE9A1", // Download / Read
                     "PlcWrite" => "\uE9A2", // Upload / Write
@@ -70,6 +71,7 @@ namespace VisionInspectionApp.UI.Converters
                     "CodeDetection" => "#038387",
                     "BlobDetection" => "#C239B3",
                     "SurfaceCompare" => "#0078D7",
+                    "ObjectCounting" or "ObjectCouting" => "#E67E22",
                     "PlcRead" => "#00897B",
                     "PlcWrite" => "#D81B60",
                     "PlcWait" => "#F57C00",

@@ -81,6 +81,8 @@ namespace VisionInspectionApp.UI.ViewModels
                     ActiveRoiLabel = $"{value.RefName} SC";
                 else if (string.Equals(value.Type, "ContourCompare", StringComparison.OrdinalIgnoreCase))
                     ActiveRoiLabel = $"{value.RefName} CC";
+                else if (string.Equals(value.Type, "ObjectCounting", StringComparison.OrdinalIgnoreCase) || string.Equals(value.Type, "ObjectCouting", StringComparison.OrdinalIgnoreCase))
+                    ActiveRoiLabel = $"{value.RefName} OC";
 
                 // If selection is empty or this node isn't part of multi-selection, treat it as a single-select.
                 if (SelectedNodes.Count == 0 || !value.IsSelected)
@@ -1355,6 +1357,26 @@ namespace VisionInspectionApp.UI.ViewModels
                 }
             }
 
+            void AddObjectCountingRoi(string ocName)
+            {
+                var oc = config.ObjectCountings?.FirstOrDefault(x => string.Equals(x.Name, ocName, StringComparison.OrdinalIgnoreCase));
+                if (oc is null || !showRois) return;
+
+                var r = _lastRun?.ObjectCountings?.FirstOrDefault(x => string.Equals(x.Name, oc.Name, StringComparison.OrdinalIgnoreCase));
+                var stroke = r is not null ? (r.Pass ? Brushes.LimeGreen : Brushes.Crimson) : Brushes.DeepSkyBlue;
+                var statusSuffix = r is not null ? $" [{r.Count}/{oc.NominalCount} {(r.Pass ? "OK" : "NG")}]" : string.Empty;
+
+                if (oc.SearchRoi.Width > 0 && oc.SearchRoi.Height > 0)
+                {
+                    dst.Add(CreateRotatedRoi(oc.SearchRoi, stroke, $"{oc.Name} OC{statusSuffix}"));
+                }
+
+                if (oc.TemplateRoi.Width > 0 && oc.TemplateRoi.Height > 0)
+                {
+                    dst.Add(CreateRotatedRoi(oc.TemplateRoi, Brushes.Gold, $"{oc.Name} OCT"));
+                }
+            }
+
             if (string.Equals(node.Type, "Preprocess", StringComparison.OrdinalIgnoreCase))
             {
                 var preDef = _config.PreprocessNodes.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
@@ -1750,6 +1772,13 @@ namespace VisionInspectionApp.UI.ViewModels
             {
                 if (showRois)
                     AddContourCompareRoi(node.RefName);
+                return;
+            }
+
+            if (string.Equals(node.Type, "ObjectCounting", StringComparison.OrdinalIgnoreCase) || string.Equals(node.Type, "ObjectCouting", StringComparison.OrdinalIgnoreCase))
+            {
+                if (showRois)
+                    AddObjectCountingRoi(node.RefName);
                 return;
             }
 

@@ -1,5 +1,22 @@
 # ROADMAP.md — Lộ trình phát triển & Trạng thái nhiệm vụ
 
+- [x] Task 424: Bổ Sung Tool ObjectCounting Trong Tool Editor (Đếm Vật Thể Đa Hướng Hỗn Loạn, Quản Lý Spec & Dung Sai):
+  - [x] **Model & Cấu Hình** ([ObjectCountingDefinition.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Models/ObjectCountingDefinition.cs)):
+    - Quản lý Search ROI và Template ROI riêng biệt, hỗ trợ đường dẫn lưu ảnh mẫu `TemplateImagePath`.
+    - Quản lý tiêu chuẩn kiểm tra: `NominalCount` (Số lượng chuẩn), `Tolerance` (Dung sai đối xứng $\pm$), `ToleranceMinus`, `TolerancePlus`.
+    - Đặt mặc định thuật toán là `NormalizedCorrelation` (NCC) khử nhiễu vân nền công nghiệp, `MinScore = 0.65`, `MaxOverlap = 0.30`.
+  - [x] **Engine Xử Lý Thị Giác Đa Hướng & Khắc Phục Đếm Sai Vỉ Thuốc** ([ObjectCountingEngine.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.VisionEngine/ObjectCountingEngine.cs)):
+    - Cơ chế Cửa sổ suy giảm biên mềm (Circular/Apodization Window) triệt tiêu 4 góc vân nền nhôm/băng chuyền của ảnh crop template.
+    - Bộ lọc Rotated NMS nâng cấp: Kiểm tra khoảng cách tâm theo tỷ lệ kích thước ($0.70 \times \min(W, H)$) và tỷ lệ giao nhau trên diện tích vật thể (`interArea / minArea > MaxOverlap`).
+    - Bổ sung trích xuất Local Maxima trên lưới ShapeMatching ngăn ngừa bùng nổ hàng trăm candidate pixel liền kề.
+    - Kim tự tháp Coarse-to-Fine (Pyramid Down 2x) quét nhanh toàn dải $360^\circ$. Đánh giá PASS/NG theo quy chuẩn Spec và Dung sai.
+  - [x] **Tích Hợp Pipeline, Condition Evaluator & Bảng Spec Results**:
+    - [InspectionService.Pipeline.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/Services/InspectionService.Pipeline.cs): Lập lịch chạy song song trong Pipeline kiểm tra, xuất `ObjectCountingResult`.
+    - [ConditionEvaluator.VariableRegistry.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/Services/ConditionEvaluator.VariableRegistry.cs): Đăng ký biến `Count`, `Nominal`, `Pass`, `Status`, `Found`, `Time`.
+    - Tích hợp xuất kết quả kiểm tra vào bảng `SpecResults` trong [ToolEditorViewModel.Inspection.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.Inspection.cs) và [InspectionViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/InspectionViewModel.cs).
+  - [x] **Kiểm Thử Tự Động Toàn Diện** ([ObjectCountingTests.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/ObjectCountingTests.cs)):
+    - 5/5 test PASSED 100%: Đếm vật thể xoay đa hướng hỗn loạn; Đánh giá Spec & Dung sai; Rotated NMS khử trùng lặp; Condition Evaluator; **Đếm chính xác tuyệt đối 10/10 viên thuốc trên vỉ thuốc thực tế của người dùng** (khắc phục hoàn toàn lỗi đếm thành 69 vật thể).
+
 - [x] Task 423: Xây Dựng Ứng Dụng Android Native "VisionCameraServer" Cho Galaxy S24 Ultra & Tích Hợp Camera2 Pro Mode:
   - [x] **Dự án Android Studio Native** ([AndroidCameraServer/](file:///g:/NODEJS/Vision2026/AndroidCameraServer)):
     - Khởi tạo trọn bộ dự án với Gradle 8.11, CompileSDK 34 (Android 14), Package `com.vision.cameraserver`.

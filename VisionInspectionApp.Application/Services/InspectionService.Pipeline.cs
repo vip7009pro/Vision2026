@@ -1606,7 +1606,67 @@ public partial class InspectionService
                     FailSegments: failSegmentsList);
             }
 
+            static ObjectCountingResult RunObjectCounting(
+                Mat matBgrOrGray,
+                Point2d originTeach,
+                Point2d originFound,
+                double angleDeg,
+                ObjectCountingDefinition def,
+                ImagePreprocessor preprocessor,
+                PreprocessSettings? settings)
+            {
+                if (matBgrOrGray is null || def is null || string.IsNullOrWhiteSpace(def.Name))
+                {
+                    int zCount = 0;
+                    bool zPass = def is not null && zCount >= def.MinCount && zCount <= def.MaxCount;
+                    return new ObjectCountingResult(def?.Name ?? string.Empty, zCount, def?.NominalCount ?? 0, def?.MinCount ?? 0, def?.MaxCount ?? 0, zPass, new List<DetectedObject>());
+                }
+
+                if (string.IsNullOrWhiteSpace(def.TemplateImageFile) || !File.Exists(def.TemplateImageFile))
+                {
+                    int zCount = 0;
+                    bool zPass = zCount >= def.MinCount && zCount <= def.MaxCount;
+                    return new ObjectCountingResult(def.Name, zCount, def.NominalCount, def.MinCount, def.MaxCount, zPass, new List<DetectedObject>());
+                }
+
+                using var templRaw = Cv2.ImRead(def.TemplateImageFile, ImreadModes.Grayscale);
+                if (templRaw.Empty())
+                {
+                    int zCount = 0;
+                    bool zPass = zCount >= def.MinCount && zCount <= def.MaxCount;
+                    return new ObjectCountingResult(def.Name, zCount, def.NominalCount, def.MinCount, def.MaxCount, zPass, new List<DetectedObject>());
+                }
+
+                var searchRoiToExtract = def.SearchRoi.Width > 0 && def.SearchRoi.Height > 0
+                    ? def.SearchRoi
+                    : new Roi { X = 0, Y = 0, Width = matBgrOrGray.Width, Height = matBgrOrGray.Height };
+
+                Roi transformedSearchRoi = TransformRoiKeepSize(searchRoiToExtract, originTeach, originFound, angleDeg);
+                var searchRect = new Rect(transformedSearchRoi.X, transformedSearchRoi.Y, transformedSearchRoi.Width, transformedSearchRoi.Height);
+
+                using var prepSearch = (settings != null) ? preprocessor.Run(matBgrOrGray, settings) : matBgrOrGray.Clone();
+                using var prepTempl = (settings != null) ? preprocessor.Run(templRaw, settings) : templRaw.Clone();
+
+                var (foundCount, pass, candidates) = ObjectCountingEngine.CountObjects(prepSearch, prepTempl, def, searchRect);
+
+                var detectedObjects = new List<DetectedObject>();
+                for (int i = 0; i < candidates.Count; i++)
+                {
+                    var c = candidates[i];
+                    var box = new Rect(
+                        (int)Math.Round(c.X - c.Width / 2.0),
+                        (int)Math.Round(c.Y - c.Height / 2.0),
+                        (int)Math.Round(c.Width),
+                        (int)Math.Round(c.Height)
+                    );
+                    detectedObjects.Add(new DetectedObject(i + 1, new Point2d(c.X, c.Y), c.AngleDeg, c.Score, box));
+                }
+
+                return new ObjectCountingResult(def.Name, foundCount, def.NominalCount, def.MinCount, def.MaxCount, pass, detectedObjects);
+            }
+
             // 0. Execute BeforeFlow DB Nodes (Read/Write before flow)
+
             swSetup.Stop();
             result.Timings.FrameworkSetupMs = (int)Math.Max(0, swSetup.ElapsedMilliseconds);
             result.Timings.ToolQueueWaitMs = TicksToMs(Interlocked.Read(ref toolWait.Ticks));
@@ -2191,6 +2251,18 @@ public partial class InspectionService
                         __sw.Stop(); result.Timings.NodeTimings[cc.Name] = (int)__sw.ElapsedMilliseconds; return res;
                     }))
                     .ToArray();
+
+                var objectCountingTasks = (config.ObjectCountings ?? new List<ObjectCountingDefinition>())
+                    .Where(oc => oc is not null && !string.IsNullOrWhiteSpace(oc.Name) && ((oc.SearchRoi.Width > 0 && oc.SearchRoi.Height > 0) || (oc.TemplateRoi.Width > 0 && oc.TemplateRoi.Height > 0)))
+                    .Select(oc => RunHeavyTool($"ObjectCounting:{oc.Name}", () =>
+                    {
+                        var __sw = System.Diagnostics.Stopwatch.StartNew();
+                        var (matForOc, ocSettings) = ResolveToolPreprocess("ObjectCounting", oc.Name);
+                        var res = RunObjectCounting(matForOc, originTeach, originFound, angleDeg, oc, _preprocessor, ocSettings);
+                        __sw.Stop(); result.Timings.NodeTimings[oc.Name] = (int)__sw.ElapsedMilliseconds; return res;
+                    }))
+                    .ToArray();
+
 
             var colorDiffTasks = (config.ColorDiffs ?? new List<ColorDiffDefinition>())
                 .Where(cd => cd is not null && !string.IsNullOrWhiteSpace(cd.Name))
@@ -2979,8 +3051,8 @@ public partial class InspectionService
                 }))
                 .ToArray();
 
-            var allHeavyTasks = new List<Task>(pointTasks.Length + lineTasks.Length + blobTasks.Length + surfaceCompareTasks.Length + contourCompareTasks.Length + colorDiffTasks.Length + cropTasks.Length + imgArithmeticTasks.Length + lpdTasks.Length + caliperTasks.Length + epdTasks.Length + circleTasks.Length + codeDetectionTasks.Length + ocrTasks.Length);
-            allHeavyTasks.AddRange(pointTasks); allHeavyTasks.AddRange(lineTasks); allHeavyTasks.AddRange(blobTasks); allHeavyTasks.AddRange(surfaceCompareTasks); allHeavyTasks.AddRange(contourCompareTasks); allHeavyTasks.AddRange(colorDiffTasks); allHeavyTasks.AddRange(cropTasks); allHeavyTasks.AddRange(imgArithmeticTasks); allHeavyTasks.AddRange(lpdTasks); allHeavyTasks.AddRange(caliperTasks); allHeavyTasks.AddRange(epdTasks); allHeavyTasks.AddRange(circleTasks); allHeavyTasks.AddRange(codeDetectionTasks); allHeavyTasks.AddRange(ocrTasks);
+            var allHeavyTasks = new List<Task>(pointTasks.Length + lineTasks.Length + blobTasks.Length + surfaceCompareTasks.Length + contourCompareTasks.Length + objectCountingTasks.Length + colorDiffTasks.Length + cropTasks.Length + imgArithmeticTasks.Length + lpdTasks.Length + caliperTasks.Length + epdTasks.Length + circleTasks.Length + codeDetectionTasks.Length + ocrTasks.Length);
+            allHeavyTasks.AddRange(pointTasks); allHeavyTasks.AddRange(lineTasks); allHeavyTasks.AddRange(blobTasks); allHeavyTasks.AddRange(surfaceCompareTasks); allHeavyTasks.AddRange(contourCompareTasks); allHeavyTasks.AddRange(objectCountingTasks); allHeavyTasks.AddRange(colorDiffTasks); allHeavyTasks.AddRange(cropTasks); allHeavyTasks.AddRange(imgArithmeticTasks); allHeavyTasks.AddRange(lpdTasks); allHeavyTasks.AddRange(caliperTasks); allHeavyTasks.AddRange(epdTasks); allHeavyTasks.AddRange(circleTasks); allHeavyTasks.AddRange(codeDetectionTasks); allHeavyTasks.AddRange(ocrTasks);
 
             var tBatch1Start = swTotal.ElapsedMilliseconds;
             if (allHeavyTasks.Count > 0) Task.WaitAll(allHeavyTasks.ToArray());
@@ -2990,7 +3062,7 @@ public partial class InspectionService
             result.Timings.PointsMs = pointTasks.Length > 0 ? batch1DurationMs : 0;
             result.Timings.LinesMs = lineTasks.Length > 0 ? batch1DurationMs : 0;
             result.Timings.BlobsMs = blobTasks.Length > 0 ? batch1DurationMs : 0;
-            result.Timings.SurfaceCompareMs = (surfaceCompareTasks.Length > 0 || contourCompareTasks.Length > 0) ? batch1DurationMs : 0;
+            result.Timings.SurfaceCompareMs = (surfaceCompareTasks.Length > 0 || contourCompareTasks.Length > 0 || objectCountingTasks.Length > 0) ? batch1DurationMs : 0;
             result.Timings.LpdMs = lpdTasks.Length > 0 ? batch1DurationMs : 0;
             result.Timings.CalipersMs = caliperTasks.Length > 0 ? batch1DurationMs : 0;
             result.Timings.EdgePairDetectMs = epdTasks.Length > 0 ? batch1DurationMs : 0;
@@ -3004,6 +3076,7 @@ public partial class InspectionService
             foreach (var t in blobTasks) result.BlobDetections.Add(t.Result);
             foreach (var t in surfaceCompareTasks) result.SurfaceCompares.Add(t.Result);
             foreach (var t in contourCompareTasks) result.ContourCompares.Add(t.Result);
+            foreach (var t in objectCountingTasks) result.ObjectCountings.Add(t.Result);
             foreach (var t in lpdTasks) result.LinePairDetections.Add(t.Result);
             foreach (var t in caliperTasks) result.Calipers.Add(t.Result);
             foreach (var t in epdTasks) result.EdgePairDetections.Add(t.Result);
@@ -3013,6 +3086,7 @@ public partial class InspectionService
             foreach (var t in imgArithmeticTasks) result.ImgArithmetics.Add(t.Result);
             foreach (var t in codeDetectionTasks) result.CodeDetections.Add(t.Result);
             foreach (var t in ocrTasks) result.Ocrs.Add(t.Result);
+
 
             if (result.Origin is not null && result.Origin.Pass) foundPoints["Origin"] = result.Origin.Position;
 
@@ -3394,6 +3468,7 @@ public partial class InspectionService
             && result.BlobDetections.All(x => x.Pass)
             && result.SurfaceCompares.All(x => x.Pass)
             && result.ContourCompares.All(x => x.Pass)
+            && result.ObjectCountings.All(x => x.Pass)
             && result.ColorDiffs.All(x => x.Pass)
             && result.CodeDetections.All(x => x.Pass)
             && result.Ocrs.All(x => x.Pass)
@@ -3509,6 +3584,20 @@ public partial class InspectionService
                 }
             }
         }
+
+        // 5.1 ObjectCountings
+        if (config.ObjectCountings != null)
+        {
+            foreach (var oc in config.ObjectCountings)
+            {
+                if (oc is not null && !string.IsNullOrWhiteSpace(oc.Name))
+                {
+                    result.ObjectCountings.Add(new ObjectCountingResult(oc.Name, 0, oc.NominalCount, oc.MinCount, oc.MaxCount, Pass: false, new List<DetectedObject>()));
+                    result.Timings.NodeTimings[oc.Name] = 0;
+                }
+            }
+        }
+
 
         // 6. ColorDiffs
         if (config.ColorDiffs != null)

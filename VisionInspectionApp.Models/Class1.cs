@@ -519,6 +519,9 @@ public sealed class VisionConfig
 
     public List<CreateCircleDefinition> CreateCircles { get; set; } = new();
 
+    public List<ObjectCountingDefinition> ObjectCountings { get; set; } = new();
+
+
     public List<PlcModel> Plcs { get; set; } = new();
 
     public List<PlcTag> PlcTags { get; set; } = new();

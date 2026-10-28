@@ -302,6 +302,7 @@ namespace VisionInspectionApp.UI.ViewModels
             RunOnceCommand = new RelayCommand(OnRunOnceClicked);
             RunContinuousCommand = new RelayCommand(OnRunContinuousClicked);
             ManualTriggerCommand = new RelayCommand(OnManualTriggerClicked);
+            InitializeObjectCountingCommands();
         }
 
         public ToolEditorViewModel(IConfigService configService, ConfigStoreOptions storeOptions, SharedImageContext sharedImage, ImagePreprocessor preprocessor, LineDetector lineDetector, IInspectionService inspectionService, CameraService cameraService, IJobService jobService, UndoRedoManager undoManager, Application.PLC.Services.IPlcManagerService plcManagerService, Application.DB.Services.IDbManagerService dbManagerService, IRecentJobsService? recentJobsService = null, LightingControllerService? lightingControllerService = null, IServiceProvider? serviceProvider = null)
@@ -399,6 +400,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 new ToolboxItemModel { Name = "OCR", Category = "🔍 Phát Hiện & Tìm Kiếm", Icon = "🔤" },
                 new ToolboxItemModel { Name = "SurfaceCompare", Shortcut = "Ctrl+6", Category = "🔍 Phát Hiện & Tìm Kiếm", Icon = "🔍" },
                 new ToolboxItemModel { Name = "ContourCompare", Category = "🔍 Phát Hiện & Tìm Kiếm", Icon = "🌀" },
+                new ToolboxItemModel { Name = "ObjectCounting", Category = "🔍 Phát Hiện & Tìm Kiếm", Icon = "🔢" },
                 new ToolboxItemModel { Name = "Crop", Category = "🔍 Phát Hiện & Tìm Kiếm", Icon = "✂️" },
                 new ToolboxItemModel { Name = "ColorDiff", Shortcut = "Ctrl+7", Category = "🔍 Phát Hiện & Tìm Kiếm", Icon = "🎨" },
                 new ToolboxItemModel { Name = "ImgArithmetic", Category = "🔍 Phát Hiện & Tìm Kiếm", Icon = "🧮" },
@@ -524,6 +526,7 @@ namespace VisionInspectionApp.UI.ViewModels
             OpenRollDefectMapCommand = new RelayCommand(OpenRollDefectMap);
             OpenInspectionLogCommand = new RelayCommand(OpenInspectionLog);
             ColorDiff_TeachRefColorCommand = new RelayCommand(ColorDiff_TeachRefColor);
+            InitializeObjectCountingCommands();
         }
     
         public IlluminationCorrectionPreset IlluminationCorrection
@@ -1728,6 +1731,28 @@ namespace VisionInspectionApp.UI.ViewModels
             OnPropertyChanged(nameof(Epd_MinEdgeSeparationPx));
             OnPropertyChanged(nameof(ShowRoisInSelectedPreview));
             OnPropertyChanged(nameof(ShowRoisInFinalPreview));
+
+            OnPropertyChanged(nameof(IsObjectCountingNode));
+            if (IsObjectCountingNode)
+            {
+                OnPropertyChanged(nameof(AvailableObjectCountingAlgorithms));
+                OnPropertyChanged(nameof(ObjectCounting_Algorithm));
+                OnPropertyChanged(nameof(ObjectCounting_NominalCount));
+                OnPropertyChanged(nameof(ObjectCounting_Tolerance));
+                OnPropertyChanged(nameof(ObjectCounting_ToleranceMinus));
+                OnPropertyChanged(nameof(ObjectCounting_TolerancePlus));
+                OnPropertyChanged(nameof(ObjectCounting_MinScore));
+                OnPropertyChanged(nameof(ObjectCounting_MinAngle));
+                OnPropertyChanged(nameof(ObjectCounting_MaxAngle));
+                OnPropertyChanged(nameof(ObjectCounting_AngleStep));
+                OnPropertyChanged(nameof(ObjectCounting_MaxOverlap));
+                OnPropertyChanged(nameof(ObjectCounting_TemplatePreviewImage));
+                OnPropertyChanged(nameof(ObjectCounting_TemplateInfoText));
+                OnPropertyChanged(nameof(ObjectCounting_LastRunCount));
+                OnPropertyChanged(nameof(ObjectCounting_PassStatus));
+                OnPropertyChanged(nameof(ObjectCounting_PassColor));
+                RefreshObjectCountingTemplatePreview();
+            }
         }
     
         public bool IsLineNode => string.Equals(SelectedNode?.Type, "Line", StringComparison.OrdinalIgnoreCase);
@@ -4972,6 +4997,24 @@ namespace VisionInspectionApp.UI.ViewModels
                 }
                 return;
             }
+
+            if (string.Equals(node.Type, "ObjectCounting", StringComparison.OrdinalIgnoreCase) || string.Equals(node.Type, "ObjectCouting", StringComparison.OrdinalIgnoreCase))
+            {
+                _config.ObjectCountings ??= new List<ObjectCountingDefinition>();
+                var existed = _config.ObjectCountings.Any(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                if (!existed)
+                {
+                    var def = new ObjectCountingDefinition
+                    {
+                        Name = node.RefName,
+                        SearchRoi = DefaultRoi(),
+                        TemplateRoi = DefaultRoi()
+                    };
+                    _config.ObjectCountings.Add(def);
+                    ActiveRoiLabel = $"{node.RefName} OC";
+                }
+                return;
+            }
         }
     
         private string GenerateDefaultRefName(string type)
@@ -5122,6 +5165,11 @@ namespace VisionInspectionApp.UI.ViewModels
             {
                 baseName = "DB";
                 exists = n => (_config.DbNodes ?? new List<DbNodeDefinition>()).Any(x => string.Equals(x.RefName, n, StringComparison.OrdinalIgnoreCase));
+            }
+            else if (string.Equals(type, "ObjectCounting", StringComparison.OrdinalIgnoreCase) || string.Equals(type, "ObjectCouting", StringComparison.OrdinalIgnoreCase))
+            {
+                baseName = "OC";
+                exists = n => (_config.ObjectCountings ?? new List<ObjectCountingDefinition>()).Any(x => string.Equals(x.Name, n, StringComparison.OrdinalIgnoreCase));
             }
             else
             {

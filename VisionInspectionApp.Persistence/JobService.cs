@@ -221,7 +221,24 @@ public sealed class JobService : IJobService
                 }
             }
         }
+
+        // ObjectCountings
+        if (config.ObjectCountings != null)
+        {
+            foreach (var oc in config.ObjectCountings)
+            {
+                if (oc == null) continue;
+                var fb = !string.IsNullOrWhiteSpace(oc.Name) ? $"{oc.Name.ToLowerInvariant()}_oc.png" : "object_counting.png";
+                var pattern = !string.IsNullOrWhiteSpace(oc.Name) ? $"{oc.Name.ToLowerInvariant()}*.png" : "object_counting*.png";
+                var found = FindFileInJob(oc.TemplateImageFile, fb, pattern);
+                if (!string.IsNullOrWhiteSpace(found))
+                {
+                    oc.TemplateImageFile = found;
+                }
+            }
+        }
     }
+
 
     private static void EnsureTemplateFilesPresentInTemp(VisionConfig config, string tempWorkingDir, string templatesDir)
     {
@@ -284,6 +301,17 @@ public sealed class JobService : IJobService
                 CheckAndCopy(cc.TemplateImageFile, fn);
             }
         }
+
+        if (config.ObjectCountings != null)
+        {
+            foreach (var oc in config.ObjectCountings)
+            {
+                if (oc == null || string.IsNullOrWhiteSpace(oc.TemplateImageFile)) continue;
+                var fn = Path.GetFileName(oc.TemplateImageFile);
+                if (string.IsNullOrWhiteSpace(fn)) fn = $"{oc.Name.ToLowerInvariant()}_oc.png";
+                CheckAndCopy(oc.TemplateImageFile, fn);
+            }
+        }
     }
 
     private static string SerializeConfigWithRelativeTemplatePaths(VisionConfig config)
@@ -293,6 +321,7 @@ public sealed class JobService : IJobService
         var pointPaths = config.Points?.Select(p => p.TemplateImageFile).ToList();
         var scPaths = config.SurfaceCompares?.Select(sc => sc.TemplateImageFile).ToList();
         var ccPaths = config.ContourCompares?.Select(cc => cc.TemplateImageFile).ToList();
+        var ocPaths = config.ObjectCountings?.Select(oc => oc.TemplateImageFile).ToList();
 
         try
         {
@@ -335,6 +364,17 @@ public sealed class JobService : IJobService
                 }
             }
 
+            if (config.ObjectCountings != null)
+            {
+                foreach (var oc in config.ObjectCountings)
+                {
+                    if (oc != null && !string.IsNullOrWhiteSpace(oc.TemplateImageFile))
+                    {
+                        oc.TemplateImageFile = Path.GetFileName(oc.TemplateImageFile);
+                    }
+                }
+            }
+
             return JsonSerializer.Serialize(config, CreateJsonOptions());
         }
         finally
@@ -362,6 +402,14 @@ public sealed class JobService : IJobService
                     config.ContourCompares[i].TemplateImageFile = ccPaths[i];
                 }
             }
+            if (config.ObjectCountings != null && ocPaths != null)
+            {
+                for (int i = 0; i < config.ObjectCountings.Count && i < ocPaths.Count; i++)
+                {
+                    config.ObjectCountings[i].TemplateImageFile = ocPaths[i];
+                }
+            }
         }
     }
 }
+

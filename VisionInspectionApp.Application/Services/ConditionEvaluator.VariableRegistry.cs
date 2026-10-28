@@ -709,6 +709,32 @@ public static partial class ConditionEvaluator
             RegisterToolVariable(cc.Name, ccAliases, ccVar);
         }
 
+        for (int i = 0; i < result.ObjectCountings.Count; i++)
+        {
+            var oc = result.ObjectCountings[i];
+            if (string.IsNullOrWhiteSpace(oc.Name)) continue;
+
+            var ocAliases = new List<string> { oc.Name, $"ObjectCounting{i + 1}", $"OC{i + 1}", $"OC.{oc.Name}", $"ObjectCounting.{oc.Name}", $"ObjectCouting{i + 1}" };
+            var ocMembers = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Count"] = (double)oc.FoundCount,
+                ["FoundCount"] = (double)oc.FoundCount,
+                ["Nominal"] = (double)oc.NominalCount,
+                ["NominalCount"] = (double)oc.NominalCount,
+                ["MinCount"] = (double)oc.MinCount,
+                ["MaxCount"] = (double)oc.MaxCount,
+                ["Pass"] = oc.Pass,
+                ["Found"] = oc.FoundCount > 0,
+                ["Status"] = oc.Pass ? "OK" : "NG",
+                ["PassBit"] = oc.Pass ? 1 : 0,
+                ["Time"] = result.Timings.NodeTimings.TryGetValue(oc.Name, out var ocMs) ? (double)ocMs : 0.0
+            };
+
+            var ocVar = new Variable(oc.Pass, value: oc.FoundCount, score: oc.FoundCount, found: oc.FoundCount > 0, text: oc.FoundCount.ToString(), rawObject: oc, members: ocMembers);
+            RegisterToolVariable(oc.Name, ocAliases, ocVar);
+        }
+
+
         for (int i = 0; i < result.BlobDetections.Count; i++)
         {
             var b = result.BlobDetections[i];

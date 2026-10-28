@@ -6,6 +6,18 @@ class Program
 {
     static void Main(string[] args)
     {
+        if (args.Length > 0 && (args[0].Equals("object-counting", StringComparison.OrdinalIgnoreCase) || args[0].Equals("oc", StringComparison.OrdinalIgnoreCase) || args[0].Equals("objectcounting", StringComparison.OrdinalIgnoreCase)))
+        {
+            ObjectCountingTests.RunAllTests();
+            return;
+        }
+
+        if (args.Length > 0 && (args[0].Equals("blister", StringComparison.OrdinalIgnoreCase) || args[0].Equals("pill", StringComparison.OrdinalIgnoreCase)))
+        {
+            ObjectCountingTests.Test_RealUserBlisterPack_PillCounting();
+            return;
+        }
+
         if (args.Length > 0 && (args[0].Equals("android-camera", StringComparison.OrdinalIgnoreCase) || args[0].Equals("android", StringComparison.OrdinalIgnoreCase) || args[0].Equals("s24", StringComparison.OrdinalIgnoreCase)))
         {
             AndroidCameraProModeTests.RunAllTests();

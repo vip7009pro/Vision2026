@@ -946,11 +946,12 @@ public partial class ImageViewerControl : UserControl
 
         if (kind == RoiDrawKind.Template)
         {
-            // Prefer active CCT, SCT or T; otherwise swap CC->CCT, SC->SCT or S->T; otherwise any CCT/SCT/T in overlays.
-            if (!string.IsNullOrWhiteSpace(_activeRoiLabel) && (EndsWith(_activeRoiLabel!, " CCT") || EndsWith(_activeRoiLabel!, " SCT") || EndsWith(_activeRoiLabel!, " T"))) return _activeRoiLabel;
+            // Prefer active CCT, SCT, OCT or T; otherwise swap CC->CCT, SC->SCT, OC->OCT or S->T; otherwise any CCT/SCT/OCT/T in overlays.
+            if (!string.IsNullOrWhiteSpace(_activeRoiLabel) && (EndsWith(_activeRoiLabel!, " CCT") || EndsWith(_activeRoiLabel!, " SCT") || EndsWith(_activeRoiLabel!, " OCT") || EndsWith(_activeRoiLabel!, " T"))) return _activeRoiLabel;
 
             var swapped = TrySwapSuffix(_activeRoiLabel, " CC", "CCT")
                 ?? TrySwapSuffix(_activeRoiLabel, " SC", "SCT")
+                ?? TrySwapSuffix(_activeRoiLabel, " OC", "OCT")
                 ?? TrySwapSuffix(_activeRoiLabel, " S", "T");
             if (!string.IsNullOrWhiteSpace(swapped)) return swapped;
 
@@ -960,10 +961,23 @@ public partial class ImageViewerControl : UserControl
             var sct = rectLabels.FirstOrDefault(x => EndsWith(x, " SCT"));
             if (!string.IsNullOrWhiteSpace(sct)) return sct;
 
+            var oct = rectLabels.FirstOrDefault(x => EndsWith(x, " OCT"));
+            if (!string.IsNullOrWhiteSpace(oct)) return oct;
+
             var t = rectLabels.FirstOrDefault(x => EndsWith(x, " T"));
             if (!string.IsNullOrWhiteSpace(t)) return t;
 
             // If we only have a Search ROI overlay, synthesize a matching Template label.
+            var oc = rectLabels.FirstOrDefault(x => EndsWith(x, " OC"));
+            if (!string.IsNullOrWhiteSpace(oc))
+            {
+                var parts = oc.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length == 2)
+                {
+                    return $"{parts[0]} OCT";
+                }
+            }
+
             var cc = rectLabels.FirstOrDefault(x => EndsWith(x, " CC"));
             if (!string.IsNullOrWhiteSpace(cc))
             {
@@ -1004,10 +1018,11 @@ public partial class ImageViewerControl : UserControl
 
         if (kind == RoiDrawKind.Search)
         {
-            // For Search: CC, SC, S, L, LP, C, CIR, Cal, EPD.
+            // For Search: CC, SC, OC, S, L, LP, C, CIR, Cal, EPD.
             if (!string.IsNullOrWhiteSpace(_activeRoiLabel)
                 && (EndsWith(_activeRoiLabel!, " CC")
                     || EndsWith(_activeRoiLabel!, " SC")
+                    || EndsWith(_activeRoiLabel!, " OC")
                     || EndsWith(_activeRoiLabel!, " S")
                     || EndsWith(_activeRoiLabel!, " L")
                     || EndsWith(_activeRoiLabel!, " LP")
@@ -1022,6 +1037,7 @@ public partial class ImageViewerControl : UserControl
 
             var swapped = TrySwapSuffix(_activeRoiLabel, " CCT", "CC")
                 ?? TrySwapSuffix(_activeRoiLabel, " SCT", "SC")
+                ?? TrySwapSuffix(_activeRoiLabel, " OCT", "OC")
                 ?? TrySwapSuffix(_activeRoiLabel, " T", "S");
             if (!string.IsNullOrWhiteSpace(swapped)) return swapped;
 
