@@ -2031,6 +2031,142 @@
                                     </Grid>
                                 </Border>
 
+                                <!-- Nguồn Camera Android (Samsung Galaxy S24 Ultra - Pro Mode) -->
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Visibility="{Binding ImageSource_IsAndroidCamera, Converter={StaticResource BoolToVis}}">
+                                    <StackPanel>
+                                        <!-- Phương thức kết nối (USB ADB / Wi-Fi / LAN) -->
+                                        <Grid Margin="0,0,0,1">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="120" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                                <TextBlock Text="Kết Nối S24 Ultra" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
+                                            </Border>
+                                            <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                                <ComboBox ItemsSource="{Binding AvailableAndroidConnectionModes}" SelectedItem="{Binding ImageSource_AndroidConnectionMode, UpdateSourceTrigger=PropertyChanged}" Margin="2,1" FontSize="11" />
+                                            </Border>
+                                        </Grid>
+
+                                        <!-- Host IP & Port + Nút ADB -->
+                                        <Grid Margin="0,0,0,1">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="120" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                                <TextBlock Text="Địa Chỉ IP : Port" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
+                                            </Border>
+                                            <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                                <Grid Margin="2,1">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                        <ColumnDefinition Width="50" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBox Text="{Binding ImageSource_AndroidHost, UpdateSourceTrigger=LostFocus}" FontSize="11" ToolTip="Nhập 127.0.0.1 khi dùng USB ADB, hoặc IP mạng Wi-Fi/Ethernet của S24 Ultra" />
+                                                    <TextBlock Grid.Column="1" Text=":" VerticalAlignment="Center" Margin="3,0" FontWeight="Bold" Foreground="{DynamicResource TextBrush}"/>
+                                                    <TextBox Grid.Column="2" Text="{Binding ImageSource_AndroidPort, UpdateSourceTrigger=LostFocus}" FontSize="11" TextAlignment="Center" />
+                                                </Grid>
+                                            </Border>
+                                            <Button Grid.Column="2" Content="⚡ ADB Forward" Command="{Binding ImageSource_AdbPortForwardCommand}" Margin="2,1,4,1" Padding="6,2" FontSize="10" FontWeight="Bold" ToolTip="Tự động mở cổng USB ADB forward tcp:8080 tcp:8080" />
+                                        </Grid>
+
+                                        <!-- Chọn Ống Kính Galaxy S24 Ultra -->
+                                        <Grid Margin="0,0,0,1">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="120" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                                <TextBlock Text="Ống Kính (Lens)" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
+                                            </Border>
+                                            <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                                <ComboBox ItemsSource="{Binding AvailableAndroidLenses}" SelectedItem="{Binding ImageSource_AndroidLens, UpdateSourceTrigger=PropertyChanged}" Margin="2,1" FontSize="11" ToolTip="PrimaryWide1x: 200MP • Tele3x: 10MP • Tele5x: 50MP • UltraWide: 12MP (Macro)" />
+                                            </Border>
+                                        </Grid>
+
+                                        <!-- Bù trừ phơi sáng EV Pro Mode -->
+                                        <Grid Margin="0,0,0,1">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="120" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                                <TextBlock Text="Bù Trừ EV" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
+                                            </Border>
+                                            <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                                <Grid Margin="2,1">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="50" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <Slider Minimum="-2.0" Maximum="2.0" SmallChange="0.1" LargeChange="0.5" Value="{Binding ImageSource_AndroidEv, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center" />
+                                                    <TextBlock Grid.Column="1" Text="{Binding ImageSource_AndroidEv, StringFormat='{}{0:+0.0;-0.0;0.0}'}" VerticalAlignment="Center" HorizontalAlignment="Right" FontWeight="Bold" Foreground="#FF9800" Margin="4,0,2,0" FontSize="11" />
+                                                </Grid>
+                                            </Border>
+                                        </Grid>
+
+                                        <!-- Lấy nét Focus (Auto / Macro / Manual) -->
+                                        <Grid Margin="0,0,0,1">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="120" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                                <TextBlock Text="Lấy Nét Focus" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
+                                            </Border>
+                                            <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                                <Grid Margin="2,1">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="90" />
+                                                        <ColumnDefinition Width="*" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <ComboBox ItemsSource="{Binding AvailableAndroidFocusModes}" SelectedItem="{Binding ImageSource_AndroidFocusMode, UpdateSourceTrigger=PropertyChanged}" FontSize="10.5" />
+                                                    <Grid Grid.Column="1" Margin="4,0,0,0" Visibility="{Binding ImageSource_IsAndroidManualFocus, Converter={StaticResource BoolToVis}}">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="38" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <Slider Minimum="0.0" Maximum="1.0" SmallChange="0.01" Value="{Binding ImageSource_AndroidFocusDistance, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center" ToolTip="Cự ly lấy nét thủ công (0.0 Vô cực ➔ 1.0 Cận cảnh)" />
+                                                        <TextBlock Grid.Column="1" Text="{Binding ImageSource_AndroidFocusDistance, StringFormat='{}{0:F2}'}" VerticalAlignment="Center" HorizontalAlignment="Right" FontWeight="Bold" Foreground="#00E5FF" FontSize="10" />
+                                                    </Grid>
+                                                </Grid>
+                                            </Border>
+                                        </Grid>
+
+                                        <!-- ISO & Đèn Flash Torch -->
+                                        <Grid Margin="0,0,0,1">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="120" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                                <TextBlock Text="ISO &amp; Đèn Flash" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
+                                            </Border>
+                                            <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                                <Grid Margin="2,1">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="70" />
+                                                        <ColumnDefinition Width="*" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <ComboBox ItemsSource="{Binding AvailableAndroidIsoOptions}" SelectedItem="{Binding ImageSource_AndroidIso, UpdateSourceTrigger=PropertyChanged}" FontSize="10.5" ToolTip="Độ nhạy sáng ISO" />
+                                                    <ToggleButton Grid.Column="1" Content="💡 Đèn Flash Torch" IsChecked="{Binding ImageSource_AndroidEnableTorch, Mode=TwoWay}" Margin="4,0,0,0" Padding="6,2" FontSize="10" FontWeight="Bold" Foreground="#FFC107" ToolTip="Bật / Tắt đèn Flash LED trợ sáng trên Galaxy S24 Ultra" />
+                                                </Grid>
+                                            </Border>
+                                        </Grid>
+
+                                        <!-- Tùy chọn Chụp Full-Res Snapshot & Nút Cấu hình Job -->
+                                        <Border Padding="4,4" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <DockPanel>
+                                                <CheckBox Content="Chụp cảm biến gốc siêu nét (12MP/50MP/200MP)" IsChecked="{Binding ImageSource_AndroidHighResSnapshot, Mode=TwoWay}" VerticalAlignment="Center" FontSize="10.5" FontWeight="SemiBold" Foreground="#10B981" ToolTip="Tải trực tiếp ảnh nguyên bản từ cảm biến S24 Ultra qua /photo.jpg khi chạy kiểm tra" />
+                                                <Button DockPanel.Dock="Right" Command="{Binding ImageSource_OpenJobCameraSettingsCommand}" Content="⚙️ Cài Đặt..." Padding="6,2" FontSize="10" FontWeight="Bold" Background="#1565C0" Foreground="White" BorderThickness="0" HorizontalAlignment="Right" Cursor="Hand" ToolTip="Mở cửa sổ cấu hình Camera Settings cho Job" />
+                                            </DockPanel>
+                                        </Border>
+                                    </StackPanel>
+                                </Border>
+
                                 <!-- Trigger Mode Selection -->
                                 <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
                                     <Grid>

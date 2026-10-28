@@ -6,6 +6,12 @@ class Program
 {
     static void Main(string[] args)
     {
+        if (args.Length > 0 && (args[0].Equals("android-camera", StringComparison.OrdinalIgnoreCase) || args[0].Equals("android", StringComparison.OrdinalIgnoreCase) || args[0].Equals("s24", StringComparison.OrdinalIgnoreCase)))
+        {
+            AndroidCameraProModeTests.RunAllTests();
+            return;
+        }
+
         if (args.Length > 0 && (args[0].Equals("column", StringComparison.OrdinalIgnoreCase) || args[0].Equals("column-resize", StringComparison.OrdinalIgnoreCase) || args[0].Equals("editor-column", StringComparison.OrdinalIgnoreCase)))
         {
             ToolEditorColumnResizeTests.RunAllTests();

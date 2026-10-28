@@ -155,7 +155,31 @@ public enum ImageSourceType
     Folder = 1,
     Camera = 2,
     Url = 3,
-    Pdf = 4
+    Pdf = 4,
+    AndroidCamera = 5
+}
+
+public enum AndroidConnectionMode
+{
+    Usb = 0,      // Kết nối cáp Type-C qua ADB Forward (127.0.0.1:8080) hoặc USB Tethering NDIS
+    WiFi = 1,     // Mạng Wi-Fi nội bộ không dây (LAN IP:Port)
+    Ethernet = 2  // Cáp mạng có dây RJ45 qua Adapter Type-C vào Switch công nghiệp
+}
+
+public enum AndroidCameraLens
+{
+    PrimaryWide1x = 0,     // Cảm biến chính Wide 200MP (1x)
+    Tele3x = 1,            // Cảm biến Tele 10MP (Zoom quang 3x)
+    Tele5xPeriscope = 2,   // Cảm biến Tele 50MP Periscope (Zoom quang 5x)
+    UltraWide06x = 3,      // Cảm biến Góc siêu rộng 12MP (0.6x, hỗ trợ Macro cận cảnh)
+    FrontSelfie = 4        // Cảm biến Camera trước 12MP
+}
+
+public enum AndroidFocusMode
+{
+    Auto = 0,              // Tự động lấy nét liên tục (Continuous AF)
+    Macro = 1,             // Lấy nét vi cự khoảng cách cực gần (Macro)
+    Manual = 2             // Lấy nét thủ công theo cự ly thanh trượt (0.0 - 1.0)
 }
 
 public enum PdfRenderMode
@@ -327,6 +351,73 @@ public sealed class ImageSourceDefinition
     /// Cấu hình thông số Đèn chiếu sáng (Lighting) riêng biệt cho từng kênh được lưu kèm theo Job hiện tại.
     /// </summary>
     public JobLightingParameters LightingParams { get; set; } = new();
+
+    #region Android Camera (Samsung Galaxy S24 Ultra) Parameters
+    /// <summary>
+    /// Phương thức kết nối điện thoại Android (USB qua ADB/Tethering, Wi-Fi LAN, hoặc Cáp Ethernet).
+    /// </summary>
+    public AndroidConnectionMode AndroidConnectionMode { get; set; } = AndroidConnectionMode.Usb;
+
+    /// <summary>
+    /// Địa chỉ IP hoặc Host của điện thoại Android (mặc định 127.0.0.1 khi dùng USB ADB Forward).
+    /// </summary>
+    public string AndroidHost { get; set; } = "127.0.0.1";
+
+    /// <summary>
+    /// Cổng dịch vụ Camera trên điện thoại Android (mặc định 8080).
+    /// </summary>
+    public int AndroidPort { get; set; } = 8080;
+
+    /// <summary>
+    /// Ống kính / Cảm biến Camera trên Galaxy S24 Ultra (Chính 1x 200MP, Tele 3x, Tele 5x Periscope, UltraWide 0.6x).
+    /// </summary>
+    public AndroidCameraLens AndroidLens { get; set; } = AndroidCameraLens.PrimaryWide1x;
+
+    /// <summary>
+    /// Tự động phơi sáng hay tinh chỉnh thời gian phơi sáng thủ công (Pro Mode).
+    /// </summary>
+    public bool AndroidAutoExposure { get; set; } = true;
+
+    /// <summary>
+    /// Thời gian phơi sáng (micro-giây µs). Ví dụ 10000µs = 10ms = 1/100s.
+    /// </summary>
+    public float AndroidExposureTimeUs { get; set; } = 10000.0f;
+
+    /// <summary>
+    /// Bù trừ giá trị phơi sáng EV (-2.0 đến +2.0).
+    /// </summary>
+    public float AndroidEv { get; set; } = 0.0f;
+
+    /// <summary>
+    /// Độ nhạy sáng ISO: "Auto", "50", "100", "200", "400", "800", "1600", "3200".
+    /// </summary>
+    public string AndroidIso { get; set; } = "Auto";
+
+    /// <summary>
+    /// Chế độ lấy nét: Auto Focus (AF), Macro Focus, hoặc Manual Focus.
+    /// </summary>
+    public AndroidFocusMode AndroidFocusMode { get; set; } = AndroidFocusMode.Auto;
+
+    /// <summary>
+    /// Khoảng cách lấy nét thủ công Manual Focus (0.0 = Vô cực, 1.0 = Cực cận Macro).
+    /// </summary>
+    public float AndroidFocusDistance { get; set; } = 0.0f;
+
+    /// <summary>
+    /// Cân bằng trắng: "Auto", "Daylight", "Cloudy", "Incandescent", "Fluorescent".
+    /// </summary>
+    public string AndroidWhiteBalance { get; set; } = "Auto";
+
+    /// <summary>
+    /// Bật/Tắt đèn Flash LED trợ sáng trên điện thoại (Torch Mode).
+    /// </summary>
+    public bool AndroidEnableTorch { get; set; } = false;
+
+    /// <summary>
+    /// Khi chạy Run / Trigger: Chụp ảnh cảm biến gốc siêu nét (Full-Res Sensor Snapshot 12MP/50MP/200MP) thay vì trích xuất từ video stream.
+    /// </summary>
+    public bool AndroidHighResSnapshot { get; set; } = true;
+    #endregion
 }
 
 public sealed class VisionConfig

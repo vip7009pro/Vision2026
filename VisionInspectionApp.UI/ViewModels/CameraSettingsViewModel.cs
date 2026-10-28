@@ -51,6 +51,7 @@ public sealed class CameraSettingsViewModel : ObservableObject, IDisposable
                 OnPropertyChanged(nameof(IsIndustrialCamera));
                 OnPropertyChanged(nameof(IsSimulatorCamera));
                 OnPropertyChanged(nameof(IsStandardOrWebcamCamera));
+                OnPropertyChanged(nameof(IsAndroidCamera));
                 OnPropertyChanged(nameof(IsWebcamCamera));
                 OnPropertyChanged(nameof(IsRtspCamera));
                 OnPropertyChanged(nameof(SelectedDeviceTitle));
@@ -62,6 +63,7 @@ public sealed class CameraSettingsViewModel : ObservableObject, IDisposable
     public bool IsIndustrialCamera => SelectedDevice?.Vendor is CameraVendor.Hikrobot or CameraVendor.Basler or CameraVendor.Cognex;
     public bool IsSimulatorCamera => SelectedDevice == null || SelectedDevice.Vendor == CameraVendor.Simulator;
     public bool IsStandardOrWebcamCamera => SelectedDevice?.Vendor is CameraVendor.WebcamDirectShow or CameraVendor.Rtsp;
+    public bool IsAndroidCamera => SelectedDevice?.Vendor == CameraVendor.AndroidCamera;
     public bool IsWebcamCamera => SelectedDevice?.Vendor == CameraVendor.WebcamDirectShow;
     public bool IsRtspCamera => SelectedDevice?.Vendor == CameraVendor.Rtsp;
 
@@ -73,6 +75,7 @@ public sealed class CameraSettingsViewModel : ObservableObject, IDisposable
         { Vendor: CameraVendor.WebcamDirectShow } => $"📹 Cấu Hình USB Webcam ({SelectedDevice.ModelName})",
         { Vendor: CameraVendor.Rtsp } => $"🌐 Cấu Hình Luồng Video RTSP ({SelectedDevice.ModelName})",
         { Vendor: CameraVendor.Simulator } => "🎮 Cấu Hình Camera Giả Lập (Simulator)",
+        { Vendor: CameraVendor.AndroidCamera } => $"📱 Cấu Hình Camera Android [Galaxy S24 Ultra] ({SelectedDevice.ModelName})",
         _ => "⚙️ Thông Số Camera"
     };
 
@@ -84,6 +87,7 @@ public sealed class CameraSettingsViewModel : ObservableObject, IDisposable
         CameraVendor.WebcamDirectShow => "USB WEBCAM",
         CameraVendor.Rtsp => "RTSP STREAM",
         CameraVendor.Simulator => "VIRTUAL SIMULATOR",
+        CameraVendor.AndroidCamera => "SAMSUNG S24 ULTRA (ANDROID)",
         _ => "CAMERA"
     };
 
@@ -635,6 +639,178 @@ public sealed class CameraSettingsViewModel : ObservableObject, IDisposable
         }
     }
 
+    #region Android Camera (Samsung Galaxy S24 Ultra) Pro Mode Properties
+    public Array AvailableAndroidConnectionModes => Enum.GetValues(typeof(VisionInspectionApp.Models.AndroidConnectionMode));
+    public Array AvailableAndroidLenses => Enum.GetValues(typeof(VisionInspectionApp.Models.AndroidCameraLens));
+    public Array AvailableAndroidFocusModes => Enum.GetValues(typeof(VisionInspectionApp.Models.AndroidFocusMode));
+    public ObservableCollection<string> AvailableAndroidIsoOptions { get; } = new()
+    {
+        "Auto", "50", "100", "200", "400", "800", "1600", "3200"
+    };
+    public ObservableCollection<string> AvailableAndroidWhiteBalances { get; } = new()
+    {
+        "Auto", "Daylight", "Cloudy", "Incandescent", "Fluorescent", "Warm"
+    };
+
+    public VisionInspectionApp.Models.AndroidConnectionMode AndroidConnectionMode
+    {
+        get => _cameraParams.AndroidConnectionMode;
+        set
+        {
+            if (_cameraParams.AndroidConnectionMode != value)
+            {
+                _cameraParams.AndroidConnectionMode = value;
+                if (SelectedDevice != null) SelectedDevice.AndroidConnectionMode = value;
+                OnPropertyChanged();
+                ScheduleApplyParameters();
+            }
+        }
+    }
+
+    public string AndroidHost
+    {
+        get => _cameraParams.AndroidHost;
+        set
+        {
+            if (_cameraParams.AndroidHost != value)
+            {
+                _cameraParams.AndroidHost = value;
+                if (SelectedDevice != null) { SelectedDevice.AndroidHost = value; SelectedDevice.IpAddress = value; }
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    public int AndroidPort
+    {
+        get => _cameraParams.AndroidPort;
+        set
+        {
+            if (_cameraParams.AndroidPort != value)
+            {
+                _cameraParams.AndroidPort = value;
+                if (SelectedDevice != null) SelectedDevice.AndroidPort = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    public VisionInspectionApp.Models.AndroidCameraLens AndroidLens
+    {
+        get => _cameraParams.AndroidLens;
+        set
+        {
+            if (_cameraParams.AndroidLens != value)
+            {
+                _cameraParams.AndroidLens = value;
+                OnPropertyChanged();
+                ScheduleApplyParameters();
+            }
+        }
+    }
+
+    public float AndroidEv
+    {
+        get => _cameraParams.AndroidEv;
+        set
+        {
+            if (Math.Abs(_cameraParams.AndroidEv - value) > 0.01f)
+            {
+                _cameraParams.AndroidEv = value;
+                OnPropertyChanged();
+                ScheduleApplyParameters();
+            }
+        }
+    }
+
+    public string AndroidIso
+    {
+        get => _cameraParams.AndroidIso;
+        set
+        {
+            if (_cameraParams.AndroidIso != value)
+            {
+                _cameraParams.AndroidIso = value;
+                OnPropertyChanged();
+                ScheduleApplyParameters();
+            }
+        }
+    }
+
+    public VisionInspectionApp.Models.AndroidFocusMode AndroidFocusMode
+    {
+        get => _cameraParams.AndroidFocusMode;
+        set
+        {
+            if (_cameraParams.AndroidFocusMode != value)
+            {
+                _cameraParams.AndroidFocusMode = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(IsAndroidManualFocus));
+                ScheduleApplyParameters();
+            }
+        }
+    }
+
+    public bool IsAndroidManualFocus => AndroidFocusMode == VisionInspectionApp.Models.AndroidFocusMode.Manual;
+
+    public float AndroidFocusDistance
+    {
+        get => _cameraParams.AndroidFocusDistance;
+        set
+        {
+            if (Math.Abs(_cameraParams.AndroidFocusDistance - value) > 0.005f)
+            {
+                _cameraParams.AndroidFocusDistance = Math.Clamp(value, 0.0f, 1.0f);
+                OnPropertyChanged();
+                ScheduleApplyParameters();
+            }
+        }
+    }
+
+    public string AndroidWhiteBalance
+    {
+        get => _cameraParams.AndroidWhiteBalance;
+        set
+        {
+            if (_cameraParams.AndroidWhiteBalance != value)
+            {
+                _cameraParams.AndroidWhiteBalance = value;
+                OnPropertyChanged();
+                ScheduleApplyParameters();
+            }
+        }
+    }
+
+    public bool AndroidEnableTorch
+    {
+        get => _cameraParams.AndroidEnableTorch;
+        set
+        {
+            if (_cameraParams.AndroidEnableTorch != value)
+            {
+                _cameraParams.AndroidEnableTorch = value;
+                OnPropertyChanged();
+                ScheduleApplyParameters();
+            }
+        }
+    }
+
+    public bool AndroidHighResSnapshot
+    {
+        get => _cameraParams.AndroidHighResSnapshot;
+        set
+        {
+            if (_cameraParams.AndroidHighResSnapshot != value)
+            {
+                _cameraParams.AndroidHighResSnapshot = value;
+                OnPropertyChanged();
+                ScheduleApplyParameters();
+            }
+        }
+    }
+    #endregion
+
     public ObservableCollection<OverlayItem> OverlayItems { get; } = new();
 
     public IAsyncRelayCommand StartCameraCommand { get; }
@@ -651,6 +827,8 @@ public sealed class CameraSettingsViewModel : ObservableObject, IDisposable
     public IRelayCommand FitViewCommand { get; }
     public IRelayCommand BrowseSimulatorImageCommand { get; }
     public IRelayCommand ClearSimulatorImageCommand { get; }
+    public IRelayCommand AdbPortForwardCommand { get; }
+    public IRelayCommand ToggleAndroidTorchCommand { get; }
     public IRelayCommand<RoiSelection> RoiEditedCommand { get; }
 
     private readonly System.Windows.Threading.DispatcherTimer _debounceTimer;
@@ -686,11 +864,21 @@ public sealed class CameraSettingsViewModel : ObservableObject, IDisposable
         FitViewCommand = new RelayCommand(TriggerFitView);
         BrowseSimulatorImageCommand = new RelayCommand(ExecuteBrowseSimulatorImage);
         ClearSimulatorImageCommand = new RelayCommand(ExecuteClearSimulatorImage);
+        AdbPortForwardCommand = new RelayCommand(ExecuteAdbPortForward);
+        ToggleAndroidTorchCommand = new RelayCommand(() => AndroidEnableTorch = !AndroidEnableTorch);
         RoiEditedCommand = new RelayCommand<RoiSelection>(OnRoiEdited);
 
         RefreshAvailableCameras();
         IsCameraRunning = _cameraService.IsRunning;
         RefreshOverlayItems();
+    }
+
+    private void ExecuteAdbPortForward()
+    {
+        bool success = VisionInspectionApp.UI.Services.Camera.Drivers.AndroidCameraDriver.EnsureAdbPortForward(AndroidPort);
+        StatusMessage = success 
+            ? $"Đã thiết lập ADB Forwarding thành công trên cổng {AndroidPort} (127.0.0.1:{AndroidPort})!" 
+            : $"Không thể chạy lệnh adb forward. Vui lòng đảm bảo Galaxy S24 Ultra đã bật USB Debugging và PC đã cài ADB.";
     }
 
     private void ScheduleApplyParameters()

@@ -9,7 +9,8 @@ public enum CameraVendor
     Cognex,
     WebcamDirectShow,
     Rtsp,
-    Simulator
+    Simulator,
+    AndroidCamera
 }
 
 public enum CameraInterfaceType
@@ -18,7 +19,8 @@ public enum CameraInterfaceType
     USB3,
     DirectShow,
     RTSP,
-    Virtual
+    Virtual,
+    Android
 }
 
 public sealed class CameraDeviceInfo
@@ -34,6 +36,11 @@ public sealed class CameraDeviceInfo
     public string MacAddress { get; set; } = string.Empty;
     public string RtspUrl { get; set; } = string.Empty;
 
+    // Cấu hình kết nối cho Android Camera
+    public VisionInspectionApp.Models.AndroidConnectionMode AndroidConnectionMode { get; set; } = VisionInspectionApp.Models.AndroidConnectionMode.Usb;
+    public string AndroidHost { get; set; } = "127.0.0.1";
+    public int AndroidPort { get; set; } = 8080;
+
     public string VendorName => Vendor switch
     {
         CameraVendor.Hikrobot => "Hikrobot MVS",
@@ -42,6 +49,7 @@ public sealed class CameraDeviceInfo
         CameraVendor.WebcamDirectShow => "USB Webcam",
         CameraVendor.Rtsp => "RTSP Stream",
         CameraVendor.Simulator => "Simulator",
+        CameraVendor.AndroidCamera => "Samsung Galaxy (Android)",
         _ => Vendor.ToString()
     };
 
@@ -52,6 +60,7 @@ public sealed class CameraDeviceInfo
         CameraInterfaceType.DirectShow => "DirectShow",
         CameraInterfaceType.RTSP => "IP RTSP",
         CameraInterfaceType.Virtual => "Virtual Engine",
+        CameraInterfaceType.Android => "USB / Wi-Fi / LAN",
         _ => InterfaceType.ToString()
     };
 
@@ -63,6 +72,7 @@ public sealed class CameraDeviceInfo
         CameraVendor.WebcamDirectShow => "📹",
         CameraVendor.Rtsp => "🌐",
         CameraVendor.Simulator => "🎮",
+        CameraVendor.AndroidCamera => "📱",
         _ => "📷"
     };
 
@@ -71,6 +81,9 @@ public sealed class CameraDeviceInfo
         CameraVendor.Simulator => "Nguồn ảnh giả lập công nghiệp",
         CameraVendor.Rtsp => string.IsNullOrEmpty(RtspUrl) ? "Luồng Video IP RTSP" : RtspUrl,
         CameraVendor.WebcamDirectShow => $"Cổng USB #{Index} DirectShow",
+        CameraVendor.AndroidCamera => string.IsNullOrEmpty(IpAddress) 
+            ? "Samsung Galaxy S24 Ultra (USB / Wi-Fi / Ethernet)" 
+            : $"{IpAddress}:{AndroidPort} • Galaxy S24 Ultra",
         _ => string.IsNullOrEmpty(IpAddress) 
             ? (string.IsNullOrEmpty(SerialNumber) ? "Industrial Vision Camera" : $"S/N: {SerialNumber}") 
             : $"IP: {IpAddress}  •  S/N: {SerialNumber}"
@@ -88,6 +101,7 @@ public sealed class CameraDeviceInfo
                 CameraVendor.WebcamDirectShow => $"📹 [USB Cam {Index}] {ModelName}",
                 CameraVendor.Rtsp => $"🌐 [RTSP] {ModelName} ({RtspUrl})",
                 CameraVendor.Simulator => "🎮 [Simulator] Camera Giả Lập Công Nghiệp",
+                CameraVendor.AndroidCamera => $"📱 [Android] {ModelName} {(string.IsNullOrEmpty(IpAddress) ? "(USB/LAN)" : "IP: " + IpAddress)}",
                 _ => ModelName
             };
         }

@@ -22,6 +22,7 @@ using VisionInspectionApp.Models;
 using VisionInspectionApp.UI.Controls;
 using VisionInspectionApp.UI.Services;
 using VisionInspectionApp.UI.Services.Camera;
+using VisionInspectionApp.UI.Services.Camera.Drivers;
 using VisionInspectionApp.VisionEngine;
 namespace VisionInspectionApp.UI.ViewModels
 {
@@ -3370,6 +3371,31 @@ namespace VisionInspectionApp.UI.ViewModels
                     // 3. Otherwise, fetch snapshot asynchronously in background so UI thread NEVER blocks
                     ScheduleAsyncCameraSnapshotFetch(source);
                 }
+                else if (source.SourceType == ImageSourceType.AndroidCamera)
+                {
+                    // 1. If camera service is running with Android camera, grab latest frame
+                    if (_cameraService.IsRunning && _cameraService.ActiveDriver is AndroidCameraDriver)
+                    {
+                        var liveMat = _cameraService.TryGetLatestFrameClone();
+                        if (liveMat is not null && !liveMat.Empty())
+                        {
+                            SetImageSourceCache(source.Name, "android_camera", liveMat);
+                            return liveMat;
+                        }
+                    }
+
+                    // 2. If shared image context already has an image, use it
+                    using var existingSnap = _sharedImage.GetSnapshot();
+                    if (existingSnap is not null && !existingSnap.Empty())
+                    {
+                        var clone = existingSnap.Clone();
+                        SetImageSourceCache(source.Name, "android_camera", clone);
+                        return clone;
+                    }
+
+                    // 3. Fetch snapshot asynchronously from Android Camera
+                    ScheduleAsyncAndroidCameraSnapshotFetch(source);
+                }
             }
             catch (Exception ex)
             {
@@ -3377,6 +3403,75 @@ namespace VisionInspectionApp.UI.ViewModels
             }
 
             return null;
+        }
+
+        private async Task<Mat?> CaptureAndroidCameraSnapshotAsync(ImageSourceDefinition def)
+        {
+            try
+            {
+                if (_cameraService.IsRunning && _cameraService.ActiveDriver is AndroidCameraDriver activeDriver)
+                {
+                    return await activeDriver.GrabFrameAsync(3000);
+                }
+
+                using var driver = new AndroidCameraDriver();
+                var deviceInfo = new CameraDeviceInfo
+                {
+                    Vendor = CameraVendor.AndroidCamera,
+                    InterfaceType = CameraInterfaceType.Android,
+                    AndroidHost = def.AndroidHost,
+                    AndroidPort = def.AndroidPort,
+                    AndroidConnectionMode = def.AndroidConnectionMode,
+                    IpAddress = def.AndroidHost,
+                    ModelName = "Samsung Galaxy S24 Ultra"
+                };
+
+                if (await driver.OpenAsync(deviceInfo))
+                {
+                    var p = new CameraParameters
+                    {
+                        AndroidConnectionMode = def.AndroidConnectionMode,
+                        AndroidHost = def.AndroidHost,
+                        AndroidPort = def.AndroidPort,
+                        AndroidLens = def.AndroidLens,
+                        AutoExposure = def.AndroidAutoExposure,
+                        ExposureTimeUs = def.AndroidExposureTimeUs,
+                        AndroidEv = def.AndroidEv,
+                        AndroidIso = def.AndroidIso,
+                        AndroidFocusMode = def.AndroidFocusMode,
+                        AndroidFocusDistance = def.AndroidFocusDistance,
+                        AndroidWhiteBalance = def.AndroidWhiteBalance,
+                        AndroidEnableTorch = def.AndroidEnableTorch,
+                        AndroidHighResSnapshot = def.AndroidHighResSnapshot
+                    };
+                    await driver.ApplyParametersAsync(p);
+                    var mat = await driver.GrabFrameAsync(3500);
+                    await driver.CloseAsync();
+                    return mat;
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[CaptureAndroidCameraSnapshotAsync] Exception: {ex.Message}");
+            }
+            return null;
+        }
+
+        private void ScheduleAsyncAndroidCameraSnapshotFetch(ImageSourceDefinition source)
+        {
+            Task.Run(async () =>
+            {
+                var mat = await CaptureAndroidCameraSnapshotAsync(source);
+                if (mat != null && !mat.Empty())
+                {
+                    SetImageSourceCache(source.Name, "android_camera", mat);
+                    _sharedImage.SetImage(mat);
+                    System.Windows.Application.Current?.Dispatcher.InvokeAsync(() =>
+                    {
+                        RefreshPreviews();
+                    });
+                }
+            });
         }
 
         private Mat? CaptureCameraSnapshotSafe(int cameraIndex, string? rtspUrl)
@@ -3612,7 +3707,7 @@ namespace VisionInspectionApp.UI.ViewModels
                         StartFolderFlow(imgSourceDef, files);
                         return;
                     }
-                    else if (imgSourceDef.SourceType == ImageSourceType.Camera)
+                    else if (imgSourceDef.SourceType == ImageSourceType.Camera || imgSourceDef.SourceType == ImageSourceType.AndroidCamera)
                     {
                         _ = StartContinuousCameraFlow(imgSourceDef);
                         return;
@@ -3899,6 +3994,13 @@ namespace VisionInspectionApp.UI.ViewModels
                         : "Đang chạy liên tục: Software Trigger (Tối đa tốc độ / FreeRun)...";
                 }
             }
+            else if (sourceDef.SourceType == ImageSourceType.AndroidCamera)
+            {
+                int interval = Math.Max(0, sourceDef.FolderIntervalMs);
+                StatusBarText = interval > 0
+                    ? $"Đang chạy liên tục: Samsung Galaxy S24 Ultra (Chu kỳ {interval} ms)..."
+                    : "Đang chạy liên tục: Samsung Galaxy S24 Ultra (Pro Mode)...";
+            }
             else if (isSimulator)
             {
                 int interval = Math.Max(0, sourceDef.FolderIntervalMs);
@@ -3926,7 +4028,22 @@ namespace VisionInspectionApp.UI.ViewModels
                 var allDevices = CameraDriverFactory.ScanAllDevices();
                 CameraDeviceInfo? targetDevice = null;
 
-                if (isSimulator)
+                if (sourceDef.SourceType == ImageSourceType.AndroidCamera)
+                {
+                    targetDevice = allDevices.FirstOrDefault(d => d.Vendor == CameraVendor.AndroidCamera)
+                                   ?? new CameraDeviceInfo
+                                   {
+                                       Vendor = CameraVendor.AndroidCamera,
+                                       InterfaceType = CameraInterfaceType.Android,
+                                       Index = -3,
+                                       AndroidHost = sourceDef.AndroidHost,
+                                       AndroidPort = sourceDef.AndroidPort,
+                                       AndroidConnectionMode = sourceDef.AndroidConnectionMode,
+                                       IpAddress = sourceDef.AndroidHost,
+                                       ModelName = "Samsung Galaxy S24 Ultra"
+                                   };
+                }
+                else if (isSimulator)
                 {
                     targetDevice = allDevices.FirstOrDefault(d => d.Vendor == CameraVendor.Simulator)
                                    ?? new CameraDeviceInfo { Vendor = CameraVendor.Simulator, Index = CameraService.SimulatorCameraIndex, ModelName = "🎮 Camera Giả Lập Công Nghiệp" };
@@ -4900,6 +5017,26 @@ namespace VisionInspectionApp.UI.ViewModels
                                 catch (Exception ex)
                                 {
                                     System.Diagnostics.Debug.WriteLine($"RunFlow Camera Exception: {ex.Message}");
+                                }
+                            }
+                            else if (imgSourceDef.SourceType == ImageSourceType.AndroidCamera)
+                            {
+                                try
+                                {
+                                    var androidMat = await CaptureAndroidCameraSnapshotAsync(imgSourceDef);
+                                    if (androidMat is not null && !androidMat.Empty())
+                                    {
+                                        SetImageSourceCache(imgSourceDef.Name, "android_camera", androidMat);
+                                        using (var displayMat = PrepareDisplayImageForSharedContext(androidMat, imgSourceDef))
+                                        {
+                                            _sharedImage.SetImage(displayMat);
+                                        }
+                                        snap = androidMat;
+                                    }
+                                }
+                                catch (Exception ex)
+                                {
+                                    System.Diagnostics.Debug.WriteLine($"RunFlow AndroidCamera Exception: {ex.Message}");
                                 }
                             }
                             else

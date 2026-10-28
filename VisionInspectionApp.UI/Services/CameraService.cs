@@ -956,7 +956,7 @@ public sealed class CameraService : IDisposable
             bool match = false;
             if (IsSimulator(cameraIndex, rtspUrl) && _activeDeviceInfo?.Vendor == CameraVendor.Simulator) match = true;
             else if (!string.IsNullOrEmpty(rtspUrl) && _activeDeviceInfo?.Vendor == CameraVendor.Rtsp && string.Equals(_activeDeviceInfo.RtspUrl, rtspUrl, StringComparison.OrdinalIgnoreCase)) match = true;
-            else if (_activeDeviceInfo?.Vendor == CameraVendor.Hikrobot || _activeDeviceInfo?.Vendor == CameraVendor.Basler || _activeDeviceInfo?.Vendor == CameraVendor.Cognex) match = true;
+            else if (_activeDeviceInfo?.Vendor == CameraVendor.Hikrobot || _activeDeviceInfo?.Vendor == CameraVendor.Basler || _activeDeviceInfo?.Vendor == CameraVendor.Cognex || _activeDeviceInfo?.Vendor == CameraVendor.AndroidCamera) match = true;
             else if (_activeDeviceInfo?.Index == cameraIndex) match = true;
 
             if (match)
@@ -1009,7 +1009,9 @@ public sealed class CameraService : IDisposable
         {
             var all = CameraDriverFactory.ScanAllDevices();
             dev = all.FirstOrDefault(d => d.Index == cameraIndex) ??
-                  new CameraDeviceInfo { Vendor = CameraVendor.WebcamDirectShow, InterfaceType = CameraInterfaceType.DirectShow, Index = cameraIndex };
+                  (cameraIndex == -3 || cameraIndex == -4
+                      ? new CameraDeviceInfo { Vendor = CameraVendor.AndroidCamera, InterfaceType = CameraInterfaceType.Android, Index = cameraIndex, ModelName = "Samsung Galaxy S24 Ultra" }
+                      : new CameraDeviceInfo { Vendor = CameraVendor.WebcamDirectShow, InterfaceType = CameraInterfaceType.DirectShow, Index = cameraIndex });
         }
 
         using var driver = CameraDriverFactory.CreateDriver(dev.Vendor);

@@ -69,6 +69,19 @@ public sealed class CameraParameters
     public string CustomImagePath { get; set; } = "";
     public bool EnableRandomTransform { get; set; } = false;
 
+    // Android Camera (Samsung Galaxy S24 Ultra) Pro Mode
+    public AndroidConnectionMode AndroidConnectionMode { get; set; } = AndroidConnectionMode.Usb;
+    public string AndroidHost { get; set; } = "127.0.0.1";
+    public int AndroidPort { get; set; } = 8080;
+    public AndroidCameraLens AndroidLens { get; set; } = AndroidCameraLens.PrimaryWide1x;
+    public float AndroidEv { get; set; } = 0.0f;
+    public string AndroidIso { get; set; } = "Auto";
+    public AndroidFocusMode AndroidFocusMode { get; set; } = AndroidFocusMode.Auto;
+    public float AndroidFocusDistance { get; set; } = 0.0f;
+    public bool AndroidEnableTorch { get; set; } = false;
+    public bool AndroidHighResSnapshot { get; set; } = true;
+    public string AndroidWhiteBalance { get; set; } = "Auto";
+
     public CameraParameters Clone()
     {
         return (CameraParameters)MemberwiseClone();

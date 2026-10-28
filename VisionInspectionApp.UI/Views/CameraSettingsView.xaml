@@ -673,6 +673,151 @@
                             </GroupBox>
                         </StackPanel>
 
+                        <!-- ============================================================= -->
+                        <!-- PHÂN HỆ 4: CAMERA ANDROID PRO MODE (GALAXY S24 ULTRA)          -->
+                        <!-- ============================================================= -->
+                        <StackPanel Visibility="{Binding IsAndroidCamera, Converter={StaticResource BoolToVis}}">
+
+                            <!-- Group 1: Kết nối thiết bị -->
+                            <GroupBox Header="🔌 Cổng Giao Tiếp (USB / Wi-Fi / LAN)" Margin="0,0,0,8" Padding="6" FontWeight="SemiBold">
+                                <StackPanel>
+                                    <TextBlock Text="Phương thức kết nối:" FontSize="10.5" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,2" />
+                                    <ComboBox ItemsSource="{Binding AvailableAndroidConnectionModes}" SelectedItem="{Binding AndroidConnectionMode}" Margin="0,0,0,6" Padding="4,3" FontSize="11" />
+
+                                    <Grid Margin="0,0,0,6">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="65" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0">
+                                            <TextBlock Text="Địa chỉ IP / Host:" FontSize="10.5" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,1" />
+                                            <TextBox Text="{Binding AndroidHost, UpdateSourceTrigger=PropertyChanged}" Padding="4,3" FontSize="11" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1" Margin="4,0,0,0">
+                                            <TextBlock Text="Cổng (Port):" FontSize="10.5" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,1" />
+                                            <TextBox Text="{Binding AndroidPort, UpdateSourceTrigger=PropertyChanged}" Padding="4,3" FontSize="11" />
+                                        </StackPanel>
+                                    </Grid>
+
+                                    <Button Command="{Binding AdbPortForwardCommand}"
+                                            Content="⚡ Kích Hoạt Cáp USB (ADB Forward)"
+                                            Padding="6,4" FontSize="10.5" FontWeight="Bold" Margin="0,0,0,2"
+                                            Background="#1565C0" Foreground="White" BorderThickness="0" Cursor="Hand"
+                                            ToolTip="Tự động mở cổng socket 127.0.0.1:8080 qua cáp Type-C bằng lệnh 'adb forward tcp:8080 tcp:8080'" />
+                                    <TextBlock Text="* USB: 127.0.0.1:8080 • Wi-Fi/Ethernet: IP của S24 Ultra" FontSize="9.5" Foreground="{DynamicResource TextMutedBrush}" />
+                                </StackPanel>
+                            </GroupBox>
+
+                            <!-- Group 2: Chọn Ống Kính Galaxy S24 Ultra -->
+                            <GroupBox Header="🔍 Chọn Ống Kính / Cảm Biến Galaxy S24 Ultra" Margin="0,0,0,8" Padding="6" FontWeight="SemiBold">
+                                <StackPanel>
+                                    <TextBlock Text="Ống kính chụp ảnh:" FontSize="10.5" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,2" />
+                                    <ComboBox ItemsSource="{Binding AvailableAndroidLenses}" SelectedItem="{Binding AndroidLens}" Margin="0,0,0,4" Padding="4,3" FontSize="11"
+                                              ToolTip="PrimaryWide1x: 200MP • Tele3x: 10MP • Tele5xPeriscope: 50MP • UltraWide06x: 12MP (Macro)" />
+                                    <TextBlock Text="Hỗ trợ chuyển đổi nhanh 4 cảm biến mặt sau &amp; Camera trước" FontSize="9.5" Foreground="{DynamicResource TextMutedBrush}" />
+                                </StackPanel>
+                            </GroupBox>
+
+                            <!-- Group 3: Phơi Sáng & Bù Trừ EV (Pro Mode) -->
+                            <GroupBox Header="💡 Phơi Sáng &amp; Bù Trừ EV (Pro Mode)" Margin="0,0,0,8" Padding="6" FontWeight="SemiBold">
+                                <StackPanel>
+                                    <DockPanel Margin="0,0,0,2">
+                                        <TextBlock Text="Bù trừ phơi sáng EV:" FontSize="10.5" Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center" />
+                                        <TextBlock Text="{Binding AndroidEv, StringFormat='{}{0:+0.0;-0.0;0.0} EV'}" DockPanel.Dock="Right" FontWeight="Bold" Foreground="#FF9800" FontSize="11" />
+                                    </DockPanel>
+                                    <Slider Minimum="-2.0" Maximum="2.0" SmallChange="0.1" LargeChange="0.5" TickFrequency="0.5" IsSnapToTickEnabled="False" Value="{Binding AndroidEv}" Margin="0,0,0,6" VerticalAlignment="Center" />
+
+                                    <DockPanel Margin="0,0,0,2">
+                                        <TextBlock Text="Thời gian phơi sáng (Exposure µs):" FontSize="10.5" Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center" />
+                                        <CheckBox Content="Auto" IsChecked="{Binding AutoExposure}" DockPanel.Dock="Right" FontSize="10.5" />
+                                    </DockPanel>
+                                    <Grid Margin="0,0,0,4">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="65" />
+                                        </Grid.ColumnDefinitions>
+                                        <Slider Grid.Column="0" Minimum="100" Maximum="100000" Value="{Binding ExposureTimeUs}" IsEnabled="{Binding AutoExposure, Converter={StaticResource InverseBoolConverter}}" VerticalAlignment="Center" />
+                                        <TextBox Grid.Column="1" Text="{Binding ExposureTimeUs, StringFormat='{}{0:F0}', UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding AutoExposure, Converter={StaticResource InverseBoolConverter}}" Margin="4,0,0,0" Padding="2,1" TextAlignment="Right" FontSize="10.5" />
+                                    </Grid>
+                                    <TextBlock Text="* 10000µs = 1/100s • 1000µs = 1/1000s • 250µs = 1/4000s" FontSize="9.5" Foreground="{DynamicResource TextMutedBrush}" />
+                                </StackPanel>
+                            </GroupBox>
+
+                            <!-- Group 4: Lấy Nét Focus (Auto / Macro / Manual) -->
+                            <GroupBox Header="🎯 Lấy Nét Focus (Auto / Macro / Manual)" Margin="0,0,0,8" Padding="6" FontWeight="SemiBold">
+                                <StackPanel>
+                                    <TextBlock Text="Chế độ lấy nét:" FontSize="10.5" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,2" />
+                                    <ComboBox ItemsSource="{Binding AvailableAndroidFocusModes}" SelectedItem="{Binding AndroidFocusMode}" Margin="0,0,0,6" Padding="4,3" FontSize="11" />
+
+                                    <StackPanel Visibility="{Binding IsAndroidManualFocus, Converter={StaticResource BoolToVis}}">
+                                        <DockPanel Margin="0,0,0,2">
+                                            <TextBlock Text="Cự ly nét Manual (0.0 Vô cực ➔ 1.0 Cận cảnh):" FontSize="10" Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center" />
+                                            <TextBlock Text="{Binding AndroidFocusDistance, StringFormat='{}{0:F2}'}" DockPanel.Dock="Right" FontWeight="Bold" Foreground="#00E5FF" FontSize="11" />
+                                        </DockPanel>
+                                        <Slider Minimum="0.0" Maximum="1.0" SmallChange="0.01" LargeChange="0.1" Value="{Binding AndroidFocusDistance}" Margin="0,0,0,4" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </GroupBox>
+
+                            <!-- Group 5: ISO, White Balance & Đèn Flash Torch -->
+                            <GroupBox Header="🎨 ISO, Cân Bằng Trắng &amp; Đèn Flash Trợ Sáng" Margin="0,0,0,8" Padding="6" FontWeight="SemiBold">
+                                <StackPanel>
+                                    <Grid Margin="0,0,0,6">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Margin="0,0,3,0">
+                                            <TextBlock Text="Độ nhạy sáng ISO:" FontSize="10" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,1" />
+                                            <ComboBox ItemsSource="{Binding AvailableAndroidIsoOptions}" SelectedItem="{Binding AndroidIso}" Padding="4,2" FontSize="10.5" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1" Margin="3,0,0,0">
+                                            <TextBlock Text="Cân bằng trắng (WB):" FontSize="10" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,1" />
+                                            <ComboBox ItemsSource="{Binding AvailableAndroidWhiteBalances}" SelectedItem="{Binding AndroidWhiteBalance}" Padding="4,2" FontSize="10.5" />
+                                        </StackPanel>
+                                    </Grid>
+
+                                    <!-- Nút Bật/Tắt Đèn Flash Torch -->
+                                    <DockPanel Margin="0,2,0,4">
+                                        <CheckBox Content="💡 Bật Đèn Flash Trợ Sáng (Torch Mode)" IsChecked="{Binding AndroidEnableTorch, Mode=TwoWay}" VerticalAlignment="Center" FontSize="11" FontWeight="Bold" Foreground="#FFC107" ToolTip="Bật đèn Flash LED trên Galaxy S24 Ultra làm nguồn sáng soi chi tiết sản phẩm" />
+                                    </DockPanel>
+                                </StackPanel>
+                            </GroupBox>
+
+                            <!-- Group 6: Chụp Ảnh Cảm Biến Gốc & Tinh Chỉnh OpenCV -->
+                            <GroupBox Header="📸 Ảnh Cảm Biến Gốc &amp; Bộ Lọc Mềm" Margin="0,0,0,8" Padding="6" FontWeight="SemiBold">
+                                <StackPanel>
+                                    <CheckBox Content="🎯 Chụp ảnh gốc độ nét cao (Full-Res Snapshot)" IsChecked="{Binding AndroidHighResSnapshot}" Margin="0,0,0,6" FontSize="11" FontWeight="Bold" Foreground="#10B981" ToolTip="Khi chụp ảnh tĩnh hoặc chạy kiểm tra, tải ảnh nguyên bản cảm biến (12MP/50MP/200MP) qua /photo.jpg để đạt độ nét cao nhất." />
+
+                                    <TextBlock Text="Độ sáng (Brightness):" FontSize="10" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,1" />
+                                    <Grid Margin="0,0,0,4">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="55" />
+                                        </Grid.ColumnDefinitions>
+                                        <Slider Grid.Column="0" Minimum="-100" Maximum="100" Value="{Binding Brightness}" VerticalAlignment="Center" />
+                                        <TextBox Grid.Column="1" Text="{Binding Brightness, StringFormat='{}{0:F0}', UpdateSourceTrigger=PropertyChanged}" Margin="4,0,0,0" Padding="2,1" TextAlignment="Right" FontSize="10" />
+                                    </Grid>
+
+                                    <TextBlock Text="Độ tương phản (Contrast):" FontSize="10" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,1" />
+                                    <Grid Margin="0,0,0,4">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="55" />
+                                        </Grid.ColumnDefinitions>
+                                        <Slider Grid.Column="0" Minimum="0.1" Maximum="3.0" Value="{Binding Contrast}" VerticalAlignment="Center" />
+                                        <TextBox Grid.Column="1" Text="{Binding Contrast, StringFormat='{}{0:F2}', UpdateSourceTrigger=PropertyChanged}" Margin="4,0,0,0" Padding="2,1" TextAlignment="Right" FontSize="10" />
+                                    </Grid>
+
+                                    <CheckBox Content="Chuyển Ảnh Đen Trắng (Grayscale)" IsChecked="{Binding IsGrayscale}" Margin="0,0,0,4" FontSize="10.5" />
+                                    <StackPanel Orientation="Horizontal">
+                                        <CheckBox Content="Lật Ngang (Rev X)" IsChecked="{Binding ReverseX}" Margin="0,0,12,0" FontSize="10.5" />
+                                        <CheckBox Content="Lật Dọc (Rev Y)" IsChecked="{Binding ReverseY}" FontSize="10.5" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </GroupBox>
+                        </StackPanel>
+
                     </StackPanel>
                 </ScrollViewer>
 

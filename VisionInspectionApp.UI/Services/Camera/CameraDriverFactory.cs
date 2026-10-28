@@ -14,6 +14,7 @@ public static class CameraDriverFactory
             CameraVendor.Basler => new BaslerCameraDriver(),
             CameraVendor.Cognex => new CognexCameraDriver(),
             CameraVendor.WebcamDirectShow or CameraVendor.Rtsp => new OpenCvCameraDriver(),
+            CameraVendor.AndroidCamera => new AndroidCameraDriver(),
             CameraVendor.Simulator => new SimulatorCameraDriver(),
             _ => new SimulatorCameraDriver()
         };
@@ -31,6 +32,14 @@ public static class CameraDriverFactory
             Index = CameraService.SimulatorCameraIndex,
             ModelName = "🎮 Camera Giả Lập Công Nghiệp (Simulator)"
         });
+
+        // 2. Quét & Thêm Camera Android (Samsung Galaxy S24 Ultra)
+        try
+        {
+            var androidDevices = AndroidCameraDriver.ScanDevices();
+            allDevices.AddRange(androidDevices);
+        }
+        catch { }
 
         // 2. Quét Camera Hikrobot (GigE & USB3) - Chỉ quét nếu IsMvSdkAvailable() = true (kiểm tra file đĩa MvCameraControl.dll)
         if (HikCameraDriver.IsMvSdkAvailable())

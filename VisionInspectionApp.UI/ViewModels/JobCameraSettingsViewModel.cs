@@ -13,6 +13,7 @@ using VisionInspectionApp.Models;
 using VisionInspectionApp.UI.Controls;
 using VisionInspectionApp.UI.Services;
 using VisionInspectionApp.UI.Services.Camera;
+using VisionInspectionApp.UI.Services.Camera.Drivers;
 
 namespace VisionInspectionApp.UI.ViewModels;
 
@@ -75,8 +76,192 @@ public sealed class JobCameraSettingsViewModel : ObservableObject, IDisposable
     public CameraDeviceInfo? SelectedDevice
     {
         get => _selectedDevice;
-        set => SetProperty(ref _selectedDevice, value);
+        set
+        {
+            if (SetProperty(ref _selectedDevice, value))
+            {
+                OnPropertyChanged(nameof(IsAndroidCamera));
+                OnPropertyChanged(nameof(IsIndustrialCamera));
+                if (value != null && value.Vendor == CameraVendor.AndroidCamera)
+                {
+                    if (value.AndroidPort > 0) AndroidPort = value.AndroidPort;
+                    if (!string.IsNullOrWhiteSpace(value.AndroidHost)) AndroidHost = value.AndroidHost;
+                    AndroidConnectionMode = value.AndroidConnectionMode;
+                }
+            }
+        }
     }
+
+    public bool IsAndroidCamera => SelectedDevice?.Vendor == CameraVendor.AndroidCamera;
+    public bool IsIndustrialCamera => !IsAndroidCamera;
+
+    public AndroidConnectionMode AndroidConnectionMode
+    {
+        get => _cameraParams.AndroidConnectionMode;
+        set
+        {
+            if (_cameraParams.AndroidConnectionMode != value)
+            {
+                _cameraParams.AndroidConnectionMode = value;
+                OnPropertyChanged();
+                ScheduleApplyParameters();
+            }
+        }
+    }
+
+    public string AndroidHost
+    {
+        get => string.IsNullOrWhiteSpace(_cameraParams.AndroidHost) ? "127.0.0.1" : _cameraParams.AndroidHost;
+        set
+        {
+            if (_cameraParams.AndroidHost != value)
+            {
+                _cameraParams.AndroidHost = value;
+                OnPropertyChanged();
+                ScheduleApplyParameters();
+            }
+        }
+    }
+
+    public int AndroidPort
+    {
+        get => _cameraParams.AndroidPort > 0 ? _cameraParams.AndroidPort : 8080;
+        set
+        {
+            if (_cameraParams.AndroidPort != value)
+            {
+                _cameraParams.AndroidPort = value;
+                OnPropertyChanged();
+                ScheduleApplyParameters();
+            }
+        }
+    }
+
+    public AndroidCameraLens AndroidLens
+    {
+        get => _cameraParams.AndroidLens;
+        set
+        {
+            if (_cameraParams.AndroidLens != value)
+            {
+                _cameraParams.AndroidLens = value;
+                OnPropertyChanged();
+                ScheduleApplyParameters();
+            }
+        }
+    }
+
+    public float AndroidEv
+    {
+        get => _cameraParams.AndroidEv;
+        set
+        {
+            if (Math.Abs(_cameraParams.AndroidEv - value) > 0.05f)
+            {
+                _cameraParams.AndroidEv = value;
+                OnPropertyChanged();
+                ScheduleApplyParameters();
+            }
+        }
+    }
+
+    public string AndroidIso
+    {
+        get => string.IsNullOrWhiteSpace(_cameraParams.AndroidIso) ? "Auto" : _cameraParams.AndroidIso;
+        set
+        {
+            if (_cameraParams.AndroidIso != value)
+            {
+                _cameraParams.AndroidIso = value;
+                OnPropertyChanged();
+                ScheduleApplyParameters();
+            }
+        }
+    }
+
+    public AndroidFocusMode AndroidFocusMode
+    {
+        get => _cameraParams.AndroidFocusMode;
+        set
+        {
+            if (_cameraParams.AndroidFocusMode != value)
+            {
+                _cameraParams.AndroidFocusMode = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(IsAndroidManualFocus));
+                ScheduleApplyParameters();
+            }
+        }
+    }
+
+    public float AndroidFocusDistance
+    {
+        get => _cameraParams.AndroidFocusDistance;
+        set
+        {
+            if (Math.Abs(_cameraParams.AndroidFocusDistance - value) > 0.05f)
+            {
+                _cameraParams.AndroidFocusDistance = value;
+                OnPropertyChanged();
+                ScheduleApplyParameters();
+            }
+        }
+    }
+
+    public string AndroidWhiteBalance
+    {
+        get => string.IsNullOrWhiteSpace(_cameraParams.AndroidWhiteBalance) ? "Auto" : _cameraParams.AndroidWhiteBalance;
+        set
+        {
+            if (_cameraParams.AndroidWhiteBalance != value)
+            {
+                _cameraParams.AndroidWhiteBalance = value;
+                OnPropertyChanged();
+                ScheduleApplyParameters();
+            }
+        }
+    }
+
+    public bool AndroidEnableTorch
+    {
+        get => _cameraParams.AndroidEnableTorch;
+        set
+        {
+            if (_cameraParams.AndroidEnableTorch != value)
+            {
+                _cameraParams.AndroidEnableTorch = value;
+                OnPropertyChanged();
+                ScheduleApplyParameters();
+            }
+        }
+    }
+
+    public bool AndroidHighResSnapshot
+    {
+        get => _cameraParams.AndroidHighResSnapshot;
+        set
+        {
+            if (_cameraParams.AndroidHighResSnapshot != value)
+            {
+                _cameraParams.AndroidHighResSnapshot = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    public bool IsAndroidManualFocus => AndroidFocusMode == AndroidFocusMode.Manual;
+
+    public ObservableCollection<AndroidConnectionMode> AvailableAndroidConnectionModes { get; } = new(Enum.GetValues<AndroidConnectionMode>());
+    public ObservableCollection<AndroidCameraLens> AvailableAndroidLenses { get; } = new(Enum.GetValues<AndroidCameraLens>());
+    public ObservableCollection<AndroidFocusMode> AvailableAndroidFocusModes { get; } = new(Enum.GetValues<AndroidFocusMode>());
+    public ObservableCollection<string> AvailableAndroidIsoOptions { get; } = new()
+    {
+        "Auto", "50", "100", "200", "400", "800", "1600", "3200"
+    };
+    public ObservableCollection<string> AvailableAndroidWhiteBalances { get; } = new()
+    {
+        "Auto", "Incandescent", "Fluorescent", "Daylight", "Cloudy"
+    };
 
     public bool IsCameraRunning
     {
@@ -567,6 +752,8 @@ public sealed class JobCameraSettingsViewModel : ObservableObject, IDisposable
     public IRelayCommand SaveJobCameraSettingsCommand { get; }
     public IRelayCommand CancelCommand { get; }
     public IRelayCommand<RoiSelection> RoiEditedCommand { get; }
+    public IRelayCommand AdbPortForwardCommand { get; }
+    public IRelayCommand ToggleAndroidTorchCommand { get; }
 
     private readonly System.Windows.Threading.DispatcherTimer _debounceTimer;
     private bool _isUpdatingFromRoiDrag;
@@ -619,6 +806,9 @@ public sealed class JobCameraSettingsViewModel : ObservableObject, IDisposable
 
         ApplyLightingToDeviceCommand = new AsyncRelayCommand(ApplyLightingToDeviceAsync);
         ReadLightingFromDeviceCommand = new AsyncRelayCommand(ReadLightingFromDeviceAsync);
+
+        AdbPortForwardCommand = new RelayCommand(ExecuteAdbPortForward);
+        ToggleAndroidTorchCommand = new RelayCommand(ExecuteToggleAndroidTorch);
 
         SyncLightingChannels();
 
@@ -995,6 +1185,27 @@ public sealed class JobCameraSettingsViewModel : ObservableObject, IDisposable
             RequestClose?.Invoke();
         }
         catch { }
+    }
+
+    private void ExecuteAdbPortForward()
+    {
+        try
+        {
+            bool ok = AndroidCameraDriver.EnsureAdbPortForward(AndroidPort);
+            StatusMessage = ok
+                ? $"✅ Đã mở cổng ADB Forward tcp:{AndroidPort} -> tcp:{AndroidPort} thành công!"
+                : $"⚠️ Cảnh báo: Không thể chạy ADB Forward cho cổng {AndroidPort}. Vui lòng kiểm tra đã bật USB Debugging và cài adb.exe.";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Lỗi ADB Forward: {ex.Message}";
+        }
+    }
+
+    private void ExecuteToggleAndroidTorch()
+    {
+        AndroidEnableTorch = !AndroidEnableTorch;
+        StatusMessage = AndroidEnableTorch ? "💡 Đã bật đèn Flash LED (Torch)." : "💡 Đã tắt đèn Flash LED (Torch).";
     }
 
     public bool IsViewActive { get; set; } = true;

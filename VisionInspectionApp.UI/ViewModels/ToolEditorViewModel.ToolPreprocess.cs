@@ -19,6 +19,7 @@ using VisionInspectionApp.Models;
 using VisionInspectionApp.UI.Controls;
 using VisionInspectionApp.UI.Services;
 using VisionInspectionApp.UI.Services.Camera;
+using VisionInspectionApp.UI.Services.Camera.Drivers;
 using VisionInspectionApp.VisionEngine;
 namespace VisionInspectionApp.UI.ViewModels
 {
@@ -470,6 +471,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 OnPropertyChanged(nameof(ImageSource_IsCamera));
                 OnPropertyChanged(nameof(ImageSource_IsUrl));
                 OnPropertyChanged(nameof(ImageSource_IsPdf));
+                OnPropertyChanged(nameof(ImageSource_IsAndroidCamera));
                 OnPropertyChanged(nameof(ImageSource_IsPdfPanActive));
                 OnPropertyChanged(nameof(ImageSource_PdfIsPanDragEnabled));
                 OnPropertyChanged(nameof(ImageSource_IsIndustrialCamera));
@@ -490,6 +492,7 @@ namespace VisionInspectionApp.UI.ViewModels
         public bool ImageSource_IsCamera => ImageSource_SourceType == ImageSourceType.Camera;
         public bool ImageSource_IsUrl => ImageSource_SourceType == ImageSourceType.Url;
         public bool ImageSource_IsPdf => ImageSource_SourceType == ImageSourceType.Pdf;
+        public bool ImageSource_IsAndroidCamera => ImageSource_SourceType == ImageSourceType.AndroidCamera;
 
         private bool _imageSource_PdfIsPanDragEnabled = true;
         public bool ImageSource_PdfIsPanDragEnabled
@@ -718,6 +721,205 @@ namespace VisionInspectionApp.UI.ViewModels
                 RequestAutoSave();
             }
         }
+
+        #region ImageSource Android Camera (Samsung Galaxy S24 Ultra) Properties
+        public Array AvailableAndroidConnectionModes => Enum.GetValues(typeof(AndroidConnectionMode));
+        public Array AvailableAndroidLenses => Enum.GetValues(typeof(AndroidCameraLens));
+        public Array AvailableAndroidFocusModes => Enum.GetValues(typeof(AndroidFocusMode));
+        public ObservableCollection<string> AvailableAndroidIsoOptions { get; } = new()
+        {
+            "Auto", "50", "100", "200", "400", "800", "1600", "3200"
+        };
+        public ObservableCollection<string> AvailableAndroidWhiteBalances { get; } = new()
+        {
+            "Auto", "Daylight", "Cloudy", "Incandescent", "Fluorescent", "Warm"
+        };
+
+        public AndroidConnectionMode ImageSource_AndroidConnectionMode
+        {
+            get => SelectedImageSourceDef()?.AndroidConnectionMode ?? AndroidConnectionMode.Usb;
+            set
+            {
+                var def = SelectedImageSourceDef();
+                if (def == null || def.AndroidConnectionMode == value) return;
+                def.AndroidConnectionMode = value;
+                OnPropertyChanged();
+                RequestAutoSave();
+            }
+        }
+
+        public string ImageSource_AndroidHost
+        {
+            get => SelectedImageSourceDef()?.AndroidHost ?? "127.0.0.1";
+            set
+            {
+                var def = SelectedImageSourceDef();
+                if (def == null || string.Equals(def.AndroidHost, value, StringComparison.Ordinal)) return;
+                def.AndroidHost = value ?? "127.0.0.1";
+                OnPropertyChanged();
+                RequestAutoSave();
+            }
+        }
+
+        public int ImageSource_AndroidPort
+        {
+            get => SelectedImageSourceDef()?.AndroidPort ?? 8080;
+            set
+            {
+                var def = SelectedImageSourceDef();
+                if (def == null || def.AndroidPort == value) return;
+                def.AndroidPort = value;
+                OnPropertyChanged();
+                RequestAutoSave();
+            }
+        }
+
+        public AndroidCameraLens ImageSource_AndroidLens
+        {
+            get => SelectedImageSourceDef()?.AndroidLens ?? AndroidCameraLens.PrimaryWide1x;
+            set
+            {
+                var def = SelectedImageSourceDef();
+                if (def == null || def.AndroidLens == value) return;
+                def.AndroidLens = value;
+                OnPropertyChanged();
+                RequestAutoSave();
+            }
+        }
+
+        public bool ImageSource_AndroidAutoExposure
+        {
+            get => SelectedImageSourceDef()?.AndroidAutoExposure ?? true;
+            set
+            {
+                var def = SelectedImageSourceDef();
+                if (def == null || def.AndroidAutoExposure == value) return;
+                def.AndroidAutoExposure = value;
+                OnPropertyChanged();
+                RequestAutoSave();
+            }
+        }
+
+        public float ImageSource_AndroidExposureTimeUs
+        {
+            get => SelectedImageSourceDef()?.AndroidExposureTimeUs ?? 10000.0f;
+            set
+            {
+                var def = SelectedImageSourceDef();
+                if (def == null || Math.Abs(def.AndroidExposureTimeUs - value) < 0.001f) return;
+                def.AndroidExposureTimeUs = value;
+                OnPropertyChanged();
+                RequestAutoSave();
+            }
+        }
+
+        public float ImageSource_AndroidEv
+        {
+            get => SelectedImageSourceDef()?.AndroidEv ?? 0.0f;
+            set
+            {
+                var def = SelectedImageSourceDef();
+                if (def == null || Math.Abs(def.AndroidEv - value) < 0.01f) return;
+                def.AndroidEv = value;
+                OnPropertyChanged();
+                RequestAutoSave();
+            }
+        }
+
+        public string ImageSource_AndroidIso
+        {
+            get => SelectedImageSourceDef()?.AndroidIso ?? "Auto";
+            set
+            {
+                var def = SelectedImageSourceDef();
+                if (def == null || string.Equals(def.AndroidIso, value, StringComparison.Ordinal)) return;
+                def.AndroidIso = value ?? "Auto";
+                OnPropertyChanged();
+                RequestAutoSave();
+            }
+        }
+
+        public AndroidFocusMode ImageSource_AndroidFocusMode
+        {
+            get => SelectedImageSourceDef()?.AndroidFocusMode ?? AndroidFocusMode.Auto;
+            set
+            {
+                var def = SelectedImageSourceDef();
+                if (def == null || def.AndroidFocusMode == value) return;
+                def.AndroidFocusMode = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(ImageSource_IsAndroidManualFocus));
+                RequestAutoSave();
+            }
+        }
+
+        public bool ImageSource_IsAndroidManualFocus => ImageSource_AndroidFocusMode == AndroidFocusMode.Manual;
+
+        public float ImageSource_AndroidFocusDistance
+        {
+            get => SelectedImageSourceDef()?.AndroidFocusDistance ?? 0.0f;
+            set
+            {
+                var def = SelectedImageSourceDef();
+                if (def == null || Math.Abs(def.AndroidFocusDistance - value) < 0.005f) return;
+                def.AndroidFocusDistance = Math.Clamp(value, 0.0f, 1.0f);
+                OnPropertyChanged();
+                RequestAutoSave();
+            }
+        }
+
+        public string ImageSource_AndroidWhiteBalance
+        {
+            get => SelectedImageSourceDef()?.AndroidWhiteBalance ?? "Auto";
+            set
+            {
+                var def = SelectedImageSourceDef();
+                if (def == null || string.Equals(def.AndroidWhiteBalance, value, StringComparison.Ordinal)) return;
+                def.AndroidWhiteBalance = value ?? "Auto";
+                OnPropertyChanged();
+                RequestAutoSave();
+            }
+        }
+
+        public bool ImageSource_AndroidEnableTorch
+        {
+            get => SelectedImageSourceDef()?.AndroidEnableTorch ?? false;
+            set
+            {
+                var def = SelectedImageSourceDef();
+                if (def == null || def.AndroidEnableTorch == value) return;
+                def.AndroidEnableTorch = value;
+                OnPropertyChanged();
+                RequestAutoSave();
+            }
+        }
+
+        public bool ImageSource_AndroidHighResSnapshot
+        {
+            get => SelectedImageSourceDef()?.AndroidHighResSnapshot ?? true;
+            set
+            {
+                var def = SelectedImageSourceDef();
+                if (def == null || def.AndroidHighResSnapshot == value) return;
+                def.AndroidHighResSnapshot = value;
+                OnPropertyChanged();
+                RequestAutoSave();
+            }
+        }
+
+        public IRelayCommand ImageSource_AdbPortForwardCommand => new RelayCommand(() =>
+        {
+            bool ok = AndroidCameraDriver.EnsureAdbPortForward(ImageSource_AndroidPort);
+            StatusBarText = ok 
+                ? $"Đã mở cổng ADB Forwarding thành công trên port {ImageSource_AndroidPort} (127.0.0.1:{ImageSource_AndroidPort})!" 
+                : "Không thể chạy lệnh adb forward. Vui lòng kiểm tra cáp USB và USB Debugging trên Galaxy S24 Ultra.";
+        });
+
+        public IRelayCommand ImageSource_ToggleTorchCommand => new RelayCommand(() =>
+        {
+            ImageSource_AndroidEnableTorch = !ImageSource_AndroidEnableTorch;
+        });
+        #endregion
 
         public async Task ImageSource_FetchUrlImageAsync()
         {
