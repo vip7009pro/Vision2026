@@ -1,0 +1,9 @@
+<resources>
+    <string name="app_name">Vision S24 Ultra Camera Server</string>
+    <string name="server_running">ĐANG CHẠY TRỰC TIẾP (PORT: %1$d)</string>
+    <string name="server_stopped">MÁY CHỦ ĐANG DỪNG</string>
+    <string name="start_server">BẬT SERVER CAMERA</string>
+    <string name="stop_server">DỪNG SERVER CAMERA</string>
+    <string name="switch_lens">ĐỔI ỐNG KÍNH (LENS)</string>
+    <string name="toggle_torch">BẬT/TẮT ĐÈN FLASH</string>
+</resources>

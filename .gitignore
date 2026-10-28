@@ -108,3 +108,24 @@ publish/
 # Local settings
 appsettings.Local.json
 launchSettings.json
+
+# Android / Gradle build outputs
+.gradle/
+**/.gradle/
+build/
+**/build/
+**/app/build/
+.cxx/
+**/.cxx/
+captures/
+**/captures/
+
+# Android Studio local configuration & binaries
+local.properties
+**/local.properties
+*.apk
+*.ap_
+*.aab
+*.dex
+*.jks
+*.keystore
