@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Windows.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using VisionInspectionApp.Application.PLC.Services;
+using VisionInspectionApp.Models;
 
 namespace VisionInspectionApp.UI.ViewModels;
 
@@ -78,6 +79,22 @@ public sealed partial class ToolEditorViewModel : ObservableObject
 
     [ObservableProperty]
     private string _handshakeAckToolTip = "PLC Ack Tag";
+
+    // Mini Indicator cho thanh ghi kết quả Word (Int16) khi ở chế độ số hoặc song hành
+    [ObservableProperty]
+    private bool _isHandshakeWordIndicatorVisible = false;
+
+    [ObservableProperty]
+    private string _handshakeWordText = "D100: --";
+
+    [ObservableProperty]
+    private Brush _handshakeWordBrush = BrushLedOffBg;
+
+    [ObservableProperty]
+    private Brush _handshakeWordForeBrush = BrushLedOffText;
+
+    [ObservableProperty]
+    private string _handshakeWordToolTip = "Thanh ghi số nguyên kết quả kiểm tra PLC (Int16)";
 
     #endregion
 
@@ -157,7 +174,14 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         bool hasAckTag = !string.IsNullOrWhiteSpace(ackTag);
         bool isNoAckMode = isNonBlocking || !hasAckTag;
 
-        // 2. Cập nhật Mini LED Brushes cho 4 bit
+        string wordTag = _handshakeStateMachine?.GetEffectiveResultWordTag() ?? "D100";
+        var outputMode = _handshakeStateMachine?.ResultOutputMode ?? PlcResultOutputMode.Bit;
+        short wordVal = ReadTagInt16(plcId, wordTag);
+        short passVal = _handshakeStateMachine?.PassNumericValue ?? 2;
+        short ngVal = _handshakeStateMachine?.NgNumericValue ?? 3;
+        bool isWordMode = outputMode == PlcResultOutputMode.NumericInt16 || outputMode == PlcResultOutputMode.Both;
+
+        // 2. Cập nhật Mini LED Brushes cho 4 bit & Mini Indicator cho Word
         HandshakeRdyBrush = bitRdy ? BrushGreenBg : BrushLedOffBg;
         HandshakeRdyForeBrush = bitRdy ? BrushGreenText : BrushLedOffText;
 
@@ -172,6 +196,28 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         HandshakeAckToolTip = hasAckTag
             ? $"PLC Ack Tag ({ackTag}): {(bitAck ? "1 (Active - Đã nhận Ack)" : "0 (Inactive)")}"
             : "PLC Ack: Đã bỏ qua (Chế độ Non-blocking - Không chờ Ack)";
+
+        IsHandshakeWordIndicatorVisible = isWordMode;
+        if (isWordMode)
+        {
+            HandshakeWordText = $"{wordTag}:{wordVal}";
+            if (wordVal == passVal)
+            {
+                HandshakeWordBrush = BrushGreenBg;
+                HandshakeWordForeBrush = BrushGreenText;
+            }
+            else if (wordVal == ngVal)
+            {
+                HandshakeWordBrush = BrushRedBg;
+                HandshakeWordForeBrush = BrushRedText;
+            }
+            else
+            {
+                HandshakeWordBrush = BrushLedOffBg;
+                HandshakeWordForeBrush = BrushLedOffText;
+            }
+            HandshakeWordToolTip = $"Thanh ghi kết quả Word ({wordTag}): {wordVal} (OK={passVal}, NG={ngVal})";
+        }
 
         // 3. Phân loại trạng thái tổng thể Badge & Màu sắc
         if (!isHandshakeEnabled)
@@ -285,30 +331,74 @@ public sealed partial class ToolEditorViewModel : ObservableObject
 
         string modeSuffix = isNonBlocking ? " [Non-blocking Queue]" : "";
         string summaryAck = hasAckTag ? $"ACK:{(bitAck ? 1 : 0)}" : "ACK:--";
-        HandshakeStatusBarSummary = $"🤝 PLC: {plcId} ({stateDesc}{modeSuffix}) | RDY:{(bitRdy ? 1 : 0)} BSY:{(bitBsy ? 1 : 0)} DON:{(bitDon ? 1 : 0)} {summaryAck}";
+        string summaryWord = isWordMode ? $" RES:{wordVal}" : "";
+        HandshakeStatusBarSummary = $"🤝 PLC: {plcId} ({stateDesc}{modeSuffix}) | RDY:{(bitRdy ? 1 : 0)} BSY:{(bitBsy ? 1 : 0)} DON:{(bitDon ? 1 : 0)} {summaryAck}{summaryWord}";
 
         string ackToolTipText = hasAckTag
             ? $"• [X] PLC Ack      ({ackTag}) : {(bitAck ? "ON (1) — PLC đã chốt" : "OFF (0)")}\n"
             : $"• [X] PLC Ack                 : Bỏ qua (Chế độ Non-blocking - Không chờ Ack)\n";
+
+        string modeStr = outputMode switch
+        {
+            PlcResultOutputMode.Bit => "1. Tín hiệu rời rạc Bit (Bool: Pass/NG)",
+            PlcResultOutputMode.NumericInt16 => $"2. Thanh ghi số nguyên ({wordTag})",
+            PlcResultOutputMode.Both => $"3. Song hành cả hai (Bit & {wordTag})",
+            _ => "Bit (Bool)"
+        };
+
+        string bitSignalsText = "";
+        if (outputMode == PlcResultOutputMode.Bit || outputMode == PlcResultOutputMode.Both)
+        {
+            bitSignalsText = $"• [Y] Vision Pass  ({passTag}) : {(bitPass ? "ON (1) — ĐẠT" : "OFF (0)")} [{_handshakeStateMachine?.PassSignalType}]\n" +
+                             $"• [Y] Vision NG    ({ngTag}) : {(bitNg ? "ON (1) — LỖI" : "OFF (0)")} [{_handshakeStateMachine?.NgSignalType}]\n";
+        }
+
+        string wordSignalText = "";
+        if (isWordMode)
+        {
+            string wordStatusDesc = wordVal == passVal ? "ĐẠT / OK" : (wordVal == ngVal ? "LỖI / NG" : "Chờ / Idle");
+            wordSignalText = $"• [D] Mã Kết Quả   ({wordTag}) : {wordVal} ({wordStatusDesc}) [OK={passVal}, NG={ngVal}]\n";
+        }
 
         HandshakeStatusToolTip =
             $"🤝 CHU TRÌNH BẮT TAY CÔNG NGHIỆP {(isNonBlocking ? "NON-BLOCKING HÀNG ĐỢI 20 NẤC" : "DETERMINISTIC 24/7")}\n" +
             $"──────────────────────────────────────────────────\n" +
             $"• PLC Mục Tiêu : {plcId} (Đã Kết Nối - Online)\n" +
             $"• Chế Độ Bắt Tay: {(isNonBlocking ? "⚡ Bất đồng bộ (Không chờ Ack - Băng tải chạy liên tục)" : (hasAckTag ? "Đồng bộ chờ Ack" : "Non-blocking (Bỏ Ack)"))}\n" +
+            $"• Phương Thức Xuất : {modeStr}\n" +
             $"• Trạng Thái   : {stateDesc}\n" +
             $"• Điểm Ra Chỉ Định: Nấc {_handshakeStateMachine?.TargetStopStationIndex ?? 10} / 20 (M200..M219)\n" +
             $"• Timeout Chờ  : {_handshakeStateMachine?.HandshakeTimeoutMs ?? 500} ms\n" +
             $"──────────────────────────────────────────────────\n" +
-            $"Tín Hiệu I/O Hiện Tại (MC Protocol / Internal Bit):\n" +
+            $"Tín Hiệu I/O Hiện Tại (MC Protocol / Internal Bit & Word):\n" +
             $"• [Y] Vision Ready ({rdyTag}) : {(bitRdy ? "ON (1) — Sẵn sàng chụp" : "OFF (0)")}\n" +
             $"• [Y] Vision Busy  ({bsyTag}) : {(bitBsy ? "ON (1) — Đang đo" : "OFF (0)")}\n" +
             $"• [Y] Vision Done  ({donTag}) : {(bitDon ? "ON (1) — Đo xong" : "OFF (0)")} [{_handshakeStateMachine?.DoneSignalType}]\n" +
             ackToolTipText +
-            $"• [Y] Vision Pass  ({passTag}) : {(bitPass ? "ON (1) — ĐẠT" : "OFF (0)")} [{_handshakeStateMachine?.PassSignalType}]\n" +
-            $"• [Y] Vision NG    ({ngTag}) : {(bitNg ? "ON (1) — LỖI" : "OFF (0)")} [{_handshakeStateMachine?.NgSignalType}]\n" +
+            bitSignalsText +
+            wordSignalText +
             $"──────────────────────────────────────────────────\n" +
             $"👉 Bấm chuột vào đây để mở Cửa Sổ Cấu Hình & Chẩn Đoán PLC.";
+    }
+
+    private short ReadTagInt16(string plcId, string tagNameOrAddress)
+    {
+        if (_plcManagerService == null || string.IsNullOrWhiteSpace(tagNameOrAddress))
+            return 0;
+
+        var tagVal = _plcManagerService.GetTagValue(plcId, tagNameOrAddress);
+        if (tagVal?.CurrentValue == null)
+            return 0;
+
+        var val = tagVal.CurrentValue;
+        if (val is short s) return s;
+        if (val is int i) return (short)i;
+        if (val is ushort us) return (short)us;
+        if (val is byte b) return b;
+        if (short.TryParse(val.ToString(), out var parsedS)) return parsedS;
+        if (int.TryParse(val.ToString(), out var parsedI)) return (short)parsedI;
+
+        return 0;
     }
 
     private bool ReadTagBool(string plcId, string tagNameOrAddress)

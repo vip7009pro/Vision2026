@@ -1,5 +1,22 @@
 # ROADMAP.md — Lộ trình phát triển & Trạng thái nhiệm vụ
 
+- [x] Task 426: Bổ Sung Chế Độ Xuất Kết Quả OK/NG Dạng Số Nguyên (Int16) Song Hành Cùng Dạng Bit Bool Trong Cửa Sổ Bắt Tay 24/7 (Handshake):
+  - [x] **Mô hình Dữ liệu & Cấu hình Bắt tay** ([PlcIndustrialConfig.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Models/PlcIndustrialConfig.cs)):
+    - Định nghĩa enum `PlcResultOutputMode` gồm 3 chế độ: `Bit = 0` (2 bit Pass/NG), `NumericInt16 = 1` (Thanh ghi Word Int16), `Both = 2` (Song hành đồng thời cả Bit & Số).
+    - Mở rộng `IndustrialHandshakeConfig`: `ResultOutputMode`, `ResultWordTagName` (mặc định D100 FX5U / MW100 I/O), `PassNumericValue = 2`, `NgNumericValue = 3`, `IdleNumericValue = 0`, `ClearResultWordOnReady = true`, `IsBitModeActive`, `IsNumericModeActive`.
+    - Hiện thực `INotifyPropertyChanged` cho `IndustrialHandshakeConfig`, cập nhật `CopyFrom`, `HasConfiguredTags`, `ApplyFx5uDefaults`, `ApplyStandardIoDefaults`.
+  - [x] **Máy Trạng Thái & Dịch Vụ PLC** ([IndustrialHandshakeStateMachine.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/PLC/Services/IndustrialHandshakeStateMachine.cs), [PlcManagerService.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/PLC/Services/PlcManagerService.cs)):
+    - Thêm resolver `GetEffectiveResultWordTag()` (fallback `D100_VisionResult`, `D100`, `MW100`).
+    - Trong `SetReadyAsync` & `SetIdleAsync`: Tự động ghi `IdleNumericValue` (0) vào thanh ghi Word khi sẵn sàng đón phôi mới.
+    - Trong `CompleteHandshakeAsync`: Phát tín hiệu bit khi chọn Bit/Both, ghi giá trị `PassNumericValue` (2) / `NgNumericValue` (3) dạng `short` vào thanh ghi Word khi chọn NumericInt16/Both.
+    - `EnsureIndustrialTagsRegistered` & `GetAllTagsToPoll`: Tự động đăng ký và nạp polling cho `ResultWordTagName` với kiểu `PlcDataType.Int16`.
+  - [x] **Giao Diện Người Dùng & Giám Sát Thanh Công Cụ** ([PlcManagerViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/PLC/PlcManagerViewModel.cs), [PlcManagerWindow.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/PLC/PlcManagerWindow.xaml), [ToolEditorViewModel.HandshakeUi.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.HandshakeUi.cs), [ToolEditorView.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/ToolEditorView.xaml)):
+    - Tab 2 Bắt Tay 24/7: Bổ sung ComboBox chọn chế độ xuất kết quả (Bit / Dạng Số Int16 / Song Hành Cả Hai); phân vùng cấu hình trực quan cho Bit Bool và Thanh Ghi Số Word (Thanh ghi Word, OK=2, NG=3, Idle=0, Clear on Ready).
+    - Thanh công cụ Tool Editor: Bổ sung Mini Indicator `D100: 2` (Xanh) khi OK và `D100: 3` (Đỏ) khi NG; hiển thị chi tiết thanh ghi kết quả trên Handshake ToolTip và Status Bar.
+  - [x] **Kiểm Thử Tự Động Toàn Diện** ([PlcHandshakeNumericModeTests.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/PlcHandshakeNumericModeTests.cs)):
+    - 7/7 test PASSED 100%: JSON serialization, defaults/helpers, ghi OK=2 và NG=3 dạng Int16, chế độ Song hành Both đồng thời Bit & Số, giá trị tùy chỉnh (OK=10, NG=99, Idle=-1), đăng ký Tag Int16, ViewModel options.
+    - Regression tests PASSED 100%: `PlcHandshakePersistenceTests` (7/7) và `PlcSignalTypeTests` (5/5).
+
 - [x] Task 425: Bổ Sung Chi Tiết Báo Lỗi NG Cho Tool CodeDetection Trong Cột Kết Quả Tool Editor & Inspection View:
   - [x] **Cập nhật Logic Báo Lỗi NG & Spec** ([ToolEditorViewModel.Inspection.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.Inspection.cs), [InspectionViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/InspectionViewModel.cs)):
     - Nâng cấp record `CodeDetectionRow` bổ sung `Pass`, `ExpectedSpec`, `StatusText`, `StatusBrush`, `DetailText`.
@@ -17,53 +34,16 @@
     - 6/6 test PASSED 100%: Kiểm tra Not Found báo lỗi kèm tên tool, đọc sai Spec báo lỗi kèm chuỗi so sánh, đọc đúng Spec PASS, SelectedRunPass phản ánh chuẩn, ConditionEvaluator đăng ký biến chuẩn, InspectionViewModel đồng bộ SpecResults & NgReasons.
 
 - [x] Task 424: Bổ Sung Tool ObjectCounting Trong Tool Editor (Đếm Vật Thể Đa Hướng Hỗn Loạn, Quản Lý Spec & Dung Sai):
-  - [x] **Model & Cấu Hình** ([ObjectCountingDefinition.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Models/ObjectCountingDefinition.cs)):
-    - Quản lý Search ROI và Template ROI riêng biệt, hỗ trợ đường dẫn lưu ảnh mẫu `TemplateImagePath`.
-    - Quản lý tiêu chuẩn kiểm tra: `NominalCount` (Số lượng chuẩn), `Tolerance` (Dung sai đối xứng $\pm$), `ToleranceMinus`, `TolerancePlus`.
-    - Đặt mặc định thuật toán là `NormalizedCorrelation` (NCC) khử nhiễu vân nền công nghiệp, `MinScore = 0.65`, `MaxOverlap = 0.30`.
-  - [x] **Engine Xử Lý Thị Giác Đa Hướng & Khắc Phục Đếm Sai Vỉ Thuốc** ([ObjectCountingEngine.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.VisionEngine/ObjectCountingEngine.cs)):
-    - Cơ chế Cửa sổ suy giảm biên mềm (Circular/Apodization Window) triệt tiêu 4 góc vân nền nhôm/băng chuyền của ảnh crop template.
-    - Bộ lọc Rotated NMS nâng cấp: Kiểm tra khoảng cách tâm theo tỷ lệ kích thước ($0.70 \times \min(W, H)$) và tỷ lệ giao nhau trên diện tích vật thể (`interArea / minArea > MaxOverlap`).
-    - Bổ sung trích xuất Local Maxima trên lưới ShapeMatching ngăn ngừa bùng nổ hàng trăm candidate pixel liền kề.
-    - Kim tự tháp Coarse-to-Fine (Pyramid Down 2x) quét nhanh toàn dải $360^\circ$. Đánh giá PASS/NG theo quy chuẩn Spec và Dung sai.
-  - [x] **Tích Hợp Pipeline, Condition Evaluator & Bảng Spec Results**:
-    - [InspectionService.Pipeline.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/Services/InspectionService.Pipeline.cs): Lập lịch chạy song song trong Pipeline kiểm tra, xuất `ObjectCountingResult`.
-    - [ConditionEvaluator.VariableRegistry.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/Services/ConditionEvaluator.VariableRegistry.cs): Đăng ký biến `Count`, `Nominal`, `Pass`, `Status`, `Found`, `Time`.
-    - Tích hợp xuất kết quả kiểm tra vào bảng `SpecResults` trong [ToolEditorViewModel.Inspection.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.Inspection.cs) và [InspectionViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/InspectionViewModel.cs).
-  - [x] **Kiểm Thử Tự Động Toàn Diện** ([ObjectCountingTests.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/ObjectCountingTests.cs)):
-    - 5/5 test PASSED 100%: Đếm vật thể xoay đa hướng hỗn loạn; Đánh giá Spec & Dung sai; Rotated NMS khử trùng lặp; Condition Evaluator; **Đếm chính xác tuyệt đối 10/10 viên thuốc trên vỉ thuốc thực tế của người dùng** (khắc phục hoàn toàn lỗi đếm thành 69 vật thể).
+  - [x] Model `ObjectCountingDefinition.cs`, Engine `ObjectCountingEngine.cs`, Circular Window, Rotated NMS.
+  - [x] Tích hợp Pipeline, Condition Evaluator & Bảng Spec Results.
+  - [x] Kiểm thử tự động `ObjectCountingTests.cs`: 5/5 test PASSED 100% (Đếm chính xác tuyệt đối 10/10 viên thuốc trên vỉ thuốc thực tế).
 
 - [x] Task 423: Xây Dựng Ứng Dụng Android Native "VisionCameraServer" Cho Galaxy S24 Ultra & Tích Hợp Camera2 Pro Mode:
-  - [x] **Dự án Android Studio Native** ([AndroidCameraServer/](file:///g:/NODEJS/Vision2026/AndroidCameraServer)):
-    - Khởi tạo trọn bộ dự án với Gradle 8.11, CompileSDK 34 (Android 14), Package `com.vision.cameraserver`.
-    - [AndroidManifest.xml](file:///g:/NODEJS/Vision2026/AndroidCameraServer/app/src/main/AndroidManifest.xml): Cấu hình đầy đủ quyền `CAMERA`, `INTERNET`, `WAKE_LOCK`, `FLASHLIGHT`.
-  - [x] **Camera2 Multi-Camera & Pro Mode** ([Camera2Manager.java](file:///g:/NODEJS/Vision2026/AndroidCameraServer/app/src/main/java/com/vision/cameraserver/Camera2Manager.java)):
-    - Ánh xạ 4 cảm biến mặt sau Galaxy S24 Ultra: Lens 0 (Chính 1x 200MP), Lens 1 (Tele 3x), Lens 2 (Tele 5x Periscope 50MP), Lens 3 (Ultra-Wide 0.6x Macro), Lens 4 (Front 12MP).
-    - Hỗ trợ phơi sáng thủ công nano-giây, bù trừ EV (-2.0 đến +2.0), lấy nét thủ công Manual Focus diopters (0.0 vô cực đến 10.0 cận cảnh), ISO thủ công (50 - 3200), White Balance và đèn Flash LED trợ sáng Torch.
-    - Luồng ảnh tĩnh độ nét cao Full-Res Snapshot qua `ImageReader` chuyên dụng khi có yêu cầu `/photo.jpg`.
-  - [x] **Máy Chủ HTTP Nhúng Hiệu Năng Cao** ([HttpCameraServer.java](file:///g:/NODEJS/Vision2026/AndroidCameraServer/app/src/main/java/com/vision/cameraserver/HttpCameraServer.java)):
-    - Luồng xem trước `/video` (MJPEG 30-60 FPS), khung hình `/shot.jpg`, ảnh tĩnh `/photo.jpg`, trạng thái `/status.json`.
-    - Tiếp nhận và áp dụng tức thì toàn bộ các endpoint điều khiển Pro Mode `/settings/...`.
-  - [x] **Giao Diện & Vòng Đời Thiết Bị** ([MainActivity.java](file:///g:/NODEJS/Vision2026/AndroidCameraServer/app/src/main/java/com/vision/cameraserver/MainActivity.java), [activity_main.xml](file:///g:/NODEJS/Vision2026/AndroidCameraServer/app/src/main/res/layout/activity_main.xml)):
-    - Giao diện Dark Mode công nghiệp hiện đại, hiển thị IP USB 127.0.0.1:8080, Wi-Fi IP, Ethernet IP, HUD Pro Mode thời gian thực.
-    - Giữ màn hình luôn sáng (`FLAG_KEEP_SCREEN_ON`) kết hợp `WakeLock` đảm bảo hoạt động 24/7 không bị ngủ.
-  - [x] **Tự Động Biên Dịch & Cài Đặt Lên S24 Ultra**:
-    - Script [build_and_install.ps1](file:///g:/NODEJS/Vision2026/AndroidCameraServer/build_and_install.ps1) tự động build APK và nạp thẳng vào Galaxy S24 Ultra (`SM-S928B`) qua cáp USB ADB.
-  - [x] **Cấu Hình Git & Loại Trừ Thư Mục Build Android**:
-    - Bổ sung vào [.gitignore](file:///g:/NODEJS/Vision2026/.gitignore), [AndroidCameraServer/.gitignore](file:///g:/NODEJS/Vision2026/AndroidCameraServer/.gitignore) và [AndroidCameraServer/app/.gitignore](file:///g:/NODEJS/Vision2026/AndroidCameraServer/app/.gitignore) loại trừ triệt để `.gradle/`, `build/`, `local.properties`, `*.apk`, `*.dex`, `.cxx/`, `captures/`.
-  - [x] **Kiểm thử thực tế**:
-    - Đã xác thực kết nối HTTP và điều khiển Pro Mode thành công trên thiết bị thật Galaxy S24 Ultra.
-    - [AndroidCameraProModeTests.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/AndroidCameraProModeTests.cs): 6/6 test PASSED 100%.
+  - [x] Dự án Android Native, Camera2 Multi-Camera & Pro Mode, HTTP Server, APK build script.
+  - [x] Kiểm thử tự động `AndroidCameraProModeTests.cs`: 6/6 test PASSED 100%.
 
-- [x] Task 422: Tích Hợp Nguồn Ảnh Camera Android (Samsung Galaxy S24 Ultra) Pro Mode Qua Cáp USB / Wi-Fi / Ethernet:
-  - [x] Bổ sung `ImageSourceType.AndroidCamera = 5`, driver `AndroidCameraDriver.cs`, giao diện Tool Editor và Tab Camera Settings.
-  - [x] Tích hợp tự động ADB Port Forwarding `adb forward tcp:8080 tcp:8080`.
-
-- [x] Task 421: Khắc Phục Triệt Để Độ Trễ 1 Giây/Nấc Khi Xả Hàng Đợi 16 Nấc (Queue Drain Delay) Trong Run Continuous:
-  - [x] Chuyển toàn bộ các lệnh bắt tay PLC sang ThreadPool ngầm độc lập (`_ = Task.Run(...)`).
-  - [x] Tự động bật `NonBlockingMode = true;` khi Run Continuous, nâng `UpdateQueueVisuals` lên `DispatcherPriority.Normal`.
-  - [x] Kiểm thử tự động `PlcContinuousQueueTests.cs`: 6/6 test PASSED 100% (89ms/3 nấc).
-
+- [x] Task 422: Tích Hợp Nguồn Ảnh Camera Android (Samsung Galaxy S24 Ultra) Pro Mode Qua Cáp USB / Wi-Fi / Ethernet.
+- [x] Task 421: Khắc Phục Triệt Để Độ Trễ 1 Giây/Nấc Khi Xả Hàng Đợi 16 Nấc (Queue Drain Delay) Trong Run Continuous.
 - [x] Task 420: Tích Hợp Chế Độ PLC Trigger Vào Pipeline Bounded Channel 16 Nấc Bất Đồng Bộ Tool Editor.
 - [x] Task 419: Tự Động Co Giãn Full Width 4 Cột Trên Tab Tool Editor Khi Ẩn/Hiện Cột.
 - [x] Task 418: Tự Động Nạp Trạng Thái Hiện Tại Của Tag HMI Khi Load/Run & Bổ Sung Nút Stop HMI.

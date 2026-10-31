@@ -191,19 +191,24 @@ public sealed class PlcManagerService : IPlcManagerService, IDisposable
             string.Equals(p.Name, plcId, StringComparison.OrdinalIgnoreCase));
         string finalPlcId = targetPlcModel?.Id ?? plcId;
 
-        var handshakeTags = new[]
+        var handshakeTags = new List<(string? addr, string desc, PlcDataType? type)>
         {
-            (handshake.ReadyTagName, "Vision Ready (Sẵn sàng nhận trigger)"),
-            (handshake.BusyTagName, "Vision Busy (Đang xử lý ảnh)"),
-            (handshake.DoneTagName, "Vision Done (Hoàn tất kiểm tra)"),
-            (handshake.PassTagName, "Vision Pass (Kết quả ĐẠT/OK)"),
-            (handshake.NgTagName, "Vision NG (Kết quả LỖI/NG)"),
-            (handshake.PlcAckTagName, "PLC Ack (Xác nhận nhận kết quả)"),
-            (handshake.ResetQueueTagName, "Vision Reset Queue (Xóa sạch hàng đợi về 0)")
+            (handshake.ReadyTagName, "Vision Ready (Sẵn sàng nhận trigger)", PlcDataType.Bool),
+            (handshake.BusyTagName, "Vision Busy (Đang xử lý ảnh)", PlcDataType.Bool),
+            (handshake.DoneTagName, "Vision Done (Hoàn tất kiểm tra)", PlcDataType.Bool),
+            (handshake.PassTagName, "Vision Pass (Kết quả ĐẠT/OK dạng Bit)", PlcDataType.Bool),
+            (handshake.NgTagName, "Vision NG (Kết quả LỖI/NG dạng Bit)", PlcDataType.Bool),
+            (handshake.PlcAckTagName, "PLC Ack (Xác nhận nhận kết quả)", PlcDataType.Bool),
+            (handshake.ResetQueueTagName, "Vision Reset Queue (Xóa sạch hàng đợi về 0)", PlcDataType.Bool)
         };
 
+        if (!string.IsNullOrWhiteSpace(handshake.ResultWordTagName))
+        {
+            handshakeTags.Add((handshake.ResultWordTagName, $"Vision Result Word (Kết quả ĐẠT={handshake.PassNumericValue}, LỖI={handshake.NgNumericValue} dạng Số Int16)", PlcDataType.Int16));
+        }
+
         bool anyAdded = false;
-        foreach (var (addr, desc) in handshakeTags)
+        foreach (var (addr, desc, defaultType) in handshakeTags)
         {
             if (string.IsNullOrWhiteSpace(addr)) continue;
             var trimmed = addr.Trim();
@@ -219,7 +224,7 @@ public sealed class PlcManagerService : IPlcManagerService, IDisposable
                     PlcId = finalPlcId,
                     Name = trimmed,
                     Address = trimmed,
-                    DataType = InferDataTypeFromAddress(trimmed, null),
+                    DataType = InferDataTypeFromAddress(trimmed, defaultType),
                     Description = desc,
                     Category = "Handshake"
                 });
@@ -552,6 +557,11 @@ public sealed class PlcManagerService : IPlcManagerService, IDisposable
             EnsureTagAddress(IndustrialConfig.Handshake.PlcId, IndustrialConfig.Handshake.PassTagName, PlcDataType.Bool);
             EnsureTagAddress(IndustrialConfig.Handshake.PlcId, IndustrialConfig.Handshake.NgTagName, PlcDataType.Bool);
             EnsureTagAddress(IndustrialConfig.Handshake.PlcId, IndustrialConfig.Handshake.PlcAckTagName, PlcDataType.Bool);
+            EnsureTagAddress(IndustrialConfig.Handshake.PlcId, IndustrialConfig.Handshake.ResetQueueTagName, PlcDataType.Bool);
+            if (!string.IsNullOrWhiteSpace(IndustrialConfig.Handshake.ResultWordTagName))
+            {
+                EnsureTagAddress(IndustrialConfig.Handshake.PlcId, IndustrialConfig.Handshake.ResultWordTagName, PlcDataType.Int16);
+            }
 
             // Heartbeat
             if (IndustrialConfig.Heartbeat != null && (IndustrialConfig.Heartbeat.IsEnabled || !string.IsNullOrWhiteSpace(IndustrialConfig.Heartbeat.PlcHeartbeatTagName) || !string.IsNullOrWhiteSpace(IndustrialConfig.Heartbeat.VisionHeartbeatTagName)))

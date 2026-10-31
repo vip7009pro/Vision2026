@@ -1,6 +1,29 @@
 using System;
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
 
 namespace VisionInspectionApp.Models;
+
+/// <summary>
+/// Chế độ xuất kết quả kiểm tra (Pass / NG) sang PLC
+/// </summary>
+public enum PlcResultOutputMode
+{
+    /// <summary>
+    /// Chế độ Bit (Bool): Gửi kết quả qua 2 chân bit Pass (OK) và NG (Lỗi) riêng biệt.
+    /// </summary>
+    Bit = 0,
+
+    /// <summary>
+    /// Chế độ Dạng Số (Int16 Word): Gửi mã số kết quả (OK = 2, NG = 3,...) vào 1 thanh ghi số nguyên Word.
+    /// </summary>
+    NumericInt16 = 1,
+
+    /// <summary>
+    /// Chế độ Song Hành: Gửi đồng thời cả bit Bool (Pass/NG) và mã số Int16 vào thanh ghi Word.
+    /// </summary>
+    Both = 2
+}
 
 /// <summary>
 /// Kiểu dạng sóng / tín hiệu gửi sang PLC (Signal Waveform)
@@ -47,90 +70,289 @@ public enum PlcInputSignalType
 /// <summary>
 /// Cấu hình Máy trạng thái Bắt tay Công nghiệp 2 chiều (Deterministic Industrial Handshake 24/7)
 /// </summary>
-public sealed class IndustrialHandshakeConfig
+public sealed class IndustrialHandshakeConfig : INotifyPropertyChanged
 {
-    public string PlcId { get; set; } = "PLC1";
-    public string ReadyTagName { get; set; } = "Y1_VisionReady";
-    public string BusyTagName { get; set; } = "Y2_VisionBusy";
-    public string DoneTagName { get; set; } = "Y3_VisionDone";
-    public string PassTagName { get; set; } = "Y4_VisionPass";
-    public string NgTagName { get; set; } = "Y5_VisionNG";
-    public string PlcAckTagName { get; set; } = "X1_PlcAck";
-    public int HandshakeTimeoutMs { get; set; } = 500;
-    public bool IsEnabled { get; set; } = true;
-    public bool SimulatePlcAck { get; set; } = false;
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+    {
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+    }
+
+    private string _plcId = "PLC1";
+    public string PlcId
+    {
+        get => _plcId;
+        set { if (_plcId != value) { _plcId = value; OnPropertyChanged(); } }
+    }
+
+    private string _readyTagName = "Y1_VisionReady";
+    public string ReadyTagName
+    {
+        get => _readyTagName;
+        set { if (_readyTagName != value) { _readyTagName = value; OnPropertyChanged(); } }
+    }
+
+    private string _busyTagName = "Y2_VisionBusy";
+    public string BusyTagName
+    {
+        get => _busyTagName;
+        set { if (_busyTagName != value) { _busyTagName = value; OnPropertyChanged(); } }
+    }
+
+    private string _doneTagName = "Y3_VisionDone";
+    public string DoneTagName
+    {
+        get => _doneTagName;
+        set { if (_doneTagName != value) { _doneTagName = value; OnPropertyChanged(); } }
+    }
+
+    private string _passTagName = "Y4_VisionPass";
+    public string PassTagName
+    {
+        get => _passTagName;
+        set { if (_passTagName != value) { _passTagName = value; OnPropertyChanged(); } }
+    }
+
+    private string _ngTagName = "Y5_VisionNG";
+    public string NgTagName
+    {
+        get => _ngTagName;
+        set { if (_ngTagName != value) { _ngTagName = value; OnPropertyChanged(); } }
+    }
+
+    private string _plcAckTagName = "X1_PlcAck";
+    public string PlcAckTagName
+    {
+        get => _plcAckTagName;
+        set { if (_plcAckTagName != value) { _plcAckTagName = value; OnPropertyChanged(); } }
+    }
+
+    private int _handshakeTimeoutMs = 500;
+    public int HandshakeTimeoutMs
+    {
+        get => _handshakeTimeoutMs;
+        set { if (_handshakeTimeoutMs != value) { _handshakeTimeoutMs = value; OnPropertyChanged(); } }
+    }
+
+    private bool _isEnabled = true;
+    public bool IsEnabled
+    {
+        get => _isEnabled;
+        set { if (_isEnabled != value) { _isEnabled = value; OnPropertyChanged(); } }
+    }
+
+    private bool _simulatePlcAck = false;
+    public bool SimulatePlcAck
+    {
+        get => _simulatePlcAck;
+        set { if (_simulatePlcAck != value) { _simulatePlcAck = value; OnPropertyChanged(); } }
+    }
+
+    /// <summary>
+    /// Phương thức xuất kết quả kiểm tra sang PLC: Bit (Bool), Dạng Số (Int16) hoặc Song Hành Cả Hai
+    /// </summary>
+    private PlcResultOutputMode _resultOutputMode = PlcResultOutputMode.Bit;
+    public PlcResultOutputMode ResultOutputMode
+    {
+        get => _resultOutputMode;
+        set
+        {
+            if (_resultOutputMode != value)
+            {
+                _resultOutputMode = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(IsBitModeActive));
+                OnPropertyChanged(nameof(IsNumericModeActive));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Địa chỉ thanh ghi số nguyên Word trên PLC lưu mã kết quả (Mặc định: D100 cho FX5U hoặc MW100 cho I/O chuẩn)
+    /// </summary>
+    private string _resultWordTagName = "D100";
+    public string ResultWordTagName
+    {
+        get => _resultWordTagName;
+        set { if (_resultWordTagName != value) { _resultWordTagName = value; OnPropertyChanged(); } }
+    }
+
+    /// <summary>
+    /// Giá trị số nguyên (Int16) gửi sang PLC khi sản phẩm ĐẠT / OK (Mặc định: 2)
+    /// </summary>
+    private short _passNumericValue = 2;
+    public short PassNumericValue
+    {
+        get => _passNumericValue;
+        set { if (_passNumericValue != value) { _passNumericValue = value; OnPropertyChanged(); } }
+    }
+
+    /// <summary>
+    /// Giá trị số nguyên (Int16) gửi sang PLC khi sản phẩm LỖI / NG (Mặc định: 3)
+    /// </summary>
+    private short _ngNumericValue = 3;
+    public short NgNumericValue
+    {
+        get => _ngNumericValue;
+        set { if (_ngNumericValue != value) { _ngNumericValue = value; OnPropertyChanged(); } }
+    }
+
+    /// <summary>
+    /// Giá trị số nguyên (Int16) gửi sang PLC khi ở trạng thái Sẵn sàng / Idle / Reset (Mặc định: 0)
+    /// </summary>
+    private short _idleNumericValue = 0;
+    public short IdleNumericValue
+    {
+        get => _idleNumericValue;
+        set { if (_idleNumericValue != value) { _idleNumericValue = value; OnPropertyChanged(); } }
+    }
+
+    /// <summary>
+    /// Tự động reset giá trị thanh ghi kết quả về IdleNumericValue (0) khi Vision sẵn sàng đón phôi mới
+    /// </summary>
+    private bool _clearResultWordOnReady = true;
+    public bool ClearResultWordOnReady
+    {
+        get => _clearResultWordOnReady;
+        set { if (_clearResultWordOnReady != value) { _clearResultWordOnReady = value; OnPropertyChanged(); } }
+    }
+
+    /// <summary>
+    /// Cho biết chế độ xuất kết quả hiện tại có phát tín hiệu Bit (Bool) hay không
+    /// </summary>
+    public bool IsBitModeActive => ResultOutputMode == PlcResultOutputMode.Bit || ResultOutputMode == PlcResultOutputMode.Both;
+
+    /// <summary>
+    /// Cho biết chế độ xuất kết quả hiện tại có ghi thanh ghi số nguyên (Int16) hay không
+    /// </summary>
+    public bool IsNumericModeActive => ResultOutputMode == PlcResultOutputMode.NumericInt16 || ResultOutputMode == PlcResultOutputMode.Both;
 
     /// <summary>
     /// Kiểu tín hiệu gửi cho kết quả Pass (Mặc định: Level)
     /// </summary>
-    public PlcSignalType PassSignalType { get; set; } = PlcSignalType.Level;
+    private PlcSignalType _passSignalType = PlcSignalType.Level;
+    public PlcSignalType PassSignalType
+    {
+        get => _passSignalType;
+        set { if (_passSignalType != value) { _passSignalType = value; OnPropertyChanged(); } }
+    }
 
     /// <summary>
     /// Kiểu tín hiệu gửi cho kết quả NG (Mặc định: Level)
     /// </summary>
-    public PlcSignalType NgSignalType { get; set; } = PlcSignalType.Level;
+    private PlcSignalType _ngSignalType = PlcSignalType.Level;
+    public PlcSignalType NgSignalType
+    {
+        get => _ngSignalType;
+        set { if (_ngSignalType != value) { _ngSignalType = value; OnPropertyChanged(); } }
+    }
 
     /// <summary>
     /// Kiểu tín hiệu gửi cho tín hiệu Done (Mặc định: Level)
     /// </summary>
-    public PlcSignalType DoneSignalType { get; set; } = PlcSignalType.Level;
+    private PlcSignalType _doneSignalType = PlcSignalType.Level;
+    public PlcSignalType DoneSignalType
+    {
+        get => _doneSignalType;
+        set { if (_doneSignalType != value) { _doneSignalType = value; OnPropertyChanged(); } }
+    }
 
     /// <summary>
     /// Độ rộng xung phát cho kiểu Edge (Rising Edge / Falling Edge) tính bằng ms (Mặc định: 100ms)
     /// </summary>
-    public int PulseDurationMs { get; set; } = 100;
+    private int _pulseDurationMs = 100;
+    public int PulseDurationMs
+    {
+        get => _pulseDurationMs;
+        set { if (_pulseDurationMs != value) { _pulseDurationMs = value; OnPropertyChanged(); } }
+    }
 
     /// <summary>
     /// Chế độ bắt tay bất đồng bộ không chờ Ack (Non-blocking Pipelined Queue):
     /// Băng tải chạy liên tục tốc độ cao, Vision ghi kết quả vào hàng đợi rồi giải phóng ngay, không dừng luồng chờ Ack.
     /// </summary>
-    public bool NonBlockingMode { get; set; } = true;
+    private bool _nonBlockingMode = true;
+    public bool NonBlockingMode
+    {
+        get => _nonBlockingMode;
+        set { if (_nonBlockingMode != value) { _nonBlockingMode = value; OnPropertyChanged(); } }
+    }
 
     /// <summary>
     /// Điểm ra chỉ định trên hàng đợi 20 sản phẩm (1..20): Nấc mà tại đó nếu là hàng NG thì băng tải sẽ dừng. Mặc định: 10
     /// </summary>
-    public int TargetStopStationIndex { get; set; } = 10;
+    private int _targetStopStationIndex = 10;
+    public int TargetStopStationIndex
+    {
+        get => _targetStopStationIndex;
+        set { if (_targetStopStationIndex != value) { _targetStopStationIndex = value; OnPropertyChanged(); } }
+    }
 
-    /// <summary>
     /// <summary>
     /// Địa chỉ bắt đầu mảng hàng đợi trên PLC (Mặc định: M200 cho mảng M200..M219)
     /// </summary>
-    public string QueueRegisterStart { get; set; } = "M200";
+    private string _queueRegisterStart = "M200";
+    public string QueueRegisterStart
+    {
+        get => _queueRegisterStart;
+        set { if (_queueRegisterStart != value) { _queueRegisterStart = value; OnPropertyChanged(); } }
+    }
 
     /// <summary>
     /// Tag nhận tín hiệu yêu cầu Reset Queue từ PLC (Mặc định: rỗng hoặc M106/X2_ResetQueue).
     /// Khi nhận tín hiệu, Vision sẽ xóa sạch hàng đợi frame và đưa các bộ đếm về 0.
     /// </summary>
-    public string ResetQueueTagName { get; set; } = "";
+    private string _resetQueueTagName = "";
+    public string ResetQueueTagName
+    {
+        get => _resetQueueTagName;
+        set { if (_resetQueueTagName != value) { _resetQueueTagName = value; OnPropertyChanged(); } }
+    }
 
     /// <summary>
     /// Kiểu tín hiệu nhận cho lệnh Reset Queue: RisingEdge (0->1), FallingEdge (1->0), hoặc LongPress (Nhấn giữ liên tục)
     /// </summary>
-    public PlcInputSignalType ResetQueueSignalType { get; set; } = PlcInputSignalType.RisingEdge;
+    private PlcInputSignalType _resetQueueSignalType = PlcInputSignalType.RisingEdge;
+    public PlcInputSignalType ResetQueueSignalType
+    {
+        get => _resetQueueSignalType;
+        set { if (_resetQueueSignalType != value) { _resetQueueSignalType = value; OnPropertyChanged(); } }
+    }
 
     /// <summary>
     /// Thời gian giữ hoặc độ rộng xung lọc / debounce (ms) cho lệnh Reset Queue. Mặc định: 500ms.
     /// Với Long Press: phải giữ liên tục ON trong ít nhất ResetQueueDurationMs.
     /// Với Edge: dùng làm thời gian lọc chống rung (lockout debounce).
     /// </summary>
-    public int ResetQueueDurationMs { get; set; } = 500;
+    private int _resetQueueDurationMs = 500;
+    public int ResetQueueDurationMs
+    {
+        get => _resetQueueDurationMs;
+        set { if (_resetQueueDurationMs != value) { _resetQueueDurationMs = value; OnPropertyChanged(); } }
+    }
 
     /// <summary>
     /// Kiểm tra xem cấu hình Handshake có chứa ít nhất một TagName hợp lệ hay không.
     /// </summary>
     public bool HasConfiguredTags()
     {
-        return !string.IsNullOrWhiteSpace(ReadyTagName) ||
-               !string.IsNullOrWhiteSpace(BusyTagName) ||
-               !string.IsNullOrWhiteSpace(DoneTagName) ||
-               !string.IsNullOrWhiteSpace(PassTagName) ||
-               !string.IsNullOrWhiteSpace(NgTagName) ||
-               !string.IsNullOrWhiteSpace(PlcAckTagName) ||
-               !string.IsNullOrWhiteSpace(ResetQueueTagName);
+        bool hasBasic = !string.IsNullOrWhiteSpace(ReadyTagName) ||
+                        !string.IsNullOrWhiteSpace(BusyTagName) ||
+                        !string.IsNullOrWhiteSpace(DoneTagName) ||
+                        !string.IsNullOrWhiteSpace(PlcAckTagName) ||
+                        !string.IsNullOrWhiteSpace(ResetQueueTagName);
+
+        bool hasBitResult = !string.IsNullOrWhiteSpace(PassTagName) ||
+                            !string.IsNullOrWhiteSpace(NgTagName);
+
+        bool hasWordResult = ResultOutputMode != PlcResultOutputMode.Bit && !string.IsNullOrWhiteSpace(ResultWordTagName);
+
+        return hasBasic || hasBitResult || hasWordResult;
     }
 
     /// <summary>
-    /// Khôi phục cấu hình bắt tay chuẩn Mitsubishi FX5U (M101..M106, xung Rising Edge 20ms, hàng đợi M200).
+    /// Khôi phục cấu hình bắt tay chuẩn Mitsubishi FX5U (M101..M106, xung Rising Edge 20ms, hàng đợi M200, kết quả số D100).
     /// </summary>
     public void ApplyFx5uDefaults(string? targetPlcId = null)
     {
@@ -154,10 +376,16 @@ public sealed class IndustrialHandshakeConfig
         NonBlockingMode = true;
         TargetStopStationIndex = 10;
         QueueRegisterStart = "M200";
+        ResultOutputMode = PlcResultOutputMode.Bit;
+        ResultWordTagName = "D100";
+        PassNumericValue = 2;
+        NgNumericValue = 3;
+        IdleNumericValue = 0;
+        ClearResultWordOnReady = true;
     }
 
     /// <summary>
-    /// Khôi phục cấu hình bắt tay chuẩn I/O Công Nghiệp (Y1..Y5, X1 Ack, X2 Reset Queue, Level).
+    /// Khôi phục cấu hình bắt tay chuẩn I/O Công Nghiệp (Y1..Y5, X1 Ack, X2 Reset Queue, Level, kết quả số MW100).
     /// </summary>
     public void ApplyStandardIoDefaults(string? targetPlcId = null)
     {
@@ -181,6 +409,12 @@ public sealed class IndustrialHandshakeConfig
         NonBlockingMode = false;
         TargetStopStationIndex = 10;
         QueueRegisterStart = "M200";
+        ResultOutputMode = PlcResultOutputMode.Bit;
+        ResultWordTagName = "MW100";
+        PassNumericValue = 2;
+        NgNumericValue = 3;
+        IdleNumericValue = 0;
+        ClearResultWordOnReady = true;
     }
 
     /// <summary>
@@ -209,6 +443,12 @@ public sealed class IndustrialHandshakeConfig
         NonBlockingMode = other.NonBlockingMode;
         TargetStopStationIndex = other.TargetStopStationIndex;
         QueueRegisterStart = other.QueueRegisterStart;
+        ResultOutputMode = other.ResultOutputMode;
+        ResultWordTagName = other.ResultWordTagName;
+        PassNumericValue = other.PassNumericValue;
+        NgNumericValue = other.NgNumericValue;
+        IdleNumericValue = other.IdleNumericValue;
+        ClearResultWordOnReady = other.ClearResultWordOnReady;
     }
 }
 

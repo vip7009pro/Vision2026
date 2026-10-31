@@ -49,6 +49,36 @@ public sealed class IndustrialHandshakeStateMachine
     public string PlcAckTagName { get; set; } = "X1_PlcAck";
     public string ResetQueueTagName { get; set; } = "";
 
+    /// <summary>
+    /// Phương thức xuất kết quả kiểm tra sang PLC: Bit (Bool), Dạng Số (Int16) hoặc Song Hành Cả Hai
+    /// </summary>
+    public PlcResultOutputMode ResultOutputMode { get; set; } = PlcResultOutputMode.Bit;
+
+    /// <summary>
+    /// Địa chỉ thanh ghi số nguyên Word trên PLC lưu mã kết quả (Mặc định: D100 hoặc MW100)
+    /// </summary>
+    public string ResultWordTagName { get; set; } = "D100";
+
+    /// <summary>
+    /// Giá trị số nguyên (Int16) gửi sang PLC khi kết quả ĐẠT / OK (Mặc định: 2)
+    /// </summary>
+    public short PassNumericValue { get; set; } = 2;
+
+    /// <summary>
+    /// Giá trị số nguyên (Int16) gửi sang PLC khi kết quả LỖI / NG (Mặc định: 3)
+    /// </summary>
+    public short NgNumericValue { get; set; } = 3;
+
+    /// <summary>
+    /// Giá trị số nguyên (Int16) gửi sang PLC khi ở trạng thái Sẵn sàng / Idle / Reset (Mặc định: 0)
+    /// </summary>
+    public short IdleNumericValue { get; set; } = 0;
+
+    /// <summary>
+    /// Tự động reset giá trị thanh ghi kết quả về IdleNumericValue (0) khi Vision sẵn sàng đón phôi mới
+    /// </summary>
+    public bool ClearResultWordOnReady { get; set; } = true;
+
     public int HandshakeTimeoutMs { get; set; } = 500;
     public bool IsEnabled { get; set; } = true;
     public bool SimulatePlcAck { get; set; } = false;
@@ -182,6 +212,12 @@ public sealed class IndustrialHandshakeStateMachine
         ResetQueueTagName = config.ResetQueueTagName;
         ResetQueueSignalType = config.ResetQueueSignalType;
         ResetQueueDurationMs = config.ResetQueueDurationMs;
+        ResultOutputMode = config.ResultOutputMode;
+        ResultWordTagName = config.ResultWordTagName;
+        PassNumericValue = config.PassNumericValue;
+        NgNumericValue = config.NgNumericValue;
+        IdleNumericValue = config.IdleNumericValue;
+        ClearResultWordOnReady = config.ClearResultWordOnReady;
     }
 
     private void PlcManager_OnTagChanged(object? sender, TagChangedEventArgs e)
@@ -282,6 +318,15 @@ public sealed class IndustrialHandshakeStateMachine
         return ResolveTag(ResetQueueTagName, "M106_ResetQueue", "M106", "ResetQueue", "X2_ResetQueue");
     }
 
+    public string? GetEffectiveResultWordTag()
+    {
+        if (string.IsNullOrWhiteSpace(ResultWordTagName))
+        {
+            return null;
+        }
+        return ResolveTag(ResultWordTagName, "D100_VisionResult", "D100", "D200", "MW100");
+    }
+
     private bool HasConfiguredHandshakeTags()
     {
         if (_plcManager == null) return false;
@@ -291,7 +336,8 @@ public sealed class IndustrialHandshakeStateMachine
                GetEffectivePassTag() != null ||
                GetEffectiveNgTag() != null ||
                GetEffectivePlcAckTag() != null ||
-               GetEffectiveResetQueueTag() != null;
+               GetEffectiveResetQueueTag() != null ||
+               GetEffectiveResultWordTag() != null;
     }
 
     /// <summary>
@@ -407,6 +453,16 @@ public sealed class IndustrialHandshakeStateMachine
             await _plcManager.WriteTagValueAsync(_plcId, ngTag, ngInactive, ct);
         }
 
+        // Đưa thanh ghi số nguyên kết quả về trạng thái Idle / Sẵn sàng (0) nếu cấu hình bật
+        if ((ResultOutputMode == PlcResultOutputMode.NumericInt16 || ResultOutputMode == PlcResultOutputMode.Both) && ClearResultWordOnReady)
+        {
+            var wordTag = GetEffectiveResultWordTag();
+            if (!string.IsNullOrEmpty(wordTag))
+            {
+                await _plcManager.WriteTagValueAsync(_plcId, wordTag, (short)IdleNumericValue, ct);
+            }
+        }
+
         CurrentState = HandshakeState.Armed;
     }
 
@@ -453,6 +509,7 @@ public sealed class IndustrialHandshakeStateMachine
 
         var passTag = GetEffectivePassTag();
         var ngTag = GetEffectiveNgTag();
+        var wordTag = GetEffectiveResultWordTag();
         var doneTag = GetEffectiveDoneTag();
         var ackTag = GetEffectivePlcAckTag();
         var readyTag = GetEffectiveReadyTag();
@@ -460,9 +517,23 @@ public sealed class IndustrialHandshakeStateMachine
 
         try
         {
-            // 1. Ghi kết quả PASS/NG theo kiểu tín hiệu cấu hình
-            await EmitSignalAsync(passTag, PassSignalType, isPass, ct);
-            await EmitSignalAsync(ngTag, NgSignalType, !isPass, ct);
+            // 1. Ghi kết quả theo phương thức xuất được chọn:
+            // A. Ghi tín hiệu dạng Bit (Bool) nếu chọn chế độ Bit hoặc Song hành (Both)
+            if (ResultOutputMode == PlcResultOutputMode.Bit || ResultOutputMode == PlcResultOutputMode.Both)
+            {
+                await EmitSignalAsync(passTag, PassSignalType, isPass, ct);
+                await EmitSignalAsync(ngTag, NgSignalType, !isPass, ct);
+            }
+
+            // B. Ghi kết quả dạng Số (Int16) nếu chọn chế độ NumericInt16 hoặc Song hành (Both)
+            if (ResultOutputMode == PlcResultOutputMode.NumericInt16 || ResultOutputMode == PlcResultOutputMode.Both)
+            {
+                if (!string.IsNullOrEmpty(wordTag) && _plcManager != null)
+                {
+                    short numericVal = isPass ? PassNumericValue : NgNumericValue;
+                    await _plcManager.WriteTagValueAsync(_plcId, wordTag, numericVal, ct);
+                }
+            }
 
             // Ghi tín hiệu DONE theo kiểu tín hiệu cấu hình
             await EmitSignalAsync(doneTag, DoneSignalType, true, ct);
@@ -615,6 +686,7 @@ public sealed class IndustrialHandshakeStateMachine
         var doneTag = GetEffectiveDoneTag();
         var passTag = GetEffectivePassTag();
         var ngTag = GetEffectiveNgTag();
+        var wordTag = GetEffectiveResultWordTag();
 
         try
         {
@@ -634,6 +706,10 @@ public sealed class IndustrialHandshakeStateMachine
             {
                 bool ngInactive = NgSignalType == PlcSignalType.FallingEdge ? true : false;
                 await _plcManager.WriteTagValueAsync(_plcId, ngTag, ngInactive, ct);
+            }
+            if ((ResultOutputMode == PlcResultOutputMode.NumericInt16 || ResultOutputMode == PlcResultOutputMode.Both) && ClearResultWordOnReady && !string.IsNullOrEmpty(wordTag))
+            {
+                await _plcManager.WriteTagValueAsync(_plcId, wordTag, (short)IdleNumericValue, ct);
             }
         }
         catch { }

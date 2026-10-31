@@ -264,11 +264,15 @@
                                     <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
                                 </Grid.RowDefinitions>
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="180"/>
+                                    <ColumnDefinition Width="195"/>
                                     <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="180"/>
+                                    <ColumnDefinition Width="195"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
 
@@ -280,7 +284,7 @@
                                 <TextBlock Grid.Row="1" Grid.Column="2" Text="Timeout Bắt Tay (ms):" Style="{StaticResource IndustrialFieldLabel}" Margin="12,4,8,4"/>
                                 <TextBox Grid.Row="1" Grid.Column="3" Text="{Binding Handshake.HandshakeTimeoutMs, UpdateSourceTrigger=PropertyChanged}" Margin="2" Padding="4,2"/>
 
-                                <TextBlock Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="4" Text="🏷️ Cấu Hình Địa Chỉ Các Tag Bắt Tay I/O &amp; Kiểu Tín Hiệu (Level / Rising Edge / Falling Edge)" Style="{StaticResource IndustrialSectionHeader}" Margin="0,14,0,8"/>
+                                <TextBlock Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="4" Text="🏷️ Cấu Hình Địa Chỉ Các Tag Bắt Tay I/O Cơ Bản (Ready, Busy, Done, Ack, Reset Queue)" Style="{StaticResource IndustrialSectionHeader}" Margin="0,14,0,8"/>
 
                                 <!-- 1. Vision Ready Tag & 2. Vision Busy Tag -->
                                 <TextBlock Grid.Row="3" Grid.Column="0" Text="1. Vision Ready Tag (Y):" Style="{StaticResource IndustrialFieldLabel}"/>
@@ -303,35 +307,60 @@
                                 <TextBlock Grid.Row="5" Grid.Column="2" Text="⚡ Kiểu Tín Hiệu Done:" Style="{StaticResource IndustrialFieldLabel}" Margin="12,4,8,4"/>
                                 <ComboBox Grid.Row="5" Grid.Column="3" ItemsSource="{Binding AvailableSignalTypes}" SelectedValuePath="Value" DisplayMemberPath="DisplayName" SelectedValue="{Binding Handshake.DoneSignalType, Mode=TwoWay}" Margin="2" Padding="4,2" ToolTip="Chọn kiểu tín hiệu Done: Level (Mức), Rising Edge (Cạnh lên 0->1->0) hoặc Falling Edge (Cạnh xuống 1->0->1)"/>
 
-                                <!-- 4. Vision Pass (OK) Tag & Kiểu Tín Hiệu Pass -->
-                                <TextBlock Grid.Row="6" Grid.Column="0" Text="4. Vision Pass (OK) Tag (Y):" Style="{StaticResource IndustrialFieldLabel}"/>
-                                <ComboBox Grid.Row="6" Grid.Column="1" ItemsSource="{Binding AvailableTagNames}" Text="{Binding Handshake.PassTagName, UpdateSourceTrigger=PropertyChanged}" IsEditable="True" IsTextSearchEnabled="True" StaysOpenOnEdit="True" MaxDropDownHeight="220" ToolTip="Tín hiệu kết quả ĐẠT (OK) gửi PLC (Mặc định: M104 hoặc Y4_VisionPass)" Margin="2"/>
-
-                                <TextBlock Grid.Row="6" Grid.Column="2" Text="⚡ Kiểu Tín Hiệu Pass (OK):" Style="{StaticResource IndustrialFieldLabel}" Margin="12,4,8,4"/>
-                                <ComboBox Grid.Row="6" Grid.Column="3" ItemsSource="{Binding AvailableSignalTypes}" SelectedValuePath="Value" DisplayMemberPath="DisplayName" SelectedValue="{Binding Handshake.PassSignalType, Mode=TwoWay}" Margin="2" Padding="4,2" ToolTip="Chọn kiểu tín hiệu Pass gửi PLC: Level (Mức), Rising Edge (LDP M104 cạnh lên 0->1->0) hoặc Falling Edge (LDF M104 cạnh xuống 1->0->1)"/>
-
-                                <!-- 5. Vision NG (Lỗi) Tag & Kiểu Tín Hiệu NG -->
-                                <TextBlock Grid.Row="7" Grid.Column="0" Text="5. Vision NG (Lỗi) Tag (Y):" Style="{StaticResource IndustrialFieldLabel}"/>
-                                <ComboBox Grid.Row="7" Grid.Column="1" ItemsSource="{Binding AvailableTagNames}" Text="{Binding Handshake.NgTagName, UpdateSourceTrigger=PropertyChanged}" IsEditable="True" IsTextSearchEnabled="True" StaysOpenOnEdit="True" MaxDropDownHeight="220" ToolTip="Tín hiệu kết quả LỖI (NG) gửi PLC (Mặc định: M105 hoặc Y5_VisionNG)" Margin="2"/>
-
-                                <TextBlock Grid.Row="7" Grid.Column="2" Text="⚡ Kiểu Tín Hiệu NG (Lỗi):" Style="{StaticResource IndustrialFieldLabel}" Margin="12,4,8,4"/>
-                                <ComboBox Grid.Row="7" Grid.Column="3" ItemsSource="{Binding AvailableSignalTypes}" SelectedValuePath="Value" DisplayMemberPath="DisplayName" SelectedValue="{Binding Handshake.NgSignalType, Mode=TwoWay}" Margin="2" Padding="4,2" ToolTip="Chọn kiểu tín hiệu NG gửi PLC: Level (Mức), Rising Edge (LDP M105 cạnh lên 0->1->0) hoặc Falling Edge (LDF M105 cạnh xuống 1->0->1)"/>
-
                                 <!-- 6. Tag Reset Queue & Kiểu Tín Hiệu Reset Queue -->
-                                <TextBlock Grid.Row="8" Grid.Column="0" Text="6. Tag Reset Queue (X/M):" Style="{StaticResource IndustrialFieldLabel}"/>
-                                <ComboBox Grid.Row="8" Grid.Column="1" ItemsSource="{Binding AvailableTagNames}" Text="{Binding Handshake.ResetQueueTagName, UpdateSourceTrigger=PropertyChanged}" IsEditable="True" IsTextSearchEnabled="True" StaysOpenOnEdit="True" MaxDropDownHeight="220" ToolTip="Tag nhận tín hiệu từ PLC để reset hàng đợi vision về 0 (Mặc định: M106 hoặc X2_ResetQueue)" Margin="2"/>
+                                <TextBlock Grid.Row="6" Grid.Column="0" Text="6. Tag Reset Queue (X/M):" Style="{StaticResource IndustrialFieldLabel}"/>
+                                <ComboBox Grid.Row="6" Grid.Column="1" ItemsSource="{Binding AvailableTagNames}" Text="{Binding Handshake.ResetQueueTagName, UpdateSourceTrigger=PropertyChanged}" IsEditable="True" IsTextSearchEnabled="True" StaysOpenOnEdit="True" MaxDropDownHeight="220" ToolTip="Tag nhận tín hiệu từ PLC để reset hàng đợi vision về 0 (Mặc định: M106 hoặc X2_ResetQueue)" Margin="2"/>
 
-                                <TextBlock Grid.Row="8" Grid.Column="2" Text="⚡ Kiểu Tín Hiệu Reset Queue:" Style="{StaticResource IndustrialFieldLabel}" Margin="12,4,8,4"/>
-                                <ComboBox Grid.Row="8" Grid.Column="3" ItemsSource="{Binding AvailableInputSignalTypes}" SelectedValuePath="Value" DisplayMemberPath="DisplayName" SelectedValue="{Binding Handshake.ResetQueueSignalType, Mode=TwoWay}" Margin="2" Padding="4,2" ToolTip="Chọn kiểu tín hiệu nhận: Rising Edge (Cạnh lên 0->1), Falling Edge (Cạnh xuống 1->0) hoặc Long Press (Nhấn giữ liên tục)"/>
+                                <TextBlock Grid.Row="6" Grid.Column="2" Text="⚡ Kiểu Tín Hiệu Reset Queue:" Style="{StaticResource IndustrialFieldLabel}" Margin="12,4,8,4"/>
+                                <ComboBox Grid.Row="6" Grid.Column="3" ItemsSource="{Binding AvailableInputSignalTypes}" SelectedValuePath="Value" DisplayMemberPath="DisplayName" SelectedValue="{Binding Handshake.ResetQueueSignalType, Mode=TwoWay}" Margin="2" Padding="4,2" ToolTip="Chọn kiểu tín hiệu nhận: Rising Edge (Cạnh lên 0->1), Falling Edge (Cạnh xuống 1->0) hoặc Long Press (Nhấn giữ liên tục)"/>
 
                                 <!-- 7. Duration cho Reset Queue -->
-                                <TextBlock Grid.Row="9" Grid.Column="0" Text="⏱️ Thời Gian Giữ / Xung (ms):" Style="{StaticResource IndustrialFieldLabel}"/>
-                                <TextBox Grid.Row="9" Grid.Column="1" Text="{Binding Handshake.ResetQueueDurationMs, UpdateSourceTrigger=PropertyChanged}" Margin="2" Padding="4,2" ToolTip="Thời gian giữ tối thiểu (với Long Press) hoặc thời gian lọc debounce (với Edge) tính bằng ms. Mặc định: 500ms."/>
+                                <TextBlock Grid.Row="7" Grid.Column="0" Text="⏱️ Thời Gian Giữ / Xung (ms):" Style="{StaticResource IndustrialFieldLabel}"/>
+                                <TextBox Grid.Row="7" Grid.Column="1" Text="{Binding Handshake.ResetQueueDurationMs, UpdateSourceTrigger=PropertyChanged}" Margin="2" Padding="4,2" ToolTip="Thời gian giữ tối thiểu (với Long Press) hoặc thời gian lọc debounce (với Edge) tính bằng ms. Mặc định: 500ms."/>
 
-                                <TextBlock Grid.Row="9" Grid.Column="2" Grid.ColumnSpan="2" Text="ℹ️ Long Press: Giữ liên tục mức 1 đủ thời gian này mới reset; Edge: Thời gian lọc chống rung." Foreground="{DynamicResource TextMutedBrush}" FontSize="10.5" VerticalAlignment="Center" Margin="12,2,0,2" TextWrapping="Wrap"/>
+                                <TextBlock Grid.Row="7" Grid.Column="2" Grid.ColumnSpan="2" Text="ℹ️ Long Press: Giữ liên tục mức 1 đủ thời gian này mới reset; Edge: Thời gian lọc chống rung." Foreground="{DynamicResource TextMutedBrush}" FontSize="10.5" VerticalAlignment="Center" Margin="12,2,0,2" TextWrapping="Wrap"/>
 
-                                <CheckBox Grid.Row="10" Grid.Column="0" Grid.ColumnSpan="2" Content="Kích hoạt Chu trình Bắt tay Công nghiệp (Handshake Enabled)" IsChecked="{Binding Handshake.IsEnabled}" FontWeight="SemiBold" Margin="0,14,0,4" Foreground="{DynamicResource TextBrush}"/>
-                                <CheckBox Grid.Row="10" Grid.Column="2" Grid.ColumnSpan="2" Content="🧪 Mô Phỏng PLC Tự Động Ack (Simulate Auto-Ack khi test offline)" IsChecked="{Binding Handshake.SimulatePlcAck}" FontWeight="SemiBold" Margin="12,14,0,4" Foreground="#10B981" ToolTip="Tự động mô phỏng PLC phản hồi tín hiệu Ack (M11) sau 20ms khi Vision hoàn thành kiểm tra. Dùng để test chu trình handshake khi chưa có PLC thật hoặc đang giả lập trên máy tính!"/>
+                                <!-- SECTION 3: PHƯƠNG THỨC XUẤT KẾT QUẢ PASS / NG (BIT / SỐ NGUYÊN INT16 / SONG HÀNH) -->
+                                <TextBlock Grid.Row="8" Grid.Column="0" Grid.ColumnSpan="4" Text="🎯 Phương Thức Xuất Kết Quả Kiểm Tra (Pass / NG) &amp; Chế Độ Song Hành (Bit / Int16)" Style="{StaticResource IndustrialSectionHeader}" Margin="0,16,0,8"/>
+
+                                <!-- Row 9: Dropdown Chế Độ Xuất Kết Quả -->
+                                <TextBlock Grid.Row="9" Grid.Column="0" Text="Chế Độ Xuất Kết Quả:" Style="{StaticResource IndustrialFieldLabel}" FontWeight="SemiBold"/>
+                                <ComboBox Grid.Row="9" Grid.Column="1" Grid.ColumnSpan="3" ItemsSource="{Binding AvailableResultOutputModes}" SelectedValuePath="Value" DisplayMemberPath="DisplayName" SelectedValue="{Binding Handshake.ResultOutputMode, Mode=TwoWay}" Margin="2" Padding="6,3" FontWeight="SemiBold" ToolTip="Chọn phương thức gửi kết quả: 1. Tín hiệu rời rạc Bit (Bool), 2. Thanh ghi số nguyên (Int16 Word), 3. Song hành cả hai (Gửi đồng thời cả Bit và Số Int16)"/>
+
+                                <!-- Row 10: [Chế Độ Bit] 4. Vision Pass (OK) Tag & Kiểu Tín Hiệu Pass -->
+                                <TextBlock Grid.Row="10" Grid.Column="0" Text="4. Vision Pass (OK) Tag (Y):" Style="{StaticResource IndustrialFieldLabel}"/>
+                                <ComboBox Grid.Row="10" Grid.Column="1" ItemsSource="{Binding AvailableTagNames}" Text="{Binding Handshake.PassTagName, UpdateSourceTrigger=PropertyChanged}" IsEditable="True" IsTextSearchEnabled="True" StaysOpenOnEdit="True" MaxDropDownHeight="220" ToolTip="Tín hiệu kết quả ĐẠT (OK) dạng Bit gửi PLC (Mặc định: M104 hoặc Y4_VisionPass)" Margin="2"/>
+
+                                <TextBlock Grid.Row="10" Grid.Column="2" Text="⚡ Kiểu Tín Hiệu Pass (OK):" Style="{StaticResource IndustrialFieldLabel}" Margin="12,4,8,4"/>
+                                <ComboBox Grid.Row="10" Grid.Column="3" ItemsSource="{Binding AvailableSignalTypes}" SelectedValuePath="Value" DisplayMemberPath="DisplayName" SelectedValue="{Binding Handshake.PassSignalType, Mode=TwoWay}" Margin="2" Padding="4,2" ToolTip="Chọn kiểu tín hiệu Pass gửi PLC: Level (Mức), Rising Edge (LDP M104 cạnh lên 0->1->0) hoặc Falling Edge (LDF M104 cạnh xuống 1->0->1)"/>
+
+                                <!-- Row 11: [Chế Độ Bit] 5. Vision NG (Lỗi) Tag & Kiểu Tín Hiệu NG -->
+                                <TextBlock Grid.Row="11" Grid.Column="0" Text="5. Vision NG (Lỗi) Tag (Y):" Style="{StaticResource IndustrialFieldLabel}"/>
+                                <ComboBox Grid.Row="11" Grid.Column="1" ItemsSource="{Binding AvailableTagNames}" Text="{Binding Handshake.NgTagName, UpdateSourceTrigger=PropertyChanged}" IsEditable="True" IsTextSearchEnabled="True" StaysOpenOnEdit="True" MaxDropDownHeight="220" ToolTip="Tín hiệu kết quả LỖI (NG) dạng Bit gửi PLC (Mặc định: M105 hoặc Y5_VisionNG)" Margin="2"/>
+
+                                <TextBlock Grid.Row="11" Grid.Column="2" Text="⚡ Kiểu Tín Hiệu NG (Lỗi):" Style="{StaticResource IndustrialFieldLabel}" Margin="12,4,8,4"/>
+                                <ComboBox Grid.Row="11" Grid.Column="3" ItemsSource="{Binding AvailableSignalTypes}" SelectedValuePath="Value" DisplayMemberPath="DisplayName" SelectedValue="{Binding Handshake.NgSignalType, Mode=TwoWay}" Margin="2" Padding="4,2" ToolTip="Chọn kiểu tín hiệu NG gửi PLC: Level (Mức), Rising Edge (LDP M105 cạnh lên 0->1->0) hoặc Falling Edge (LDF M105 cạnh xuống 1->0->1)"/>
+
+                                <!-- Row 12: [Chế Độ Số Int16] 7. Thanh Ghi Kết Quả (Word) & Giá Trị Sẵn Sàng (Idle) -->
+                                <TextBlock Grid.Row="12" Grid.Column="0" Text="7. Thanh Ghi Kết Quả (Word):" Style="{StaticResource IndustrialFieldLabel}"/>
+                                <ComboBox Grid.Row="12" Grid.Column="1" ItemsSource="{Binding AvailableTagNames}" Text="{Binding Handshake.ResultWordTagName, UpdateSourceTrigger=PropertyChanged}" IsEditable="True" IsTextSearchEnabled="True" StaysOpenOnEdit="True" MaxDropDownHeight="220" ToolTip="Địa chỉ thanh ghi số nguyên Word trên PLC lưu mã kết quả kiểm tra (Mặc định: D100 cho FX5U hoặc MW100 cho I/O chuẩn)" Margin="2"/>
+
+                                <TextBlock Grid.Row="12" Grid.Column="2" Text="🔢 Giá Trị Sẵn Sàng (Idle/0):" Style="{StaticResource IndustrialFieldLabel}" Margin="12,4,8,4"/>
+                                <TextBox Grid.Row="12" Grid.Column="3" Text="{Binding Handshake.IdleNumericValue, UpdateSourceTrigger=PropertyChanged}" Margin="2" Padding="4,2" ToolTip="Giá trị số nguyên (Int16) ghi vào thanh ghi khi Vision ở trạng thái Sẵn sàng / Idle / Chờ phôi (Mặc định: 0)"/>
+
+                                <!-- Row 13: [Chế Độ Số Int16] 8. Giá Trị Số Khi OK (Pass) & 9. Giá Trị Số Khi NG (Lỗi) -->
+                                <TextBlock Grid.Row="13" Grid.Column="0" Text="8. Giá Trị Số Khi OK (Pass):" Style="{StaticResource IndustrialFieldLabel}"/>
+                                <TextBox Grid.Row="13" Grid.Column="1" Text="{Binding Handshake.PassNumericValue, UpdateSourceTrigger=PropertyChanged}" Margin="2" Padding="4,2" ToolTip="Giá trị số nguyên (Int16) gửi sang PLC khi sản phẩm ĐẠT / OK (Ví dụ: 2)"/>
+
+                                <TextBlock Grid.Row="13" Grid.Column="2" Text="9. Giá Trị Số Khi NG (Lỗi):" Style="{StaticResource IndustrialFieldLabel}" Margin="12,4,8,4"/>
+                                <TextBox Grid.Row="13" Grid.Column="3" Text="{Binding Handshake.NgNumericValue, UpdateSourceTrigger=PropertyChanged}" Margin="2" Padding="4,2" ToolTip="Giá trị số nguyên (Int16) gửi sang PLC khi sản phẩm LỖI / NG (Ví dụ: 3)"/>
+
+                                <!-- Row 14: Checkboxes -->
+                                <StackPanel Grid.Row="14" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,14,0,4">
+                                    <CheckBox Content="Kích hoạt Chu trình Bắt tay Công nghiệp (Handshake Enabled)" IsChecked="{Binding Handshake.IsEnabled}" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,4"/>
+                                    <CheckBox Content="🧹 Tự Động Xóa Word Về Idle (0) Khi Sẵn Sàng" IsChecked="{Binding Handshake.ClearResultWordOnReady}" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}" Margin="0,2,0,0" ToolTip="Tự động ghi giá trị Idle (mặc định 0) vào thanh ghi kết quả Word khi Vision chuyển sang trạng thái Sẵn sàng để chuẩn bị đón phôi mới."/>
+                                </StackPanel>
+                                <CheckBox Grid.Row="14" Grid.Column="2" Grid.ColumnSpan="2" Content="🧪 Mô Phỏng PLC Tự Động Ack (Simulate Auto-Ack khi test offline)" IsChecked="{Binding Handshake.SimulatePlcAck}" FontWeight="SemiBold" Margin="12,14,0,4" VerticalAlignment="Top" Foreground="#10B981" ToolTip="Tự động mô phỏng PLC phản hồi tín hiệu Ack (M11) sau 20ms khi Vision hoàn thành kiểm tra. Dùng để test chu trình handshake khi chưa có PLC thật hoặc đang giả lập trên máy tính!"/>
                             </Grid>
                         </Border>
 

@@ -153,6 +153,12 @@ class Program
             return;
         }
 
+        if (args.Length > 0 && (args[0].Equals("numeric", StringComparison.OrdinalIgnoreCase) || args[0].Equals("word", StringComparison.OrdinalIgnoreCase) || args[0].Equals("int16", StringComparison.OrdinalIgnoreCase) || args[0].Equals("handshake-numeric", StringComparison.OrdinalIgnoreCase)))
+        {
+            PlcHandshakeNumericModeTests.RunAllTestsAsync().GetAwaiter().GetResult();
+            return;
+        }
+
         HikApiTest.PrintApi();
         CameraTest.TestCameraParametersJobSerialization();
         CameraTest.TestNativeMatPoolAndMetadata();

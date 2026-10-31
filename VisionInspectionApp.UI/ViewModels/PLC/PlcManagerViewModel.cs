@@ -69,6 +69,15 @@ public partial class PlcManagerViewModel : ObservableObject
         new(PlcInputSignalType.LongPress, "Long Press (Nhấn giữ liên tục)")
     };
 
+    public record PlcResultOutputModeOption(PlcResultOutputMode Value, string DisplayName, string Description);
+
+    public IReadOnlyList<PlcResultOutputModeOption> AvailableResultOutputModes { get; } = new List<PlcResultOutputModeOption>
+    {
+        new(PlcResultOutputMode.Bit, "1. Tín hiệu rời rạc Bit (Bool: Pass / NG Tag)", "Gửi kết quả qua 2 chân bit riêng biệt Pass (OK) và NG (Lỗi)"),
+        new(PlcResultOutputMode.NumericInt16, "2. Thanh ghi số nguyên (Int16 Word: D, MW,...)", "Gửi mã số kết quả (OK = 2, NG = 3,...) vào 1 thanh ghi số nguyên Word"),
+        new(PlcResultOutputMode.Both, "3. Song hành cả hai (Đồng thời Bit & Số Int16)", "Gửi đồng thời cả bit Bool (Pass/NG) và mã số Int16 vào thanh ghi Word")
+    };
+
     public PlcIndustrialConfig IndustrialConfig
     {
         get => _plcService.IndustrialConfig;
@@ -144,6 +153,7 @@ public partial class PlcManagerViewModel : ObservableObject
             "Y0_VisionHeartbeat", "X0_PlcHeartbeat", "Y10_VisionFault",
             "Y1_VisionReady", "Y2_VisionBusy", "Y3_VisionDone", "Y4_VisionPass", "Y5_VisionNG", "X1_PlcAck",
             "M101_VisionReady", "M102_VisionBusy", "M103_VisionDone", "M104_VisionPass", "M105_VisionNG", "M106_ResetQueue", "X2_ResetQueue",
+            "D100_VisionResult", "D100", "MW100",
             "D1000_EncoderPulses", "D1002_LineSpeed",
             "Y0_RejectPiston", "Y1_RejectMarker"
         };
@@ -162,7 +172,7 @@ public partial class PlcManagerViewModel : ObservableObject
         // Tags from current Industrial Config
         var configTags = new[]
         {
-            Handshake?.ReadyTagName, Handshake?.BusyTagName, Handshake?.DoneTagName, Handshake?.PassTagName, Handshake?.NgTagName, Handshake?.PlcAckTagName, Handshake?.ResetQueueTagName,
+            Handshake?.ReadyTagName, Handshake?.BusyTagName, Handshake?.DoneTagName, Handshake?.PassTagName, Handshake?.NgTagName, Handshake?.PlcAckTagName, Handshake?.ResetQueueTagName, Handshake?.ResultWordTagName,
             Heartbeat?.VisionHeartbeatTagName, Heartbeat?.PlcHeartbeatTagName, Heartbeat?.EmergencyStopTagName,
             Motion?.EncoderTagName, Motion?.SpeedTagName,
             ShiftRegister?.RejectTagName
@@ -465,7 +475,7 @@ public partial class PlcManagerViewModel : ObservableObject
             System.Windows.MessageBox.Show(
                 "Đã khôi phục cấu hình Bắt tay 24/7 theo chuẩn Mitsubishi FX5U:\n" +
                 "• PLC Đích: " + plcId + "\n" +
-                "• Ready: M101\n• Busy: M102\n• Done: M103\n• Pass (OK): M104 (Rising Edge 20ms)\n• NG (Lỗi): M105 (Rising Edge 20ms)\n• Hàng đợi: M200 (Non-Blocking, Trạm dừng 10)",
+                "• Ready: M101\n• Busy: M102\n• Done: M103\n• Pass (OK): M104 (Rising Edge 20ms)\n• NG (Lỗi): M105 (Rising Edge 20ms)\n• Kết Quả Số: D100 (OK=2, NG=3)\n• Hàng đợi: M200 (Non-Blocking, Trạm dừng 10)",
                 "Khôi Phục Chuẩn FX5U",
                 System.Windows.MessageBoxButton.OK,
                 System.Windows.MessageBoxImage.Information);
@@ -489,7 +499,7 @@ public partial class PlcManagerViewModel : ObservableObject
             System.Windows.MessageBox.Show(
                 "Đã khôi phục cấu hình Bắt tay 24/7 theo chuẩn I/O Công Nghiệp:\n" +
                 "• PLC Đích: " + plcId + "\n" +
-                "• Ready: Y1_VisionReady\n• Busy: Y2_VisionBusy\n• Done: Y3_VisionDone\n• Pass (OK): Y4_VisionPass\n• NG (Lỗi): Y5_VisionNG\n• Ack: X1_PlcAck",
+                "• Ready: Y1_VisionReady\n• Busy: Y2_VisionBusy\n• Done: Y3_VisionDone\n• Pass (OK): Y4_VisionPass\n• NG (Lỗi): Y5_VisionNG\n• Kết Quả Số: MW100 (OK=2, NG=3)\n• Ack: X1_PlcAck",
                 "Khôi Phục Chuẩn I/O",
                 System.Windows.MessageBoxButton.OK,
                 System.Windows.MessageBoxImage.Information);
