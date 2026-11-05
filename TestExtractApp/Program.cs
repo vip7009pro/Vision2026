@@ -6,6 +6,13 @@ class Program
 {
     static void Main(string[] args)
     {
+        if (args.Length > 0 && (args[0].Equals("blob", StringComparison.OrdinalIgnoreCase) || args[0].Equals("blob-spec", StringComparison.OrdinalIgnoreCase) || args[0].Equals("blobspec", StringComparison.OrdinalIgnoreCase)))
+        {
+            NewJobAndBlobSpecTests.RunTests();
+            BlobCountingModeTests.RunTests();
+            return;
+        }
+
         if (args.Length > 0 && (args[0].Equals("code-detection", StringComparison.OrdinalIgnoreCase) || args[0].Equals("code", StringComparison.OrdinalIgnoreCase) || args[0].Equals("qr", StringComparison.OrdinalIgnoreCase) || args[0].Equals("cdt", StringComparison.OrdinalIgnoreCase)))
         {
             CodeDetectionResultTests.RunAllTests();

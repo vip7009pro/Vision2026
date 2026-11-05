@@ -2649,69 +2649,109 @@
                                     </Grid>
                                 </Border>
 
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                    <TextBlock Text="Thr" Width="60" VerticalAlignment="Center" Foreground="{DynamicResource TextBrush}" />
-                                    <TextBlock Text="{Binding Blob_Threshold}" Width="40" Foreground="{DynamicResource TextBrush}" />
-                                </StackPanel>
-                                <Slider Minimum="0" Maximum="255" Value="{Binding Blob_Threshold, UpdateSourceTrigger=LostFocus}" IsSnapToTickEnabled="True" TickFrequency="1" Margin="0,0,0,6" />
+                                <!-- Chế độ chưa hiệu chuẩn: Bắt blob theo MinA, MaxA (pixel) -->
+                                <StackPanel Visibility="{Binding Blob_IsNotCalibrated, Converter={StaticResource BoolToVis}}">
+                                    <Border Background="#263238" Padding="6,3" Margin="0,4,0,2" CornerRadius="3">
+                                        <TextBlock Text="⚠️ Chưa hiệu chuẩn — Bắt blob theo Diện tích MinA / MaxA (px)" FontSize="10" FontWeight="SemiBold" Foreground="#FFB74D" />
+                                    </Border>
 
-                                <Border BorderBrush="{DynamicResource DarkBorderBrush}" BorderThickness="1" Padding="2" Margin="0,0,0,6">
-                                    <Image Source="{Binding BlobThresholdPreviewImage}" Stretch="Uniform" Height="120" />
-                                </Border>
-
-                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="120" />
-                                            <ColumnDefinition Width="*" />
-                                        </Grid.ColumnDefinitions>
-                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
-                                            <TextBlock Text="MinA" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
-                                        </Border>
-                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <TextBox Text="{Binding Blob_MinBlobArea, UpdateSourceTrigger=LostFocus}" Margin="2,1" FontSize="11" />
-                                        </Border>
-                                    </Grid>
-                                </Border>
-                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="120" />
-                                            <ColumnDefinition Width="*" />
-                                        </Grid.ColumnDefinitions>
-                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
-                                            <TextBlock Text="MaxA" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
-                                        </Border>
-                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <TextBox Text="{Binding Blob_MaxBlobArea, UpdateSourceTrigger=LostFocus}" Margin="2,1" FontSize="11" />
-                                        </Border>
-                                    </Grid>
-                                </Border>
-
-                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="4">
-                                    <StackPanel>
-                                        <TextBlock Text="MinA / MaxA (diện tích tương đương)" FontSize="10" Foreground="{DynamicResource TextMutedBrush}" Margin="0,0,0,4" />
-                                        <Grid Height="82">
+                                    <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                        <Grid>
                                             <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="120" />
                                                 <ColumnDefinition Width="*" />
                                             </Grid.ColumnDefinitions>
-                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                                                <Border Width="88" Height="58" Background="#18222C" BorderBrush="#52606D" BorderThickness="1">
-                                                    <Ellipse Width="{Binding Blob_MinAreaPreviewSide}" Height="{Binding Blob_MinAreaPreviewHeight}" Fill="#4FC3F7" Stroke="#B3E5FC" StrokeThickness="1" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                                </Border>
-                                                <TextBlock Text="{Binding Blob_MinAreaPreviewText}" FontSize="9" Foreground="{DynamicResource TextBrush}" HorizontalAlignment="Center" Margin="0,2,0,0" />
-                                            </StackPanel>
-                                            <StackPanel Grid.Column="1" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                                <Border Width="88" Height="58" Background="#18222C" BorderBrush="#52606D" BorderThickness="1">
-                                                    <Ellipse Width="{Binding Blob_MaxAreaPreviewSide}" Height="{Binding Blob_MaxAreaPreviewHeight}" Fill="#FFB74D" Stroke="#FFE0B2" StrokeThickness="1" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                                </Border>
-                                                <TextBlock Text="{Binding Blob_MaxAreaPreviewText}" FontSize="9" Foreground="{DynamicResource TextBrush}" HorizontalAlignment="Center" Margin="0,2,0,0" />
-                                            </StackPanel>
+                                            <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                                <TextBlock Text="MinA (px)" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
+                                            </Border>
+                                            <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                                <TextBox Text="{Binding Blob_MinBlobArea, UpdateSourceTrigger=LostFocus}" Margin="2,1" FontSize="11" />
+                                            </Border>
                                         </Grid>
-                                    </StackPanel>
-                                </Border>
+                                    </Border>
+                                    <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="120" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                                <TextBlock Text="MaxA (px)" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
+                                            </Border>
+                                            <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                                <TextBox Text="{Binding Blob_MaxBlobArea, UpdateSourceTrigger=LostFocus}" Margin="2,1" FontSize="11" />
+                                            </Border>
+                                        </Grid>
+                                    </Border>
 
+                                    <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="4">
+                                        <StackPanel>
+                                            <TextBlock Text="MinA / MaxA (diện tích tương đương)" FontSize="10" Foreground="{DynamicResource TextMutedBrush}" Margin="0,0,0,4" />
+                                            <Grid Height="82">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                     <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                    <Border Width="88" Height="58" Background="#18222C" BorderBrush="#52606D" BorderThickness="1">
+                                                        <Ellipse Width="{Binding Blob_MinAreaPreviewSide}" Height="{Binding Blob_MinAreaPreviewHeight}" Fill="#4FC3F7" Stroke="#B3E5FC" StrokeThickness="1" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                    </Border>
+                                                    <TextBlock Text="{Binding Blob_MinAreaPreviewText}" FontSize="9" Foreground="{DynamicResource TextBrush}" HorizontalAlignment="Center" Margin="0,2,0,0" />
+                                                </StackPanel>
+                                                <StackPanel Grid.Column="1" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                    <Border Width="88" Height="58" Background="#18222C" BorderBrush="#52606D" BorderThickness="1">
+                                                        <Ellipse Width="{Binding Blob_MaxAreaPreviewSide}" Height="{Binding Blob_MaxAreaPreviewHeight}" Fill="#FFB74D" Stroke="#FFE0B2" StrokeThickness="1" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                    </Border>
+                                                    <TextBlock Text="{Binding Blob_MaxAreaPreviewText}" FontSize="9" Foreground="{DynamicResource TextBrush}" HorizontalAlignment="Center" Margin="0,2,0,0" />
+                                                </StackPanel>
+                                            </Grid>
+                                        </StackPanel>
+                                    </Border>
+                                </StackPanel>
+
+                                <!-- Chế độ đã hiệu chuẩn: Bắt blob theo W x L (mm) -->
+                                <StackPanel Visibility="{Binding Blob_IsCalibrated, Converter={StaticResource BoolToVis}}">
+                                    <Border Background="#1B5E20" Padding="6,3" Margin="0,4,0,2" CornerRadius="3">
+                                        <TextBlock Text="🎯 Đã hiệu chuẩn — Bắt blob theo Kích thước W x L (mm)" FontSize="10" FontWeight="SemiBold" Foreground="#A5D6A7" />
+                                    </Border>
+
+                                    <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="120" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="12" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="32" />
+                                            </Grid.ColumnDefinitions>
+                                            <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                                <TextBlock Text="Spec Max (W x L)" ToolTip="Kích thước tối đa của 1 blob (không phân biệt chiều xoay: kiểm tra cả WxL và LxW)" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
+                                            </Border>
+                                            <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                                <TextBox Text="{Binding Blob_MaxBlobWidth, UpdateSourceTrigger=LostFocus, TargetNullValue=0.0, StringFormat='{}{0:0.##}'}" Margin="2,1" FontSize="11" ToolTip="Chiều rộng tối đa (0 = bỏ qua)" />
+                                            </Border>
+                                            <TextBlock Grid.Column="2" Text="x" VerticalAlignment="Center" HorizontalAlignment="Center" FontSize="10" Foreground="{DynamicResource TextBrush}" />
+                                            <Border Grid.Column="3" Background="{DynamicResource PanelBackgroundBrush}">
+                                                <TextBox Text="{Binding Blob_MaxBlobLength, UpdateSourceTrigger=LostFocus, TargetNullValue=0.0, StringFormat='{}{0:0.##}'}" Margin="2,1" FontSize="11" ToolTip="Chiều dài tối đa (0 = bỏ qua)" />
+                                            </Border>
+                                            <TextBlock Grid.Column="4" Text="{Binding Blob_DistanceUnitText}" VerticalAlignment="Center" HorizontalAlignment="Center" FontSize="10" Foreground="{DynamicResource TextBrush}" />
+                                        </Grid>
+                                    </Border>
+
+                                    <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="4">
+                                        <StackPanel>
+                                            <TextBlock Text="Preview Kích thước W x L (mm)" FontSize="10" Foreground="{DynamicResource TextMutedBrush}" Margin="0,0,0,4" />
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,4">
+                                                <Border Width="98" Height="62" Background="#18222C" BorderBrush="#52606D" BorderThickness="1" Visibility="{Binding Blob_HasMaxSpecPreview, Converter={StaticResource BoolToVis}}">
+                                                    <Rectangle Width="{Binding Blob_MaxSpecPreviewWidth}" Height="{Binding Blob_MaxSpecPreviewHeight}" Fill="#81C784" Stroke="#C8E6C9" StrokeThickness="1" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                </Border>
+                                                <TextBlock Text="{Binding Blob_MaxSpecPreviewText}" FontSize="9" Foreground="{DynamicResource TextBrush}" HorizontalAlignment="Center" Margin="0,2,0,0" />
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Border>
+                                </StackPanel>
+
+                                <!-- Cấu hình chung: Spec số lượng & Khoảng cách -->
                                 <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
                                     <Grid>
                                         <Grid.ColumnDefinitions>
@@ -2744,58 +2784,20 @@
                                     </Grid>
                                 </Border>
 
-                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="120" />
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="12" />
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="32" />
-                                        </Grid.ColumnDefinitions>
-                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
-                                            <TextBlock Text="Spec Max (W x L)" ToolTip="Kích thước tối đa của 1 blob (không phân biệt chiều xoay: kiểm tra cả WxL và LxW)" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
-                                        </Border>
-                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <TextBox Text="{Binding Blob_MaxBlobWidth, UpdateSourceTrigger=LostFocus, TargetNullValue=0.0, StringFormat='{}{0:0.##}'}" Margin="2,1" FontSize="11" ToolTip="Chiều rộng tối đa (0 = bỏ qua)" />
-                                        </Border>
-                                        <TextBlock Grid.Column="2" Text="x" VerticalAlignment="Center" HorizontalAlignment="Center" FontSize="10" Foreground="{DynamicResource TextBrush}" />
-                                        <Border Grid.Column="3" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <TextBox Text="{Binding Blob_MaxBlobLength, UpdateSourceTrigger=LostFocus, TargetNullValue=0.0, StringFormat='{}{0:0.##}'}" Margin="2,1" FontSize="11" ToolTip="Chiều dài tối đa (0 = bỏ qua)" />
-                                        </Border>
-                                        <TextBlock Grid.Column="4" Text="{Binding Blob_DistanceUnitText}" VerticalAlignment="Center" HorizontalAlignment="Center" FontSize="10" Foreground="{DynamicResource TextBrush}" />
-                                    </Grid>
-                                </Border>
-
                                 <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="4">
                                     <StackPanel>
-                                        <TextBlock Text="Preview Spec mm / Count" FontSize="10" Foreground="{DynamicResource TextMutedBrush}" Margin="0,0,0,4" />
-                                        <Grid Height="100">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="*" />
-                                            </Grid.ColumnDefinitions>
-                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                                                <Border Width="98" Height="62" Background="#18222C" BorderBrush="#52606D" BorderThickness="1" Visibility="{Binding Blob_HasMaxSpecPreview, Converter={StaticResource BoolToVis}}">
-                                                    <Rectangle Width="{Binding Blob_MaxSpecPreviewWidth}" Height="{Binding Blob_MaxSpecPreviewHeight}" Fill="#81C784" Stroke="#C8E6C9" StrokeThickness="1" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                                </Border>
-                                                <TextBlock Text="{Binding Blob_MaxSpecPreviewText}" FontSize="9" Foreground="{DynamicResource TextBrush}" HorizontalAlignment="Center" Margin="0,2,0,0" />
-                                            </StackPanel>
-                                            <StackPanel Grid.Column="1" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                                <Canvas Width="98" Height="62" Background="#18222C">
-                                                    <Ellipse Width="10" Height="10" Fill="#4FC3F7" Canvas.Left="22" Canvas.Top="12" />
-                                                    <Ellipse Width="10" Height="10" Fill="#4FC3F7" Canvas.Left="65" Canvas.Top="12" />
-                                                    <Line X1="32" Y1="17" X2="65" Y2="17" Stroke="#FFB74D" StrokeThickness="2" />
-                                                </Canvas>
-                                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,2,0,0">
-                                                    <TextBlock Text="Khoảng cách tối thiểu: " FontSize="9" Foreground="{DynamicResource TextBrush}" />
-                                                    <TextBlock Text="{Binding Blob_MinBlobDistance, StringFormat={}{0:0.##}}" FontSize="9" Foreground="{DynamicResource TextBrush}" />
-                                                    <TextBlock Text=" " FontSize="9" />
-                                                    <TextBlock Text="{Binding Blob_DistanceUnitText}" FontSize="9" Foreground="{DynamicResource TextBrush}" />
-                                                </StackPanel>
-                                            </StackPanel>
-                                        </Grid>
+                                        <Canvas Width="98" Height="42" Background="#18222C" HorizontalAlignment="Center" Margin="0,2">
+                                            <Ellipse Width="10" Height="10" Fill="#4FC3F7" Canvas.Left="22" Canvas.Top="12" />
+                                            <Ellipse Width="10" Height="10" Fill="#4FC3F7" Canvas.Left="65" Canvas.Top="12" />
+                                            <Line X1="32" Y1="17" X2="65" Y2="17" Stroke="#FFB74D" StrokeThickness="2" />
+                                        </Canvas>
                                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,2,0,0">
+                                            <TextBlock Text="Khoảng cách tối thiểu: " FontSize="9" Foreground="{DynamicResource TextBrush}" />
+                                            <TextBlock Text="{Binding Blob_MinBlobDistance, StringFormat={}{0:0.##}}" FontSize="9" Foreground="{DynamicResource TextBrush}" />
+                                            <TextBlock Text=" " FontSize="9" />
+                                            <TextBlock Text="{Binding Blob_DistanceUnitText}" FontSize="9" Foreground="{DynamicResource TextBrush}" />
+                                        </StackPanel>
+                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,4,0,0">
                                             <TextBlock Text="Count preview: " FontSize="9" Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center" />
                                             <TextBlock Text="{Binding Blob_MaxBlobCountPreview}" FontSize="9" Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center" />
                                         </StackPanel>

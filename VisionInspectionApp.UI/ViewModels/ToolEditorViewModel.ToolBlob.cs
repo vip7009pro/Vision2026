@@ -15,6 +15,7 @@ using Microsoft.Win32;
 using OpenCvSharp;
 using OpenCvSharp.WpfExtensions;
 using VisionInspectionApp.Application;
+using VisionInspectionApp.Application.Services;
 using VisionInspectionApp.Models;
 using VisionInspectionApp.UI.Controls;
 using VisionInspectionApp.UI.Services;
@@ -48,6 +49,7 @@ namespace VisionInspectionApp.UI.ViewModels
                     return;
                 def.Polarity = value;
                 RequestBlobThresholdPreviewUpdate();
+                RunFlow();
                 RequestAutoSave();
                 OnPropertyChanged();
             }
@@ -73,6 +75,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (def.CountingMode == value)
                     return;
                 def.CountingMode = value;
+                RunFlow();
                 RequestAutoSave();
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(Blob_CountingModeText));
@@ -127,6 +130,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 def.MinBlobArea = v;
                 if (def.MaxBlobArea < def.MinBlobArea)
                     def.MaxBlobArea = def.MinBlobArea;
+                RunFlow();
                 RequestAutoSave();
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(Blob_MaxBlobArea));
@@ -151,6 +155,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (def.MaxBlobArea == v)
                     return;
                 def.MaxBlobArea = v;
+                RunFlow();
                 RequestAutoSave();
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(Blob_MinAreaPreviewSide));
@@ -185,6 +190,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (def.MaxAllowedBlobs == v)
                     return;
                 def.MaxAllowedBlobs = v;
+                RunFlow();
                 RequestAutoSave();
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(Blob_MaxBlobCountPreview));
@@ -206,6 +212,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (Math.Abs(def.MinBlobDistance - v) < 1e-6)
                     return;
                 def.MinBlobDistance = v;
+                RunFlow();
                 RequestAutoSave();
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(Blob_HasMinDistancePreview));
@@ -229,6 +236,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (Math.Abs(def.MaxBlobWidth - v) < 1e-6)
                     return;
                 def.MaxBlobWidth = v;
+                RunFlow();
                 RequestAutoSave();
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(Blob_HasMaxSpecPreview));
@@ -254,6 +262,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (Math.Abs(def.MaxBlobLength - v) < 1e-6)
                     return;
                 def.MaxBlobLength = v;
+                RunFlow();
                 RequestAutoSave();
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(Blob_HasMaxSpecPreview));
@@ -298,15 +307,22 @@ namespace VisionInspectionApp.UI.ViewModels
             return Math.Clamp(millimeters * pixelsPerMm * 0.12, 2, 88);
         }
 
-        public string Blob_DistanceUnitText
+        public bool Blob_IsCalibrated
         {
             get
             {
-                if (_config is not null && _config.PixelsPerMm > 0 && Math.Abs(_config.PixelsPerMm - 1.0) > 1e-6)
-                    return "mm";
-                return "px";
+                if (_config is null) return false;
+                var effectiveCalib = ChessboardCalibrationService.GetEffectiveCalibration(_config);
+                if (effectiveCalib is not null && effectiveCalib.IsCalibrated && effectiveCalib.PixelsPerMm > 0 && Math.Abs(effectiveCalib.PixelsPerMm - 1.0) > 1e-6)
+                    return true;
+                if (_config.ChessboardCalibration is not null && _config.ChessboardCalibration.IsCalibrated && _config.ChessboardCalibration.PixelsPerMm > 0 && Math.Abs(_config.ChessboardCalibration.PixelsPerMm - 1.0) > 1e-6)
+                    return true;
+                return _config.PixelsPerMm > 0 && Math.Abs(_config.PixelsPerMm - 1.0) > 1e-6;
             }
         }
+        public bool Blob_IsNotCalibrated => !Blob_IsCalibrated;
+
+        public string Blob_DistanceUnitText => Blob_IsCalibrated ? "mm" : "px";
 
         public string Blob_LastRunMinDistanceText
         {

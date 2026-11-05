@@ -492,7 +492,7 @@ public partial class InspectionService
                 return (image, defaultSettings, _preprocessor);
             }
 
-            static List<BlobInfo> DetectBlobsInCrop(Mat crop, Roi inspectRoi, List<BlobRoiDefinition>? rois, BlobPolarity polarity, int threshold, int minArea, int maxArea, Point2d centerFound, double totalAngle, BlobCountingMode countingMode = BlobCountingMode.Separate)
+            static List<BlobInfo> DetectBlobsInCrop(Mat crop, Roi inspectRoi, List<BlobRoiDefinition>? rois, BlobPolarity polarity, int threshold, int minArea, int maxArea, Point2d centerFound, double totalAngle, BlobCountingMode countingMode = BlobCountingMode.Separate, bool isCalibrated = false, double scale = 1.0, double maxBlobWidth = 0.0, double maxBlobLength = 0.0)
             {
                 var blobs = new List<BlobInfo>();
                 if (crop is null || crop.Empty())
@@ -594,9 +594,44 @@ public partial class InspectionService
                     var height = stats.Get<int>(i, (int)ConnectedComponentsTypes.Height);
                     var areaPx = stats.Get<int>(i, (int)ConnectedComponentsTypes.Area);
 
-                    if (areaPx < minArea || areaPx > maxArea)
+                    if (isCalibrated)
                     {
-                        continue;
+                        // 1. Khi ĐÃ CÓ HIỆU CHUẨN: Bắt blob theo W x L (mm)
+                        // Bỏ qua các blob nhỏ nằm trong dung sai kích thước cho phép (<= Spec Max WxL)
+                        // Chỉ bắt những blob VƯỢT QUÁ kích thước cho phép (tức là khuyết tật / dị vật / vết bẩn lỗi)
+                        if (maxBlobWidth > 0 || maxBlobLength > 0)
+                        {
+                            var blobW = width / scale;
+                            var blobH = height / scale;
+
+                            var withinTolerance = true;
+                            if (maxBlobWidth > 0 && maxBlobLength > 0)
+                            {
+                                withinTolerance = (blobW <= maxBlobWidth && blobH <= maxBlobLength) ||
+                                                  (blobH <= maxBlobWidth && blobW <= maxBlobLength);
+                            }
+                            else if (maxBlobWidth > 0)
+                            {
+                                withinTolerance = (blobW <= maxBlobWidth || blobH <= maxBlobWidth);
+                            }
+                            else if (maxBlobLength > 0)
+                            {
+                                withinTolerance = (blobW <= maxBlobLength || blobH <= maxBlobLength);
+                            }
+
+                            if (withinTolerance)
+                            {
+                                continue; // Nằm trong dung sai cho phép -> bỏ qua, không bắt làm lỗi
+                            }
+                        }
+                    }
+                    else
+                    {
+                        // 2. Khi CHƯA CÓ HIỆU CHUẨN: Bắt blob theo minA, maxA (pixel)
+                        if (areaPx < minArea || areaPx > maxArea)
+                        {
+                            continue;
+                        }
                     }
 
                     var cx = centroids.Get<double>(i, 0);
@@ -2125,11 +2160,32 @@ public partial class InspectionService
                     var (matForBlob, _) = ResolveToolPreprocess("BlobDetection", b.Name);
                     using var crop = ExtractStraightRoi(matForBlob, b.InspectRoi, originTeach, originFound, angleDeg, out var centerFound);
                     var totalAngle = angleDeg + b.InspectRoi.Angle;
-                    var blobs = DetectBlobsInCrop(crop, b.InspectRoi, b.Rois, b.Polarity, b.Threshold, b.MinBlobArea, b.MaxBlobArea, centerFound, totalAngle, b.CountingMode);
+                    var effectiveCalib = ChessboardCalibrationService.GetEffectiveCalibration(config);
+                    var calibPpm = (effectiveCalib is not null && effectiveCalib.IsCalibrated && effectiveCalib.PixelsPerMm > 0)
+                        ? effectiveCalib.PixelsPerMm
+                        : ((config.ChessboardCalibration is not null && config.ChessboardCalibration.IsCalibrated && config.ChessboardCalibration.PixelsPerMm > 0)
+                            ? config.ChessboardCalibration.PixelsPerMm
+                            : config.PixelsPerMm);
+                    var isCalibrated = calibPpm > 0 && Math.Abs(calibPpm - 1.0) > 1e-6;
+                    var scale = isCalibrated ? calibPpm : 1.0;
+                    var blobs = DetectBlobsInCrop(
+                        crop,
+                        b.InspectRoi,
+                        b.Rois,
+                        b.Polarity,
+                        b.Threshold,
+                        b.MinBlobArea,
+                        b.MaxBlobArea,
+                        centerFound,
+                        totalAngle,
+                        b.CountingMode,
+                        isCalibrated,
+                        scale,
+                        b.MaxBlobWidth,
+                        b.MaxBlobLength);
                     __sw.Stop();
                     result.Timings.NodeTimings[b.Name] = (int)__sw.ElapsedMilliseconds;
 
-                    var scale = (config.PixelsPerMm > 0 && Math.Abs(config.PixelsPerMm - 1.0) > 1e-6) ? config.PixelsPerMm : 1.0;
                     var passCount = blobs.Count <= b.MaxAllowedBlobs;
 
                     double? minDistance = null;
@@ -2186,18 +2242,26 @@ public partial class InspectionService
                         if (checkSize)
                         {
                             var fits = true;
-                            if (b.MaxBlobWidth > 0 && b.MaxBlobLength > 0)
+                            if (isCalibrated)
                             {
-                                fits = (bw <= b.MaxBlobWidth && bh <= b.MaxBlobLength) ||
-                                       (bh <= b.MaxBlobWidth && bw <= b.MaxBlobLength);
+                                // Ở chế độ Calibrated, mọi blob bắt được đều là blob vượt quá WxL
+                                fits = false;
                             }
-                            else if (b.MaxBlobWidth > 0)
+                            else
                             {
-                                fits = (bw <= b.MaxBlobWidth || bh <= b.MaxBlobWidth);
-                            }
-                            else if (b.MaxBlobLength > 0)
-                            {
-                                fits = (bw <= b.MaxBlobLength || bh <= b.MaxBlobLength);
+                                if (b.MaxBlobWidth > 0 && b.MaxBlobLength > 0)
+                                {
+                                    fits = (bw <= b.MaxBlobWidth && bh <= b.MaxBlobLength) ||
+                                           (bh <= b.MaxBlobWidth && bw <= b.MaxBlobLength);
+                                }
+                                else if (b.MaxBlobWidth > 0)
+                                {
+                                    fits = (bw <= b.MaxBlobWidth || bh <= b.MaxBlobWidth);
+                                }
+                                else if (b.MaxBlobLength > 0)
+                                {
+                                    fits = (bw <= b.MaxBlobLength || bh <= b.MaxBlobLength);
+                                }
                             }
 
                             if (!fits)

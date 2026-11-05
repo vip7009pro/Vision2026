@@ -111,6 +111,8 @@ namespace VisionInspectionApp.UI.ViewModels
             OnPropertyChanged(nameof(Blob_MaxBlobWidth));
             OnPropertyChanged(nameof(Blob_MaxBlobLength));
             OnPropertyChanged(nameof(Blob_DistanceUnitText));
+            OnPropertyChanged(nameof(Blob_IsCalibrated));
+            OnPropertyChanged(nameof(Blob_IsNotCalibrated));
             OnPropertyChanged(nameof(Blob_LastRunMinDistanceText));
             OnPropertyChanged(nameof(Blob_LastRunMaxDimensionsText));
             OnPropertyChanged(nameof(Blob_PassStatus));

@@ -828,6 +828,10 @@ public static class ChessboardCalibrationService
         // 2. Nếu Job đã có cấu hình riêng hợp lệ
         if (config.ChessboardCalibration is not null && config.ChessboardCalibration.IsCalibrated)
         {
+            if (config.PixelsPerMm <= 0 || Math.Abs(config.PixelsPerMm - 1.0) < 1e-6)
+            {
+                config.PixelsPerMm = config.ChessboardCalibration.PixelsPerMm;
+            }
             return true; // Giữ nguyên cấu hình riêng của Job
         }
 

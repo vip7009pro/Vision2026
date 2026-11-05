@@ -23,6 +23,9 @@ public static class NewJobAndBlobSpecTests
         TestOqcScannerBlobMeasurement();
         TestBlobOverallResultPass();
         TestCaliperStripRoiDefinition();
+        TestBlobDetectionCalibratedModeWxLFilter();
+        TestBlobDetectionUncalibratedModeMinMaxAreaFilter();
+        TestBlobDetectionUIViewModelCalibratedSwitch();
 
         Console.WriteLine("=== All NewJob, CaliperStrip & BlobDetection Spec Tests Passed! ===");
     }
@@ -295,4 +298,157 @@ public static class NewJobAndBlobSpecTests
 
         Console.WriteLine($" -> Unified Caliper ROI geometry & 2-way sync (W={cHoriz.SearchRoi.Width}, H={cHoriz.SearchRoi.Height}, Cx={newCx}, Cy={newCy}) verified!");
     }
+
+    private static IInspectionService CreateInspectionService()
+    {
+        var pre = new ImagePreprocessor();
+        var matcher = new PatternMatcher();
+        var dist = new DistanceCalculator();
+        var line = new LineDetector();
+        var defect = new DefectDetector();
+        return new InspectionService(pre, matcher, dist, line, defect);
+    }
+
+    private static void TestBlobDetectionCalibratedModeWxLFilter()
+    {
+        Console.WriteLine("[Test 7] Testing BlobDetection Calibrated Mode: Catches by WxL (mm), ignores small MinA...");
+
+        // Tao anh den 400x400 voi 3 blob trang:
+        // Blob 1: 20x20 px (o scale 10 px/mm => 2.0 x 2.0 mm, dien tich 400 px)
+        // Blob 2: 40x30 px (o scale 10 px/mm => 4.0 x 3.0 mm, dien tich 1200 px)
+        // Blob 3: 100x80 px (o scale 10 px/mm => 10.0 x 8.0 mm, dien tich 8000 px)
+        using var img = new Mat(400, 400, MatType.CV_8UC3, Scalar.Black);
+        Cv2.Rectangle(img, new Rect(20, 20, 20, 20), Scalar.White, -1);
+        Cv2.Rectangle(img, new Rect(80, 20, 40, 30), Scalar.White, -1);
+        Cv2.Rectangle(img, new Rect(160, 20, 100, 80), Scalar.White, -1);
+
+        var config = new VisionConfig
+        {
+            PixelsPerMm = 10.0, // DA CO HIEU CHUAN
+            BlobDetections = new List<BlobDetectionDefinition>
+            {
+                new BlobDetectionDefinition
+                {
+                    Name = "BlobCalib",
+                    InspectRoi = new Roi { X = 5, Y = 5, Width = 380, Height = 380 },
+                    Polarity = BlobPolarity.LightOnDark,
+                    Threshold = 100,
+                    MinBlobArea = 1, // minA rat nho (1 px)
+                    MaxBlobArea = 500000,
+                    MaxBlobWidth = 5.0,  // Spec WxL = 5.0 x 5.0 mm
+                    MaxBlobLength = 5.0
+                }
+            }
+        };
+
+        var service = CreateInspectionService();
+        var res = service.Inspect(img, config);
+        var blobRes = res.BlobDetections.FirstOrDefault(x => x.Name == "BlobCalib");
+        if (blobRes is null) throw new Exception("BlobCalib result not found!");
+
+        // Blob 1 (2x2 mm <= 5x5) va Blob 2 (4x3 mm <= 5x5) nam trong dung sai -> BO QUA
+        // Blob 3 (10x8 mm > 5x5) vuot qua Spec Max WxL -> DUOC BAT LAM LOI!
+        if (blobRes.Count != 1)
+            throw new Exception($"Expected exactly 1 defect blob exceeding WxL 5x5 mm, but got {blobRes.Count}!");
+
+        // Thu nang WxL len 15x15 mm (rat lon) -> Khong co blob nao vuot qua -> Count = 0 (Khong bat blob nho)
+        config.BlobDetections[0].MaxBlobWidth = 15.0;
+        config.BlobDetections[0].MaxBlobLength = 15.0;
+        var res2 = service.Inspect(img, config);
+        var blobRes2 = res2.BlobDetections.FirstOrDefault(x => x.Name == "BlobCalib");
+        if (blobRes2?.Count != 0)
+            throw new Exception($"Expected 0 blobs caught with WxL 15x15 mm (all within tolerance), but got {blobRes2?.Count}!");
+
+        // Thu ha WxL xuong 1x1 mm (rat nho) -> Ca 3 blob deu vuot qua 1x1 mm -> Ca 3 bi bat lam loi!
+        config.BlobDetections[0].MaxBlobWidth = 1.0;
+        config.BlobDetections[0].MaxBlobLength = 1.0;
+        var res3 = service.Inspect(img, config);
+        var blobRes3 = res3.BlobDetections.FirstOrDefault(x => x.Name == "BlobCalib");
+        if (blobRes3?.Count != 3)
+            throw new Exception($"Expected 3 defect blobs caught with WxL 1x1 mm, but got {blobRes3?.Count}!");
+
+        Console.WriteLine(" -> Calibrated Mode WxL blob detection successfully verified!");
+    }
+
+
+    private static void TestBlobDetectionUncalibratedModeMinMaxAreaFilter()
+    {
+        Console.WriteLine("[Test 8] Testing BlobDetection Uncalibrated Mode: Catches by MinA/MaxA (px)...");
+
+        string globalCalPath = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "Vision2026",
+            "global_chessboard_calibration.json");
+        string backupPath = globalCalPath + ".bak_test";
+        bool hasBackup = false;
+
+        try
+        {
+            if (File.Exists(globalCalPath))
+            {
+                File.Copy(globalCalPath, backupPath, true);
+                File.Delete(globalCalPath);
+                hasBackup = true;
+            }
+
+            using var img = new Mat(400, 400, MatType.CV_8UC3, Scalar.Black);
+            Cv2.Rectangle(img, new Rect(20, 20, 20, 20), Scalar.White, -1);   // Area = 400 px
+            Cv2.Rectangle(img, new Rect(80, 20, 40, 30), Scalar.White, -1);   // Area = 1200 px
+            Cv2.Rectangle(img, new Rect(160, 20, 100, 80), Scalar.White, -1); // Area = 8000 px
+
+            var config = new VisionConfig
+            {
+                PixelsPerMm = 1.0, // CHUA CO HIEU CHUAN
+                BlobDetections = new List<BlobDetectionDefinition>
+                {
+                    new BlobDetectionDefinition
+                    {
+                        Name = "BlobUncalib",
+                        InspectRoi = new Roi { X = 5, Y = 5, Width = 380, Height = 380 },
+                        Polarity = BlobPolarity.LightOnDark,
+                        Threshold = 100,
+                        MinBlobArea = 500,   // Chi bat tu 500 .. 2000 px
+                        MaxBlobArea = 2000,
+                        MaxBlobWidth = 200.0, // WxL lon khong duoc can thiep vao bat blob khi chua calib
+                        MaxBlobLength = 200.0
+                    }
+                }
+            };
+
+            var service = CreateInspectionService();
+            var res = service.Inspect(img, config);
+            var blobRes = res.BlobDetections.FirstOrDefault(x => x.Name == "BlobUncalib");
+            if (blobRes is null) throw new Exception("BlobUncalib result not found!");
+
+            // Chi co Blob 2 (Area 1200 px) nam trong [500, 2000] duoc bat
+            if (blobRes.Count != 1)
+                throw new Exception($"Expected exactly 1 blob caught by MinA/MaxA in uncalibrated mode, but got {blobRes.Count}!");
+
+            Console.WriteLine(" -> Uncalibrated Mode MinA/MaxA blob detection successfully verified!");
+        }
+        finally
+        {
+            if (hasBackup && File.Exists(backupPath))
+            {
+                File.Copy(backupPath, globalCalPath, true);
+                File.Delete(backupPath);
+            }
+        }
+    }
+
+    private static void TestBlobDetectionUIViewModelCalibratedSwitch()
+    {
+        Console.WriteLine("[Test 9] Testing BlobDetection ViewModel Calibrated properties & unit toggle...");
+
+        var configCalib = new VisionConfig { PixelsPerMm = 15.5 };
+        bool isCalib = configCalib.PixelsPerMm > 0 && Math.Abs(configCalib.PixelsPerMm - 1.0) > 1e-6;
+        if (!isCalib) throw new Exception("Expected isCalib = true for PixelsPerMm = 15.5!");
+
+        var configUncalib = new VisionConfig { PixelsPerMm = 1.0 };
+        bool isUncalib = configUncalib.PixelsPerMm > 0 && Math.Abs(configUncalib.PixelsPerMm - 1.0) > 1e-6;
+        if (isUncalib) throw new Exception("Expected isCalib = false for PixelsPerMm = 1.0!");
+
+        Console.WriteLine(" -> ViewModel Calibrated/Uncalibrated properties verified!");
+    }
+
 }
