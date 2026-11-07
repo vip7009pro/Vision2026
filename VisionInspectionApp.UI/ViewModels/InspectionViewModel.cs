@@ -680,7 +680,7 @@ public sealed partial class InspectionViewModel : ObservableObject
         try
         {
             var mat = await _cameraService.CaptureSnapshotAsync();
-            if (mat != null && !mat.Empty())
+            if (mat != null && !mat.IsDisposed && !mat.Empty())
             {
                 _imageMat?.Dispose();
                 _imageMat = mat;

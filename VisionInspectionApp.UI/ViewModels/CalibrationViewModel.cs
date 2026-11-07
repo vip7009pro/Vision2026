@@ -255,7 +255,7 @@ public sealed partial class CalibrationViewModel : ObservableObject
             IsLiveActive = false;
             _ = _cameraService.RequestLiveStreamAsync("TwoPointCalib", false);
             var mat = await _cameraService.CaptureSnapshotAsync();
-            if (mat is not null && !mat.Empty())
+            if (mat is not null && !mat.IsDisposed && !mat.Empty())
             {
                 _imageMat?.Dispose();
                 _imageMat = mat;

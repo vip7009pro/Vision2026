@@ -6,6 +6,21 @@ class Program
 {
     static void Main(string[] args)
     {
+        if (args.Length > 0 && (args[0].Equals("hik-stream", StringComparison.OrdinalIgnoreCase) || args[0].Equals("hik", StringComparison.OrdinalIgnoreCase) || args[0].Equals("snap", StringComparison.OrdinalIgnoreCase)))
+        {
+            CameraTest.TestHikHighSpeedStreamingOptimization();
+            CameraTest.TestSnapshotFrameOwnershipAndNoObjectDisposedException();
+            return;
+        }
+
+        if (args.Length > 0 && args[0].Equals("inspect-mvs", StringComparison.OrdinalIgnoreCase))
+        {
+            CameraTest.InspectMvsMethods();
+            CameraTest.BenchmarkBayerAndCopies();
+            CameraTest.TestHikHighSpeedStreamingOptimization();
+            return;
+        }
+
         if (args.Length > 0 && (args[0].Equals("blob", StringComparison.OrdinalIgnoreCase) || args[0].Equals("blob-spec", StringComparison.OrdinalIgnoreCase) || args[0].Equals("blobspec", StringComparison.OrdinalIgnoreCase)))
         {
             NewJobAndBlobSpecTests.RunTests();

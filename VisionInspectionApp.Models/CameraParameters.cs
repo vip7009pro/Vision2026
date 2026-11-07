@@ -47,8 +47,8 @@ public sealed class CameraParameters
     public bool IsLiveViewEnabled { get; set; } = false; // Mặc định sau khi kết nối không tự ý stream liên tục chiếm băng thông
 
     // Mạng GigE Vision (Chỉ dành cho GigE Camera)
-    public int PacketSize { get; set; } = 1500; // GevSCPSPacketSize (Bytes)
-    public int PacketDelay { get; set; } = 0;   // GevSCPD (Microseconds)
+    public int PacketSize { get; set; } = 9000; // GevSCPSPacketSize (Bytes) - Chuẩn 9000 Jumbo Frames cho 10GbE (MV-GT1002) & GigE
+    public int PacketDelay { get; set; } = 0;   // GevSCPD (Microseconds) - 0 cho kết nối trực tiếp băng thông cao
 
     // Hardware Camera ROI (Vùng ảnh phần cứng trực tiếp từ Camera)
     public bool EnableHardwareRoi { get; set; } = false;
@@ -57,8 +57,8 @@ public sealed class CameraParameters
     public int RoiWidth { get; set; } = 5472;
     public int RoiHeight { get; set; } = 3648;
 
-    // Định dạng điểm ảnh từ Camera (Pixel Format chuẩn MVS)
-    public string PixelFormat { get; set; } = "Bayer GB 8";
+    // Định dạng điểm ảnh từ Camera (Pixel Format chuẩn MVS: "" = Tự động dùng định dạng gốc phần cứng)
+    public string PixelFormat { get; set; } = "";
 
     // Xử lý mềm OpenCV (Brightness, Contrast, Grayscale)
     public double Brightness { get; set; } = 0.0;

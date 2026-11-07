@@ -58,6 +58,26 @@ public sealed class NativeMatPool : IDisposable
         }
     }
 
+    private int _ringIndex = 0;
+
+    /// <summary>
+    /// Lấy Buffer Mat tiếp theo trong Ring Buffer tuần hoàn không khóa (Lock-Free Circular Ring Buffer),
+    /// cực kỳ tối ưu cho luồng Video Streaming 40+ FPS.
+    /// </summary>
+    public Mat? GetNextRingBuffer()
+    {
+        lock (_lock)
+        {
+            if (!_isInitialized || _disposed) return null;
+            int idx = Math.Abs(_ringIndex++) % _poolSize;
+            if (_buffers[idx] == null || _buffers[idx].IsDisposed)
+            {
+                _buffers[idx] = new Mat(_height, _width, _type, Scalar.All(0));
+            }
+            return _buffers[idx];
+        }
+    }
+
     /// <summary>
     /// Thuê một Buffer Mat từ Pool để sao chép dữ liệu ảnh mới trực tiếp vào bộ nhớ có sẵn
     /// </summary>
@@ -72,12 +92,20 @@ public sealed class NativeMatPool : IDisposable
                 if (!_inUse[i])
                 {
                     _inUse[i] = true;
+                    if (_buffers[i] == null || _buffers[i].IsDisposed)
+                    {
+                        _buffers[i] = new Mat(_height, _width, _type, Scalar.All(0));
+                    }
                     return (i, _buffers[i]);
                 }
             }
 
             // Nếu tất cả buffer đang bận, buộc lấy buffer cũ nhất (Index 0) để tái sử dụng
             _inUse[0] = true;
+            if (_buffers[0] == null || _buffers[0].IsDisposed)
+            {
+                _buffers[0] = new Mat(_height, _width, _type, Scalar.All(0));
+            }
             return (0, _buffers[0]);
         }
     }

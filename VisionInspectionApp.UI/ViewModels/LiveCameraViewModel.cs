@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.IO;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -207,6 +207,7 @@ public sealed partial class LiveCameraViewModel : ObservableObject
     public bool IsViewActive { get; set; } = false;
     private readonly WriteableBitmapRenderer _liveRenderer = new();
     private bool _isRenderingFrame;
+    private long _lastSnapshotCacheTicks;
 
     private void OnFrameCaptured(object? sender, Mat frame)
     {
@@ -230,18 +231,32 @@ public sealed partial class LiveCameraViewModel : ObservableObject
             }
 
             Mat? frameCopyForInspection = null;
-            lock (_frameLock)
-            {
-                if (_currentFrame == null || _currentFrame.IsDisposed || _currentFrame.Width != frame.Width || _currentFrame.Height != frame.Height || _currentFrame.Type() != frame.Type())
-                {
-                    _currentFrame?.Dispose();
-                    _currentFrame = new Mat(frame.Height, frame.Width, frame.Type());
-                }
-                frame.CopyTo(_currentFrame);
+            long nowTicks = Environment.TickCount64;
 
-                if (IsLiveInspectionEnabled && _config != null)
+            if (IsLiveInspectionEnabled && _config != null)
+            {
+                lock (_frameLock)
                 {
+                    if (_currentFrame == null || _currentFrame.IsDisposed || _currentFrame.Width != frame.Width || _currentFrame.Height != frame.Height || _currentFrame.Type() != frame.Type())
+                    {
+                        _currentFrame?.Dispose();
+                        _currentFrame = new Mat(frame.Height, frame.Width, frame.Type());
+                    }
+                    frame.CopyTo(_currentFrame);
                     frameCopyForInspection = _currentFrame.Clone();
+                }
+            }
+            else if (nowTicks - _lastSnapshotCacheTicks >= 200)
+            {
+                _lastSnapshotCacheTicks = nowTicks;
+                lock (_frameLock)
+                {
+                    if (_currentFrame == null || _currentFrame.IsDisposed || _currentFrame.Width != frame.Width || _currentFrame.Height != frame.Height || _currentFrame.Type() != frame.Type())
+                    {
+                        _currentFrame?.Dispose();
+                        _currentFrame = new Mat(frame.Height, frame.Width, frame.Type());
+                    }
+                    frame.CopyTo(_currentFrame);
                 }
             }
 

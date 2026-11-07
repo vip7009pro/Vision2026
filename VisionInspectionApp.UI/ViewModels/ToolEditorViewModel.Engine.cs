@@ -631,7 +631,7 @@ namespace VisionInspectionApp.UI.ViewModels
 
         public Mat PrepareDisplayImageForSharedContext(Mat rawMat, ImageSourceDefinition? sourceDef = null)
         {
-            if (rawMat is null || rawMat.Empty()) return rawMat?.Clone() ?? new Mat();
+            if (rawMat is null || rawMat.IsDisposed || rawMat.Empty()) return (rawMat != null && !rawMat.IsDisposed) ? rawMat.Clone() : new Mat();
             sourceDef ??= SelectedImageSourceDef() ?? _config?.ImageSources?.FirstOrDefault();
             if (sourceDef != null && sourceDef.EnableUndistort)
             {
@@ -3006,7 +3006,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 try
                 {
                     var mat = await _cameraService.CaptureSnapshotAsync(camIndex, rtspUrl);
-                    if (mat is not null && !mat.Empty())
+                    if (mat is not null && !mat.IsDisposed && !mat.Empty())
                     {
                         SetImageSourceCache(nodeName, "camera", mat);
                         // Chuyển quyền sở hữu để tránh clone ảnh lớn và đảm bảo Mat được giải phóng.
@@ -3795,7 +3795,7 @@ namespace VisionInspectionApp.UI.ViewModels
                             var camIdx = imgSourceDef?.CameraIndex ?? 0;
                             var rtsp = string.IsNullOrWhiteSpace(imgSourceDef?.RtspUrl) ? null : imgSourceDef.RtspUrl;
                             var snapMat = await _cameraService.CaptureSnapshotAsync(camIdx, rtsp);
-                            if (snapMat != null && !snapMat.Empty())
+                            if (snapMat != null && !snapMat.IsDisposed && !snapMat.Empty())
                             {
                                 _continuousFrameHandler?.Invoke(this, snapMat);
                                 snapMat.Dispose();
@@ -4279,7 +4279,7 @@ namespace VisionInspectionApp.UI.ViewModels
                             {
                                 // Fallback chụp snapshot nếu driver không kích hoạt qua lệnh command
                                 var snapMat = await _cameraService.CaptureSnapshotAsync(sourceDef.CameraIndex, string.IsNullOrWhiteSpace(sourceDef.RtspUrl) ? null : sourceDef.RtspUrl);
-                                if (snapMat != null && !snapMat.Empty() && !token.IsCancellationRequested)
+                                if (snapMat != null && !snapMat.IsDisposed && !snapMat.Empty() && !token.IsCancellationRequested)
                                 {
                                     _continuousFrameHandler?.Invoke(this, snapMat);
                                     snapMat.Dispose();
@@ -4635,7 +4635,7 @@ namespace VisionInspectionApp.UI.ViewModels
                             {
                                 // Fallback snapshot nếu driver không kích hoạt qua lệnh software trigger command
                                 var snapMat = await _cameraService.CaptureSnapshotAsync(imgSourceDef.CameraIndex, string.IsNullOrWhiteSpace(imgSourceDef.RtspUrl) ? null : imgSourceDef.RtspUrl);
-                                if (snapMat != null && !snapMat.Empty())
+                                if (snapMat != null && !snapMat.IsDisposed && !snapMat.Empty())
                                 {
                                     _continuousFrameHandler?.Invoke(this, snapMat);
                                     snapMat.Dispose();
@@ -4926,7 +4926,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 int camIndex = imgSourceDef?.CameraIndex ?? 0;
                 string? rtsp = (imgSourceDef != null && !string.IsNullOrWhiteSpace(imgSourceDef.RtspUrl)) ? imgSourceDef.RtspUrl : null;
                 var mat = await _cameraService.CaptureSnapshotAsync(camIndex, rtsp);
-                if (mat != null && !mat.Empty())
+                if (mat != null && !mat.IsDisposed && !mat.Empty())
                 {
                     if (imgSourceDef is not null)
                     {
@@ -4956,10 +4956,10 @@ namespace VisionInspectionApp.UI.ViewModels
                 string? rtsp = (imgSourceDef != null && !string.IsNullOrWhiteSpace(imgSourceDef.RtspUrl)) ? imgSourceDef.RtspUrl : null;
                 
                 Mat? mat = await _cameraService.CaptureSnapshotAsync(camIndex, rtsp);
-                if (mat == null || mat.Empty())
+                if (mat == null || mat.IsDisposed || mat.Empty())
                 {
                     mat = _sharedImage.GetSnapshot();
-                    if (mat == null || mat.Empty())
+                    if (mat == null || mat.IsDisposed || mat.Empty())
                     {
                         MessageBox.Show("Không thể chụp ảnh từ camera và chưa có ảnh nào trong bộ nhớ đệm.\nVui lòng kiểm tra lại kết nối camera trong tab Live Camera.", "Chụp ảnh thất bại", MessageBoxButton.OK, MessageBoxImage.Warning);
                         return;
@@ -5039,7 +5039,7 @@ namespace VisionInspectionApp.UI.ViewModels
                                 try
                                 {
                                     var cameraMat = await _cameraService.CaptureSnapshotAsync(imgSourceDef.CameraIndex, string.IsNullOrWhiteSpace(imgSourceDef.RtspUrl) ? null : imgSourceDef.RtspUrl);
-                                    if (cameraMat is not null && !cameraMat.Empty())
+                                    if (cameraMat is not null && !cameraMat.IsDisposed && !cameraMat.Empty())
                                     {
                                         SetImageSourceCache(imgSourceDef.Name, "camera", cameraMat);
                                         using (var displayMat = PrepareDisplayImageForSharedContext(cameraMat, imgSourceDef))

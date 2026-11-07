@@ -180,7 +180,12 @@ public sealed class AndroidCameraDriver : CameraDriverBase
                         var fullResMat = Cv2.ImDecode(bytes, ImreadModes.Color);
                         if (fullResMat != null && !fullResMat.Empty())
                         {
-                            return ApplySoftwarePostProcessing(fullResMat, _parameters);
+                            var processed = ApplySoftwarePostProcessing(fullResMat, _parameters);
+                            if (!ReferenceEquals(processed, fullResMat))
+                            {
+                                fullResMat.Dispose();
+                            }
+                            return processed;
                         }
                     }
                 }
@@ -196,11 +201,17 @@ public sealed class AndroidCameraDriver : CameraDriverBase
         {
             if (_cap != null && _cap.IsOpened())
             {
-                using var rawFrame = new Mat();
+                var rawFrame = new Mat();
                 if (_cap.Read(rawFrame) && !rawFrame.Empty())
                 {
-                    return ApplySoftwarePostProcessing(rawFrame, _parameters);
+                    var processed = ApplySoftwarePostProcessing(rawFrame, _parameters);
+                    if (!ReferenceEquals(processed, rawFrame))
+                    {
+                        rawFrame.Dispose();
+                    }
+                    return processed;
                 }
+                rawFrame.Dispose();
             }
 
             // Fallback tải preview shot
@@ -214,7 +225,12 @@ public sealed class AndroidCameraDriver : CameraDriverBase
                     var shotMat = Cv2.ImDecode(bytes, ImreadModes.Color);
                     if (shotMat != null && !shotMat.Empty())
                     {
-                        return ApplySoftwarePostProcessing(shotMat, _parameters);
+                        var processed = ApplySoftwarePostProcessing(shotMat, _parameters);
+                        if (!ReferenceEquals(processed, shotMat))
+                        {
+                            shotMat.Dispose();
+                        }
+                        return processed;
                     }
                 }
             }

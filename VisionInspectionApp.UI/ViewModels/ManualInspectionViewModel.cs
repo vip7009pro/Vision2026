@@ -186,7 +186,7 @@ public sealed partial class ManualInspectionViewModel : ObservableObject, IDispo
             _rawImageMat = sourceMat;
         }
 
-        if (_rawImageMat is null || _rawImageMat.Empty()) return;
+        if (_rawImageMat is null || _rawImageMat.IsDisposed || _rawImageMat.Empty()) return;
 
         _imageMat?.Dispose();
 
@@ -243,7 +243,7 @@ public sealed partial class ManualInspectionViewModel : ObservableObject, IDispo
         try
         {
             var mat = await _cameraService.CaptureSnapshotAsync();
-            if (mat != null && !mat.Empty())
+            if (mat != null && !mat.IsDisposed && !mat.Empty())
             {
                 ApplyCalibrationAndDisplayImage(mat);
             }

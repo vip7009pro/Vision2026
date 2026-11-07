@@ -93,7 +93,7 @@ public abstract class CameraDriverBase : ICameraDriver
     public static Mat ApplySoftwarePostProcessing(Mat input, CameraParameters paramsObj, bool hardwareReverseXApplied = false, bool hardwareReverseYApplied = false)
     {
         if (input == null || input.IsDisposed || input.Empty()) return new Mat();
-        if (paramsObj == null) return input.Clone();
+        if (paramsObj == null) return input;
 
         bool needFlipX = (paramsObj.ReverseX != hardwareReverseXApplied);
         bool needFlipY = (paramsObj.ReverseY != hardwareReverseYApplied);
@@ -106,7 +106,8 @@ public abstract class CameraDriverBase : ICameraDriver
 
         if (!needProcessing)
         {
-            return input.Clone();
+            // Trả về trực tiếp input, triệt tiêu hoàn toàn lệnh Clone() 78.6MB (Zero-Allocation)
+            return input;
         }
 
         try

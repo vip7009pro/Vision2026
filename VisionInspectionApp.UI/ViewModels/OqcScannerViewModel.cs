@@ -864,7 +864,7 @@ public partial class OqcScannerViewModel : ObservableObject
             {
                 // 1. Chụp 1 ảnh từ camera tại thời điểm bấm Space
                 using var snapshot = _cameraService.TryGetLatestFrameClone() ?? await _cameraService.CaptureSnapshotAsync();
-                if (snapshot == null || snapshot.Empty())
+                if (snapshot == null || snapshot.IsDisposed || snapshot.Empty())
                 {
                     return;
                 }

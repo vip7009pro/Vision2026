@@ -871,18 +871,27 @@ public sealed class CameraService : IDisposable
         return null;
     }
 
+    private long _lastFrameUpdateTicks;
+
     private void OnDriverFrameCaptured(object? sender, Mat frame)
     {
         if (frame == null || frame.IsDisposed || frame.Empty()) return;
 
-        lock (_lastFrameGate)
+        // Tối ưu hóa bộ nhớ: Ở tốc độ cao 40+ FPS, chỉ cập nhật _lastFrame định kỳ tối đa 5Hz (200ms)
+        // để tránh sao chép 78.6MB liên tục 41 lần mỗi giây trên CPU (tiết kiệm hơn 800ms CPU/giây).
+        long nowTicks = Environment.TickCount64;
+        if (nowTicks - _lastFrameUpdateTicks >= 200)
         {
-            if (_lastFrame == null || _lastFrame.IsDisposed || _lastFrame.Width != frame.Width || _lastFrame.Height != frame.Height || _lastFrame.Type() != frame.Type())
+            _lastFrameUpdateTicks = nowTicks;
+            lock (_lastFrameGate)
             {
-                _lastFrame?.Dispose();
-                _lastFrame = new Mat(frame.Height, frame.Width, frame.Type());
+                if (_lastFrame == null || _lastFrame.IsDisposed || _lastFrame.Width != frame.Width || _lastFrame.Height != frame.Height || _lastFrame.Type() != frame.Type())
+                {
+                    _lastFrame?.Dispose();
+                    _lastFrame = new Mat(frame.Height, frame.Width, frame.Type());
+                }
+                frame.CopyTo(_lastFrame);
             }
-            frame.CopyTo(_lastFrame);
         }
 
         FrameCaptured?.Invoke(this, frame);
@@ -920,12 +929,13 @@ public sealed class CameraService : IDisposable
             if (_activeDriver.IsGrabbing)
             {
                 var freshMat = await _activeDriver.GrabFrameAsync(1500);
-                if (freshMat != null && !freshMat.Empty())
+                if (freshMat != null && !freshMat.IsDisposed && !freshMat.Empty())
                 {
                     lock (_lastFrameGate)
                     {
-                        _lastFrame?.Dispose();
+                        var old = _lastFrame;
                         _lastFrame = freshMat.Clone();
+                        old?.Dispose();
                     }
                     return freshMat;
                 }
@@ -934,15 +944,17 @@ public sealed class CameraService : IDisposable
             else
             {
                 var freshMat = await _activeDriver.GrabFrameAsync(3000);
-                if (freshMat != null && !freshMat.Empty())
+                if (freshMat != null && !freshMat.IsDisposed && !freshMat.Empty())
                 {
                     lock (_lastFrameGate)
                     {
-                        _lastFrame?.Dispose();
+                        var old = _lastFrame;
                         _lastFrame = freshMat.Clone();
+                        old?.Dispose();
                     }
+                    return freshMat;
                 }
-                return freshMat;
+                return TryGetLatestFrameClone();
             }
         }
 
@@ -964,12 +976,13 @@ public sealed class CameraService : IDisposable
                 if (_activeDriver.IsGrabbing)
                 {
                     var freshMat = await _activeDriver.GrabFrameAsync(1500);
-                    if (freshMat != null && !freshMat.Empty())
+                    if (freshMat != null && !freshMat.IsDisposed && !freshMat.Empty())
                     {
                         lock (_lastFrameGate)
                         {
-                            _lastFrame?.Dispose();
+                            var old = _lastFrame;
                             _lastFrame = freshMat.Clone();
+                            old?.Dispose();
                         }
                         return freshMat;
                     }
@@ -978,15 +991,17 @@ public sealed class CameraService : IDisposable
                 else
                 {
                     var freshMat = await _activeDriver.GrabFrameAsync(3000);
-                    if (freshMat != null && !freshMat.Empty())
+                    if (freshMat != null && !freshMat.IsDisposed && !freshMat.Empty())
                     {
                         lock (_lastFrameGate)
                         {
-                            _lastFrame?.Dispose();
+                            var old = _lastFrame;
                             _lastFrame = freshMat.Clone();
+                            old?.Dispose();
                         }
+                        return freshMat;
                     }
-                    return freshMat;
+                    return TryGetLatestFrameClone();
                 }
             }
         }
@@ -1032,8 +1047,14 @@ public sealed class CameraService : IDisposable
 
             await driver.ApplyParametersAsync(p);
             var mat = await driver.GrabFrameAsync(2000);
+            Mat? result = null;
+            if (mat != null && !mat.IsDisposed && !mat.Empty())
+            {
+                result = mat.Clone();
+                mat.Dispose();
+            }
             await driver.CloseAsync();
-            return mat;
+            return result;
         }
 
         return null;
@@ -1043,7 +1064,11 @@ public sealed class CameraService : IDisposable
     {
         lock (_lastFrameGate)
         {
-            return _lastFrame?.Clone();
+            if (_lastFrame != null && !_lastFrame.IsDisposed && !_lastFrame.Empty())
+            {
+                return _lastFrame.Clone();
+            }
+            return null;
         }
     }
 

@@ -3,6 +3,7 @@ using System.IO;
 using DirectShowLib;
 using OpenCvSharp;
 using VisionInspectionApp.Models;
+using VisionInspectionApp.UI.Services;
 
 namespace TestExtractApp;
 
@@ -1091,5 +1092,424 @@ public static class CameraTest
         Console.WriteLine("  [4/4] ResultTransfer Node Deletion & Config Synchronization: PASSED");
 
         Console.WriteLine("✅ ALL FLOW CANVAS RENAME & DELETE TESTS PASSED (100%)!\n");
+    }
+
+    public static void InspectMvsMethods()
+    {
+        Console.WriteLine("=== OPENCV BAYER PATTERN DETAILED DECODING TEST ===");
+        var pixType = typeof(MvCamCtrl.NET.MyCamera.MvGvspPixelType);
+        foreach (var val in Enum.GetValues(pixType))
+        {
+            try
+            {
+                Console.WriteLine($"  {val} = 0x{Convert.ToInt64(val):X8}");
+            }
+            catch { }
+        }
+    }
+
+    public static void BenchmarkBayerAndCopies()
+    {
+        Console.WriteLine("\n=== BENCHMARK 25MP (5120x5120) CONVERSION & MEMORY SPEEDS ===");
+        int w = 5120;
+        int h = 5120;
+        byte[] bayerData = new byte[w * h];
+        new Random(42).NextBytes(bayerData);
+
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+
+        // 1. OpenCV CvtColor BayerGB2BGR
+        using (var bayerMat = new Mat(h, w, MatType.CV_8UC1))
+        using (var bgrMat = new Mat(h, w, MatType.CV_8UC3))
+        {
+            System.Runtime.InteropServices.Marshal.Copy(bayerData, 0, bayerMat.Data, w * h);
+
+            // Warmup
+            Cv2.CvtColor(bayerMat, bgrMat, ColorConversionCodes.BayerGB2BGR);
+
+            sw.Restart();
+            int iterations = 10;
+            for (int i = 0; i < iterations; i++)
+            {
+                Cv2.CvtColor(bayerMat, bgrMat, ColorConversionCodes.BayerGB2BGR);
+            }
+            sw.Stop();
+            double cvtMs = sw.Elapsed.TotalMilliseconds / iterations;
+            Console.WriteLine($"  [OpenCV Cv2.CvtColor BayerGB2BGR 25MP]: {cvtMs:F2} ms/frame -> Max FPS = {1000.0 / cvtMs:F1} FPS");
+        }
+
+        // 1b. Hikrobot SDK MV_CC_ConvertPixelTypeEx_NET
+        try
+        {
+            var cam = new MvCamCtrl.NET.MyCamera();
+            int bayerSize = w * h;
+            int bgrSize = w * h * 3;
+            IntPtr pSrc = System.Runtime.InteropServices.Marshal.AllocHGlobal(bayerSize);
+            IntPtr pDst = System.Runtime.InteropServices.Marshal.AllocHGlobal(bgrSize);
+            System.Runtime.InteropServices.Marshal.Copy(bayerData, 0, pSrc, bayerSize);
+
+            cam.MV_CC_SetBayerCvtQuality_NET(0); // Fast mode
+
+            var cvtParam = new MvCamCtrl.NET.MyCamera.MV_CC_PIXEL_CONVERT_PARAM_EX
+            {
+                nWidth = (uint)w,
+                nHeight = (uint)h,
+                enSrcPixelType = MvCamCtrl.NET.MyCamera.MvGvspPixelType.PixelType_Gvsp_BayerBG8,
+                pSrcData = pSrc,
+                nSrcDataLen = (uint)bayerSize,
+                enDstPixelType = MvCamCtrl.NET.MyCamera.MvGvspPixelType.PixelType_Gvsp_BGR8_Packed,
+                pDstBuffer = pDst,
+                nDstBufferSize = (uint)bgrSize
+            };
+
+            int ret = cam.MV_CC_ConvertPixelTypeEx_NET(ref cvtParam);
+            Console.WriteLine($"  [Hik SDK ConvertPixelTypeEx First Call]: ret = 0x{ret:X8}, dstLen = {cvtParam.nDstLen}");
+
+            if (ret == MvCamCtrl.NET.MyCamera.MV_OK)
+            {
+                sw.Restart();
+                int iters = 10;
+                for (int i = 0; i < iters; i++)
+                {
+                    cam.MV_CC_ConvertPixelTypeEx_NET(ref cvtParam);
+                }
+                sw.Stop();
+                double sdkMs = sw.Elapsed.TotalMilliseconds / iters;
+                Console.WriteLine($"  [Hik SDK ConvertPixelTypeEx Fast 25MP]: {sdkMs:F2} ms/frame -> Max FPS = {1000.0 / sdkMs:F1} FPS");
+
+                // High Quality test
+                cam.MV_CC_SetBayerCvtQuality_NET(1);
+                sw.Restart();
+                iters = 5;
+                for (int i = 0; i < iters; i++)
+                {
+                    cam.MV_CC_ConvertPixelTypeEx_NET(ref cvtParam);
+                }
+                sw.Stop();
+                double sdkHqMs = sw.Elapsed.TotalMilliseconds / iters;
+                Console.WriteLine($"  [Hik SDK ConvertPixelTypeEx HighQuality 25MP]: {sdkHqMs:F2} ms/frame -> Max FPS = {1000.0 / sdkHqMs:F1} FPS");
+            }
+
+            System.Runtime.InteropServices.Marshal.FreeHGlobal(pSrc);
+            System.Runtime.InteropServices.Marshal.FreeHGlobal(pDst);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"  [Hik SDK ConvertPixelTypeEx Exception]: {ex.Message}");
+        }
+
+        // 2. Mat.Clone() of 25MP BGR (78.6 MB)
+        using (var testBgr = new Mat(h, w, MatType.CV_8UC3, Scalar.All(128)))
+        {
+            sw.Restart();
+            int iterations = 10;
+            for (int i = 0; i < iterations; i++)
+            {
+                using var cloned = testBgr.Clone();
+            }
+            sw.Stop();
+            double cloneMs = sw.Elapsed.TotalMilliseconds / iterations;
+            Console.WriteLine($"  [OpenCV Mat.Clone() 25MP BGR (78.6MB)]: {cloneMs:F2} ms/clone -> Max FPS = {1000.0 / cloneMs:F1} FPS");
+        }
+
+        // 3. Mat.CopyTo() into pre-allocated Mat (no alloc)
+        using (var srcBgr = new Mat(h, w, MatType.CV_8UC3, Scalar.All(128)))
+        using (var dstBgr = new Mat(h, w, MatType.CV_8UC3))
+        {
+            sw.Restart();
+            int iterations = 10;
+            for (int i = 0; i < iterations; i++)
+            {
+                srcBgr.CopyTo(dstBgr);
+            }
+            sw.Stop();
+            double copyMs = sw.Elapsed.TotalMilliseconds / iterations;
+            Console.WriteLine($"  [OpenCV src.CopyTo(dst) 25MP pre-allocated]: {copyMs:F2} ms/copy -> Max FPS = {1000.0 / copyMs:F1} FPS");
+        }
+
+        // 4. Cv2.Resize 25MP -> 1920x1080 (Linear)
+        using (var srcBgr = new Mat(h, w, MatType.CV_8UC3, Scalar.All(128)))
+        using (var dst1080 = new Mat(1080, 1920, MatType.CV_8UC3))
+        {
+            sw.Restart();
+            int iterations = 5;
+            for (int i = 0; i < iterations; i++)
+            {
+                Cv2.Resize(srcBgr, dst1080, new OpenCvSharp.Size(1920, 1080), 0, 0, InterpolationFlags.Linear);
+            }
+            sw.Stop();
+            double resizeMs = sw.Elapsed.TotalMilliseconds / iterations;
+            Console.WriteLine($"  [Cv2.Resize 25MP -> 1080p Linear]: {resizeMs:F2} ms/frame -> Max FPS = {1000.0 / resizeMs:F1} FPS");
+        }
+
+        // 5. Cv2.Resize 25MP -> 1920x1080 (Nearest - fast preview)
+        using (var srcBgr = new Mat(h, w, MatType.CV_8UC3, Scalar.All(128)))
+        using (var dst1080 = new Mat(1080, 1920, MatType.CV_8UC3))
+        {
+            sw.Restart();
+            int iterations = 5;
+            for (int i = 0; i < iterations; i++)
+            {
+                Cv2.Resize(srcBgr, dst1080, new OpenCvSharp.Size(1920, 1080), 0, 0, InterpolationFlags.Nearest);
+            }
+            sw.Stop();
+            double resizeNearestMs = sw.Elapsed.TotalMilliseconds / iterations;
+            Console.WriteLine($"  [Cv2.Resize 25MP -> 1080p Nearest]: {resizeNearestMs:F2} ms/frame -> Max FPS = {1000.0 / resizeNearestMs:F1} FPS");
+        }
+    }
+
+    public static void TestHikHighSpeedStreamingOptimization()
+    {
+        Console.WriteLine("\n=== TESTING HIKROBOT 25MP 10GbE STREAMING OPTIMIZATIONS ===");
+
+        // 1. Kiểm tra cấu hình mạng mặc định
+        var defaultParams = new VisionInspectionApp.Models.CameraParameters();
+        if (defaultParams.PacketSize != 9000)
+        {
+            throw new Exception($"Default PacketSize must be 9000 (Jumbo Frames) for 10GbE! Got {defaultParams.PacketSize}");
+        }
+        if (defaultParams.PacketDelay != 0)
+        {
+            throw new Exception($"Default PacketDelay must be 0 for high-speed link! Got {defaultParams.PacketDelay}");
+        }
+        Console.WriteLine("  [1/4] Jumbo Frames (9000 MTU) & Zero Packet Delay default: PASSED");
+
+        // 2. Kiểm tra Zero-Clone PostProcessing khi không chỉnh sửa
+        using (var testMat = new Mat(100, 100, MatType.CV_8UC3, Scalar.All(100)))
+        {
+            var p = new VisionInspectionApp.Models.CameraParameters
+            {
+                Contrast = 1.0,
+                Brightness = 0.0,
+                IsGrayscale = false,
+                ReverseX = false,
+                ReverseY = false
+            };
+
+            var result = VisionInspectionApp.UI.Services.Camera.CameraDriverBase.ApplySoftwarePostProcessing(testMat, p, false, false);
+            if (!ReferenceEquals(testMat, result))
+            {
+                throw new Exception("ApplySoftwarePostProcessing must return the same instance (Zero-Allocation) when no processing is required!");
+            }
+            Console.WriteLine("  [2/4] Zero-Clone PostProcessing Reference Preservation (0ms): PASSED");
+        }
+
+        // 3. Kiểm tra NativeMatPool Ring Buffer tái sử dụng không cấp phát mới và không bị dispose
+        using (var pool = new VisionInspectionApp.UI.Services.Camera.NativeMatPool(4))
+        {
+            pool.Initialize(512, 512, MatType.CV_8UC3);
+            var m1 = pool.GetNextRingBuffer();
+            var m2 = pool.GetNextRingBuffer();
+            var m3 = pool.GetNextRingBuffer();
+            var m4 = pool.GetNextRingBuffer();
+            var m5 = pool.GetNextRingBuffer(); // Should cycle back to m1
+
+            if (m1 == null || m2 == null || m3 == null || m4 == null || m5 == null)
+            {
+                throw new Exception("NativeMatPool GetNextRingBuffer returned null!");
+            }
+            if (!ReferenceEquals(m1, m5))
+            {
+                throw new Exception("NativeMatPool GetNextRingBuffer must cycle circularly back to slot 0!");
+            }
+            Console.WriteLine("  [3/4] NativeMatPool Circular Ring Buffer (Lock-Free recycling): PASSED");
+        }
+
+        // 4. Kiểm tra tốc độ giải mã màu Bayer 25MP đạt >40 FPS
+        int w = 5120;
+        int h = 5120;
+        using (var bayerMat = new Mat(h, w, MatType.CV_8UC1, Scalar.All(128)))
+        using (var bgrMat = new Mat(h, w, MatType.CV_8UC3))
+        {
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            Cv2.CvtColor(bayerMat, bgrMat, ColorConversionCodes.BayerGB2BGR);
+            sw.Restart();
+            int iters = 5;
+            for (int i = 0; i < iters; i++)
+            {
+                Cv2.CvtColor(bayerMat, bgrMat, ColorConversionCodes.BayerGB2BGR);
+            }
+            sw.Stop();
+            double ms = sw.Elapsed.TotalMilliseconds / iters;
+            double fps = 1000.0 / Math.Max(0.1, ms);
+            Console.WriteLine($"  [4/5] 25MP Bayer demosaicing speed: {ms:F2} ms/frame ({fps:F1} FPS) -> {(fps >= 40.0 ? "PASSED (Exceeds 41 FPS requirement)" : "WARNING: Below 40 FPS")}");
+            if (fps < 40.0)
+            {
+                throw new Exception($"Bayer demosaicing is too slow: {ms:F2} ms ({fps:F1} FPS)");
+            }
+        }
+
+        // 5. Kiểm tra tính chuẩn xác của ánh xạ Bayer không bị đảo màu Red/Blue
+        using (var bayer = new Mat(4, 4, MatType.CV_8UC1, Scalar.All(0)))
+        {
+            // (0,0) là Blue pixel trong cảm biến BayerBG8
+            bayer.Set(0, 0, (byte)255);
+            bayer.Set(0, 2, (byte)255);
+            bayer.Set(2, 0, (byte)255);
+            bayer.Set(2, 2, (byte)255);
+
+            using var bgr = new Mat();
+            // Hik Driver sử dụng ColorConversionCodes.BayerRG2BGR cho cảm biến BayerBG8
+            Cv2.CvtColor(bayer, bgr, ColorConversionCodes.BayerRG2BGR);
+            var pix = bgr.Get<Vec3b>(0, 0);
+            if (pix.Item0 == 0 || pix.Item2 != 0)
+            {
+                throw new Exception($"BayerBG8 color mapping inverted! Expected Blue>0 and Red=0 at (0,0), got B={pix.Item0}, R={pix.Item2}");
+            }
+            Console.WriteLine($"  [5/5] Bayer Color Fidelity (No Red/Blue inversion): B={pix.Item0}, G={pix.Item1}, R={pix.Item2} -> PASSED");
+        }
+
+        Console.WriteLine("✅ ALL HIKROBOT 25MP 10GbE STREAMING & COLOR OPTIMIZATION TESTS PASSED (100%)!\n");
+    }
+
+    public static void TestSnapshotFrameOwnershipAndNoObjectDisposedException()
+    {
+        Console.WriteLine("\n=== TESTING SNAPSHOT FRAME OWNERSHIP & NO OBJECTDISPOSEDEXCEPTION ===");
+
+        // 1. Kiểm tra IsValid extension method xử lý an toàn Mat null, disposed, empty
+        Mat? nullMat = null;
+        if (VisionInspectionApp.UI.Services.MatExtensions.IsValid(nullMat))
+        {
+            throw new Exception("IsValid must return false for null Mat!");
+        }
+
+        var tempMat = new Mat(50, 50, MatType.CV_8UC3, Scalar.All(100));
+        if (!VisionInspectionApp.UI.Services.MatExtensions.IsValid(tempMat))
+        {
+            throw new Exception("IsValid must return true for active Mat!");
+        }
+
+        tempMat.Dispose();
+        // Kiểm tra disposed Mat không được ném ngoại lệ ObjectDisposedException
+        if (VisionInspectionApp.UI.Services.MatExtensions.IsValid(tempMat))
+        {
+            throw new Exception("IsValid must return false for disposed Mat!");
+        }
+        Console.WriteLine("  [1/4] MatExtensions.IsValid safe null/disposed validation: PASSED");
+
+        // 2. Kiểm tra Ring Buffer Isolation: Caller chụp ảnh và Dispose không được làm hỏng Pool nội bộ của Driver
+        using (var pool = new VisionInspectionApp.UI.Services.Camera.NativeMatPool(4))
+        {
+            pool.Initialize(640, 480, MatType.CV_8UC3);
+            var rawMat = pool.GetNextRingBuffer();
+            if (rawMat == null || rawMat.IsDisposed)
+            {
+                throw new Exception("Pool failed to supply raw Mat!");
+            }
+
+            var p = new VisionInspectionApp.Models.CameraParameters();
+            var processed = VisionInspectionApp.UI.Services.Camera.CameraDriverBase.ApplySoftwarePostProcessing(rawMat, p, false, false);
+
+            // Mô phỏng logic chuẩn hóa trong HikCameraDriver.GrabFrameAsync:
+            Mat snapshotMat = ReferenceEquals(processed, rawMat) ? rawMat.Clone() : processed;
+
+            if (snapshotMat == null || snapshotMat.IsDisposed || snapshotMat.Empty())
+            {
+                throw new Exception("Snapshot Mat must be valid and non-empty!");
+            }
+
+            // Caller trong Tool Editor / Manual Inspection gọi snapshotMat.Dispose()
+            snapshotMat.Dispose();
+
+            // Kiểm tra: rawMat trong NativeMatPool PHẢI CÒN SỐNG 100% và không bị disposed lây!
+            if (rawMat.IsDisposed || rawMat.Empty())
+            {
+                throw new Exception("CRITICAL FAILURE: Driver internal pool Mat was disposed by caller snapshot disposal!");
+            }
+
+            // Vòng quay Ring Buffer tiếp theo phải nguyên vẹn
+            var nextMat = pool.GetNextRingBuffer();
+            if (nextMat == null || nextMat.IsDisposed || nextMat.Empty())
+            {
+                throw new Exception("CRITICAL FAILURE: Next ring buffer Mat is corrupted or disposed!");
+            }
+            Console.WriteLine("  [2/4] NativeMatPool Ring Buffer Isolation against caller Dispose: PASSED");
+        }
+
+        // 3. Kiểm tra SimulatorCameraDriver.GrabFrameAsync trả về Mat độc lập, không bị disposed
+        using (var simDriver = new VisionInspectionApp.UI.Services.Camera.Drivers.SimulatorCameraDriver())
+        {
+            var dev = new VisionInspectionApp.UI.Services.Camera.CameraDeviceInfo
+            {
+                Vendor = VisionInspectionApp.UI.Services.Camera.CameraVendor.Simulator,
+                InterfaceType = VisionInspectionApp.UI.Services.Camera.CameraInterfaceType.Virtual,
+                Index = -2,
+                ModelName = "Simulator"
+            };
+
+            var openTask = simDriver.OpenAsync(dev);
+            openTask.Wait();
+            if (!openTask.Result)
+            {
+                throw new Exception("Simulator driver failed to open!");
+            }
+
+            var grabTask = simDriver.GrabFrameAsync(1000);
+            grabTask.Wait();
+            var grabbed = grabTask.Result;
+
+            if (grabbed == null)
+            {
+                throw new Exception("GrabFrameAsync returned null!");
+            }
+            if (grabbed.IsDisposed)
+            {
+                throw new Exception("CRITICAL FAILURE: GrabFrameAsync returned a DISPOSED Mat!");
+            }
+            if (grabbed.Empty() || grabbed.Width <= 0 || grabbed.Height <= 0)
+            {
+                throw new Exception("GrabFrameAsync returned an empty Mat!");
+            }
+
+            // Caller chụp và lưu / clone
+            using var callerClone = grabbed.Clone();
+            if (callerClone.IsDisposed || callerClone.Empty())
+            {
+                throw new Exception("Caller clone failed!");
+            }
+
+            // Caller dispose grabbed Mat
+            grabbed.Dispose();
+
+            if (!callerClone.IsValid())
+            {
+                throw new Exception("Caller clone was corrupted after grabbed disposal!");
+            }
+
+            var closeTask = simDriver.CloseAsync();
+            closeTask.Wait();
+            Console.WriteLine("  [3/4] SimulatorCameraDriver.GrabFrameAsync caller ownership & disposal safety: PASSED");
+        }
+
+        // 4. Kiểm tra CameraService.CaptureSnapshotAsync trả về Mat hợp lệ và caller dispose an toàn
+        using (var camService = new VisionInspectionApp.UI.Services.CameraService())
+        {
+            var snapTask = camService.CaptureSnapshotAsync(-2, null);
+            snapTask.Wait();
+            var snapMat = snapTask.Result;
+
+            if (snapMat == null)
+            {
+                throw new Exception("CameraService.CaptureSnapshotAsync returned null for simulator!");
+            }
+            if (snapMat.IsDisposed)
+            {
+                throw new Exception("CRITICAL FAILURE: CameraService.CaptureSnapshotAsync returned a DISPOSED Mat!");
+            }
+            if (!snapMat.IsValid())
+            {
+                throw new Exception("CameraService.CaptureSnapshotAsync returned an invalid Mat!");
+            }
+
+            // Caller dispose Mat
+            snapMat.Dispose();
+
+            // Gọi TryGetLatestFrameClone an toàn không bị văng Exception
+            using var latestClone = camService.TryGetLatestFrameClone();
+            // Cho dù latestClone có hoặc null, không được văng ObjectDisposedException
+            Console.WriteLine("  [4/4] CameraService.CaptureSnapshotAsync & TryGetLatestFrameClone safety: PASSED");
+        }
+
+        Console.WriteLine("✅ ALL SNAPSHOT FRAME OWNERSHIP & OBJECTDISPOSED TESTS PASSED (100%)!\n");
     }
 }

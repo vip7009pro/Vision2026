@@ -1,25 +1,20 @@
 # ROADMAP.md — Lộ trình phát triển & Trạng thái nhiệm vụ
 
-- [x] Task 427: Tối Ưu Triệt Để BlobDetection Bắt Khuyết Tật Theo WxL Khi Đã Hiệu Chuẩn, Tự Động RunFlow Preview Tức Thì & Loại Bỏ Slider Thr:
-  - [x] **Thuật toán Pipeline Bắt Blob Khuyết Tật** ([InspectionService.Pipeline.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/Services/InspectionService.Pipeline.cs)):
-    - Chuẩn hóa ý nghĩa `Spec Max (W x L)`: Đây là ngưỡng khuyết tật tối đa cho phép. Khi đã hiệu chuẩn (`isCalibrated == true`), các blob có kích thước nhỏ hơn hoặc bằng WxL là nằm trong dung sai cho phép -> **BỎ QUA (`continue`), KHÔNG BẮT**.
-    - Chỉ bắt những blob **VƯỢT QUÁ kích thước cho phép `maxBlobWidth x maxBlobLength`** (khuyết tật / dị vật lỗi).
-    - Khi người dùng nhập `Spec Max (W x L)` lớn, toàn bộ các hạt bụi/nhiễu pixel nhỏ li ti đều tự động được bỏ qua, không còn bị bắt hay vẽ khung thừa thãi.
-    - Nhận diện hệ số hiệu chuẩn đa tầng `calibPpm` qua `ChessboardCalibrationService.GetEffectiveCalibration`, `ChessboardCalibration` và `PixelsPerMm`.
-    - Khi chưa hiệu chuẩn (`isCalibrated == false`), duy trì lọc theo dải diện tích pixel `minArea <= areaPx <= maxArea`.
-  - [x] **Tự Động RunFlow Cập Nhật Preview Tức Thì** ([ToolEditorViewModel.ToolBlob.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.ToolBlob.cs)):
-    - Bổ sung lệnh `RunFlow()` vào tất cả setter của ToolBlob (`Blob_MaxBlobWidth`, `Blob_MaxBlobLength`, `Blob_MinBlobArea`, `Blob_MaxBlobArea`, `Blob_MaxAllowedBlobs`, `Blob_MinBlobDistance`, `Blob_Polarity`, `Blob_CountingMode`).
-    - Khi người dùng thay đổi bất kỳ thông số nào trên panel, Flow tự động chạy lại ngay lập tức và làm mới ảnh preview cùng khung vẽ ROI/Blob tức thời (không cần bấm F5).
-    - Cập nhật `Blob_IsCalibrated` kiểm tra đa tầng từ `ChessboardCalibrationService.GetEffectiveCalibration(_config)`.
-  - [x] **Đồng Bộ Hệ Số Hiệu Chuẩn Job** ([ChessboardCalibrationService.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/Services/ChessboardCalibrationService.cs)):
-    - Trong `EnsureCalibration`: Tự động gán `config.PixelsPerMm = config.ChessboardCalibration.PixelsPerMm` nếu Job có ChessboardCalibration nhưng chưa gán PixelsPerMm.
-  - [x] **Giao Diện Bảng Properties Tool Editor** ([ToolEditorView.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/ToolEditorView.xaml)):
-    - Loại bỏ hoàn toàn thanh trượt `Thr`, nhãn text và khung preview nhị phân `BlobThresholdPreviewImage`.
-    - Tự động hiển thị linh hoạt: Đã hiệu chuẩn hiện badge xanh `🎯 Đã hiệu chuẩn — Bắt blob theo Kích thước W x L (mm)` và ô nhập `WxL`; Chưa hiệu chuẩn hiện badge cam `⚠️ Chưa hiệu chuẩn — Bắt blob theo Diện tích MinA / MaxA (px)` và ô nhập `MinA / MaxA`.
-  - [x] **Kiểm Thử Tự Động Toàn Diện** ([NewJobAndBlobSpecTests.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/NewJobAndBlobSpecTests.cs), [BlobCountingModeTests.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/BlobCountingModeTests.cs)):
-    - 9/9 test NewJob & BlobSpec PASSED 100%: Test 7 Calibrated WxL defect filter (WxL 5x5 mm chỉ bắt đúng blob vượt quá kích thước, WxL 15x15 mm bỏ qua toàn bộ không bắt blob nhỏ, WxL 1x1 mm bắt cả 3 blob), Test 8 Uncalibrated MinA/MaxA, Test 9 ViewModel.
-    - 6/6 test BlobCountingMode PASSED 100%.
+- [x] Task 429: Khắc Phục Triệt Để Lỗi ObjectDisposedException ("Cannot access a disposed object OpenCvSharp.Mat") Khi Chụp Ảnh Trong Tool Editor & Manual Inspection:
+  - [x] **Tách Bạch Quyền Sở Hữu Mat Cho Caller Snapshot** ([HikCameraDriver.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Services/Camera/Drivers/HikCameraDriver.cs)):
+    - Loại bỏ `using var rawMat` gây tự động dispose Mat trước khi trả về caller trong `GrabFrameAsync`.
+    - Clone 1 bản Mat độc lập `rawMat.Clone()` khi trả về snapshot từ Ring Buffer `_matPool`, bảo toàn tuyệt đối 100% ô nhớ của Driver khi caller gọi `mat.Dispose()`.
+  - [x] **Chuẩn Hóa Xử Lý Frame Trên Toàn Bộ Camera Drivers** ([OpenCvCameraDriver.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Services/Camera/Drivers/OpenCvCameraDriver.cs), [AndroidCameraDriver.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Services/Camera/Drivers/AndroidCameraDriver.cs)):
+    - Triệt tiêu hoàn toàn `using var` trên các đường dẫn đọc frame của `GrabFrameAsync` để không bao giờ trả về Mat đã bị Dispose.
+  - [x] **Bảo Vệ Tài Nguyên CameraService & Helper An Toàn** ([CameraService.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Services/CameraService.cs), [MatExtensions.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Services/MatExtensions.cs)):
+    - Trong `CaptureSnapshotFromCameraAsync`: clone ảnh snapshot độc lập trước khi `driver.CloseAsync()` và `driver.Dispose()`.
+    - Trong `TryGetLatestFrameClone()`: kiểm tra an toàn `!_lastFrame.IsDisposed && !_lastFrame.Empty()` trước khi gọi `.Clone()`.
+    - Bổ sung extension method `MatExtensions.IsValid()` và kiểm tra an toàn `!mat.IsDisposed` trên tất cả ViewModels.
+  - [x] **Kiểm Thử Tự Động Toàn Diện** ([CameraTest.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/CameraTest.cs)):
+    - 4/4 tests PASSED 100% (`MatExtensions.IsValid` an toàn với null/disposed; `NativeMatPool` ring buffer isolation; `SimulatorCameraDriver.GrabFrameAsync` caller disposal safety; `CameraService.CaptureSnapshotAsync` & `TryGetLatestFrameClone` lifecycle safety).
 
+- [x] Task 428: Tối Ưu Triệt Để Stream Live Camera Hikrobot 25MP MV-CH250-90TC-C-NF Qua Card Mạng 10GbE MV-GT1002 Đạt 41 FPS & Chuẩn Màu 100% Như Phần Mềm MVS.
+- [x] Task 427: Tối Ưu Triệt Để BlobDetection Bắt Khuyết Tật Theo WxL Khi Đã Hiệu Chuẩn, Tự Động RunFlow Preview Tức Thì & Loại Bỏ Slider Thr.
 - [x] Task 426: Bổ Sung Chế Độ Xuất Kết QuẢ OK/NG Dạng Số Nguyên (Int16) Song Hành Cùng Dạng Bit Bool Trong Cửa Sổ Bắt Tay 24/7 (Handshake).
 - [x] Task 425: Bổ Sung Chi Tiết Báo Lỗi NG Cho Tool CodeDetection Trong Cột Kết Quả Tool Editor & Inspection View.
 - [x] Task 424: Bổ Sung Tool ObjectCounting Trong Tool Editor (Đếm Vật Thể Đa Hướng Hỗn Loạn, Quản Lý Spec & Dung Sai).

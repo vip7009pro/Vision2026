@@ -448,7 +448,7 @@ public sealed partial class ChessboardCalibrationViewModel : ObservableObject
             StatusMessage = "⏳ Đang chụp khung hình và phân tích bàn cờ (Sector-Based SB)...";
 
             var mat = _cameraService.TryGetLatestFrameClone() ?? await _cameraService.CaptureSnapshotAsync();
-            if (mat is not null && !mat.Empty())
+            if (mat is not null && !mat.IsDisposed && !mat.Empty())
             {
                 _currentMat?.Dispose();
                 _currentMat = mat;
@@ -480,7 +480,7 @@ public sealed partial class ChessboardCalibrationViewModel : ObservableObject
             StatusMessage = "⏳ Đang chụp & phân tích bàn cờ...";
 
             var mat = _cameraService.TryGetLatestFrameClone() ?? await _cameraService.CaptureSnapshotAsync();
-            if (mat is null || mat.Empty())
+            if (mat is null || mat.IsDisposed || mat.Empty())
             {
                 StatusMessage = "❌ Không thể chụp ảnh từ camera.";
                 return;

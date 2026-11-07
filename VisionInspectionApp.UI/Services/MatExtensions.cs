@@ -45,6 +45,16 @@ public static class MatExtensions
     }
 
     /// <summary>
+    /// Kiểm tra nhanh Mat có hợp lệ để thao tác hay không (không null, chưa dispose, không rỗng và kích thước > 0).
+    /// Triệt tiêu hoàn toàn ngoại lệ ObjectDisposedException khi kiểm tra .Empty().
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static bool IsValid(this Mat? mat)
+    {
+        return mat is not null && !mat.IsDisposed && !mat.Empty() && mat.Width > 0 && mat.Height > 0;
+    }
+
+    /// <summary>
     /// Chuyển đổi an toàn từ OpenCvSharp Mat sang WPF BitmapSource.
     /// Bọc khối try-catch bẫy tất cả ngoại lệ ObjectDisposedException hoặc Mat invalid.
     /// Tự động gọi Freeze() để đảm bảo BitmapSource an toàn truyền qua các thread UI.

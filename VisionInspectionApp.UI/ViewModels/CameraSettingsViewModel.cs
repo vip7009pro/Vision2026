@@ -523,6 +523,10 @@ public sealed class CameraSettingsViewModel : ObservableObject, IDisposable
     // Pixel Format chuẩn MVS
     public ObservableCollection<string> PixelFormatOptions { get; } = new()
     {
+        "Bayer BG 8",
+        "Bayer RG 8",
+        "Bayer GB 8",
+        "Bayer GR 8",
         "Mono 8",
         "Mono 10",
         "Mono 12",
@@ -530,16 +534,27 @@ public sealed class CameraSettingsViewModel : ObservableObject, IDisposable
         "BGR 8",
         "YUV 422 (YUYV) Packed",
         "YUV 422 Packed",
-        "Bayer GB 8",
+        "Bayer BG 10",
+        "Bayer RG 10",
         "Bayer GB 10",
+        "Bayer GR 10",
+        "Bayer BG 10 Packed",
+        "Bayer RG 10 Packed",
         "Bayer GB 10 Packed",
+        "Bayer GR 10 Packed",
+        "Bayer BG 12",
+        "Bayer RG 12",
         "Bayer GB 12",
-        "Bayer GB 12 Packed"
+        "Bayer GR 12",
+        "Bayer BG 12 Packed",
+        "Bayer RG 12 Packed",
+        "Bayer GB 12 Packed",
+        "Bayer GR 12 Packed"
     };
 
     public string SelectedPixelFormat
     {
-        get => string.IsNullOrWhiteSpace(_cameraParams.PixelFormat) ? "Bayer GB 8" : _cameraParams.PixelFormat;
+        get => string.IsNullOrWhiteSpace(_cameraParams.PixelFormat) ? "Bayer BG 8" : _cameraParams.PixelFormat;
         set
         {
             if (_cameraParams.PixelFormat != value && !string.IsNullOrWhiteSpace(value))
@@ -1126,7 +1141,7 @@ public sealed class CameraSettingsViewModel : ObservableObject, IDisposable
 
             StatusMessage = "📸 Đang chụp 1 frame từ camera...";
             var mat = await _cameraService.CaptureSnapshotAsync();
-            if (mat != null && !mat.Empty())
+            if (mat != null && !mat.IsDisposed && !mat.Empty())
             {
                 var bitmap = mat.ToBitmapSourceForDisplay(1920, 1080);
                 if (bitmap != null)
