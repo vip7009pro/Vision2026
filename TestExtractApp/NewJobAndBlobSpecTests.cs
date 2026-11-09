@@ -311,7 +311,7 @@ public static class NewJobAndBlobSpecTests
 
     private static void TestBlobDetectionCalibratedModeWxLFilter()
     {
-        Console.WriteLine("[Test 7] Testing BlobDetection Calibrated Mode: Catches by WxL (mm), ignores small MinA...");
+        Console.WriteLine("[Test 7] Testing BlobDetection Millimeter Spec Mode: Catches defects by WxL (mm), ignores small within tolerance...");
 
         // Tao anh den 400x400 voi 3 blob trang:
         // Blob 1: 20x20 px (o scale 10 px/mm => 2.0 x 2.0 mm, dien tich 400 px)
@@ -325,6 +325,11 @@ public static class NewJobAndBlobSpecTests
         var config = new VisionConfig
         {
             PixelsPerMm = 10.0, // DA CO HIEU CHUAN
+            ChessboardCalibration = new ChessboardCalibrationData
+            {
+                IsCalibrated = true,
+                PixelsPerMm = 10.0
+            },
             BlobDetections = new List<BlobDetectionDefinition>
             {
                 new BlobDetectionDefinition
@@ -333,6 +338,7 @@ public static class NewJobAndBlobSpecTests
                     InspectRoi = new Roi { X = 5, Y = 5, Width = 380, Height = 380 },
                     Polarity = BlobPolarity.LightOnDark,
                     Threshold = 100,
+                    SpecMode = BlobSpecMode.Millimeter, // User chu dong chon Spec theo mm
                     MinBlobArea = 1, // minA rat nho (1 px)
                     MaxBlobArea = 500000,
                     MaxBlobWidth = 5.0,  // Spec WxL = 5.0 x 5.0 mm
@@ -367,78 +373,73 @@ public static class NewJobAndBlobSpecTests
         if (blobRes3?.Count != 3)
             throw new Exception($"Expected 3 defect blobs caught with WxL 1x1 mm, but got {blobRes3?.Count}!");
 
-        Console.WriteLine(" -> Calibrated Mode WxL blob detection successfully verified!");
+        Console.WriteLine(" -> Millimeter Spec Mode WxL blob detection successfully verified!");
     }
 
 
     private static void TestBlobDetectionUncalibratedModeMinMaxAreaFilter()
     {
-        Console.WriteLine("[Test 8] Testing BlobDetection Uncalibrated Mode: Catches by MinA/MaxA (px)...");
+        Console.WriteLine("[Test 8] Testing BlobDetection Pixel Spec Mode: Catches strictly by MinA/MaxA (px), default is Pixel...");
 
-        string globalCalPath = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "Vision2026",
-            "global_chessboard_calibration.json");
-        string backupPath = globalCalPath + ".bak_test";
-        bool hasBackup = false;
+        // 1. Kiem tra default khoi tao BlobDetectionDefinition phai la BlobSpecMode.Pixel
+        var defaultDef = new BlobDetectionDefinition();
+        if (defaultDef.SpecMode != BlobSpecMode.Pixel)
+            throw new Exception($"Expected default SpecMode to be Pixel (0), but got {defaultDef.SpecMode}!");
 
-        try
+        using var img = new Mat(400, 400, MatType.CV_8UC3, Scalar.Black);
+        Cv2.Rectangle(img, new Rect(20, 20, 20, 20), Scalar.White, -1);   // Area = 400 px
+        Cv2.Rectangle(img, new Rect(80, 20, 40, 30), Scalar.White, -1);   // Area = 1200 px
+        Cv2.Rectangle(img, new Rect(160, 20, 100, 80), Scalar.White, -1); // Area = 8000 px
+
+        // Kiem tra du Job co PixelsPerMm = 10.0 (co hieu chuan) nhung nguoi dung chon Pixel mode
+        // thi HE THONG PHAI BAT THEO MINA/MAXA, khong tu dong ep sang mm!
+        var config = new VisionConfig
         {
-            if (File.Exists(globalCalPath))
+            PixelsPerMm = 10.0, // Dù đã có hiệu chuẩn
+            BlobDetections = new List<BlobDetectionDefinition>
             {
-                File.Copy(globalCalPath, backupPath, true);
-                File.Delete(globalCalPath);
-                hasBackup = true;
-            }
-
-            using var img = new Mat(400, 400, MatType.CV_8UC3, Scalar.Black);
-            Cv2.Rectangle(img, new Rect(20, 20, 20, 20), Scalar.White, -1);   // Area = 400 px
-            Cv2.Rectangle(img, new Rect(80, 20, 40, 30), Scalar.White, -1);   // Area = 1200 px
-            Cv2.Rectangle(img, new Rect(160, 20, 100, 80), Scalar.White, -1); // Area = 8000 px
-
-            var config = new VisionConfig
-            {
-                PixelsPerMm = 1.0, // CHUA CO HIEU CHUAN
-                BlobDetections = new List<BlobDetectionDefinition>
+                new BlobDetectionDefinition
                 {
-                    new BlobDetectionDefinition
-                    {
-                        Name = "BlobUncalib",
-                        InspectRoi = new Roi { X = 5, Y = 5, Width = 380, Height = 380 },
-                        Polarity = BlobPolarity.LightOnDark,
-                        Threshold = 100,
-                        MinBlobArea = 500,   // Chi bat tu 500 .. 2000 px
-                        MaxBlobArea = 2000,
-                        MaxBlobWidth = 200.0, // WxL lon khong duoc can thiep vao bat blob khi chua calib
-                        MaxBlobLength = 200.0
-                    }
+                    Name = "BlobPixelMode",
+                    InspectRoi = new Roi { X = 5, Y = 5, Width = 380, Height = 380 },
+                    Polarity = BlobPolarity.LightOnDark,
+                    Threshold = 100,
+                    SpecMode = BlobSpecMode.Pixel, // Mặc định hoặc user chọn theo pixel
+                    MinBlobArea = 500,   // Chi bat tu 500 .. 2000 px
+                    MaxBlobArea = 2000,
+                    MaxBlobWidth = 200.0, // Cac thong so WxL khong duoc anh huong khi o Pixel mode
+                    MaxBlobLength = 200.0
                 }
-            };
-
-            var service = CreateInspectionService();
-            var res = service.Inspect(img, config);
-            var blobRes = res.BlobDetections.FirstOrDefault(x => x.Name == "BlobUncalib");
-            if (blobRes is null) throw new Exception("BlobUncalib result not found!");
-
-            // Chi co Blob 2 (Area 1200 px) nam trong [500, 2000] duoc bat
-            if (blobRes.Count != 1)
-                throw new Exception($"Expected exactly 1 blob caught by MinA/MaxA in uncalibrated mode, but got {blobRes.Count}!");
-
-            Console.WriteLine(" -> Uncalibrated Mode MinA/MaxA blob detection successfully verified!");
-        }
-        finally
-        {
-            if (hasBackup && File.Exists(backupPath))
-            {
-                File.Copy(backupPath, globalCalPath, true);
-                File.Delete(backupPath);
             }
-        }
+        };
+
+        var service = CreateInspectionService();
+        var res = service.Inspect(img, config);
+        var blobRes = res.BlobDetections.FirstOrDefault(x => x.Name == "BlobPixelMode");
+        if (blobRes is null) throw new Exception("BlobPixelMode result not found!");
+
+        // Chi co Blob 2 (Area 1200 px) nam trong [500, 2000] duoc bat
+        if (blobRes.Count != 1)
+            throw new Exception($"Expected exactly 1 blob caught by MinA/MaxA in Pixel spec mode, but got {blobRes.Count}!");
+
+        Console.WriteLine(" -> Pixel Spec Mode MinA/MaxA blob detection successfully verified (even with calibration)!");
     }
 
     private static void TestBlobDetectionUIViewModelCalibratedSwitch()
     {
-        Console.WriteLine("[Test 9] Testing BlobDetection ViewModel Calibrated properties & unit toggle...");
+        Console.WriteLine("[Test 9] Testing BlobDetection ViewModel SpecMode toggle (Pixel vs Millimeter)...");
+
+        var def = new BlobDetectionDefinition();
+        if (def.SpecMode != BlobSpecMode.Pixel)
+            throw new Exception("Default SpecMode must be Pixel!");
+
+        def.SpecMode = BlobSpecMode.Millimeter;
+        if (def.SpecMode != BlobSpecMode.Millimeter)
+            throw new Exception("Expected SpecMode to switch to Millimeter!");
+
+        def.SpecMode = BlobSpecMode.Pixel;
+        if (def.SpecMode != BlobSpecMode.Pixel)
+            throw new Exception("Expected SpecMode to switch back to Pixel!");
 
         var configCalib = new VisionConfig { PixelsPerMm = 15.5 };
         bool isCalib = configCalib.PixelsPerMm > 0 && Math.Abs(configCalib.PixelsPerMm - 1.0) > 1e-6;
@@ -448,7 +449,7 @@ public static class NewJobAndBlobSpecTests
         bool isUncalib = configUncalib.PixelsPerMm > 0 && Math.Abs(configUncalib.PixelsPerMm - 1.0) > 1e-6;
         if (isUncalib) throw new Exception("Expected isCalib = false for PixelsPerMm = 1.0!");
 
-        Console.WriteLine(" -> ViewModel Calibrated/Uncalibrated properties verified!");
+        Console.WriteLine(" -> ViewModel SpecMode toggle & calibration status verified!");
     }
 
 }

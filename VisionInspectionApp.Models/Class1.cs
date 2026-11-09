@@ -140,6 +140,12 @@ public enum BlobCountingMode
     ExcludeContained = 1
 }
 
+public enum BlobSpecMode
+{
+    Pixel = 0,
+    Millimeter = 1
+}
+
 public enum CodeSymbology
 {
     Qr = 0,
@@ -949,6 +955,8 @@ public sealed class BlobDetectionDefinition
     public BlobPolarity Polarity { get; set; } = BlobPolarity.DarkOnLight;
 
     public BlobCountingMode CountingMode { get; set; } = BlobCountingMode.Separate;
+
+    public BlobSpecMode SpecMode { get; set; } = BlobSpecMode.Pixel;
 
     public bool FilterContainedBlobs
     {

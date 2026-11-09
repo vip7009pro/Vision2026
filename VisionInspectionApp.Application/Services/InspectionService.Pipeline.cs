@@ -492,7 +492,21 @@ public partial class InspectionService
                 return (image, defaultSettings, _preprocessor);
             }
 
-            static List<BlobInfo> DetectBlobsInCrop(Mat crop, Roi inspectRoi, List<BlobRoiDefinition>? rois, BlobPolarity polarity, int threshold, int minArea, int maxArea, Point2d centerFound, double totalAngle, BlobCountingMode countingMode = BlobCountingMode.Separate, bool isCalibrated = false, double scale = 1.0, double maxBlobWidth = 0.0, double maxBlobLength = 0.0)
+            static List<BlobInfo> DetectBlobsInCrop(
+                Mat crop,
+                Roi inspectRoi,
+                List<BlobRoiDefinition>? rois,
+                BlobPolarity polarity,
+                int threshold,
+                int minArea,
+                int maxArea,
+                Point2d centerFound,
+                double totalAngle,
+                BlobCountingMode countingMode = BlobCountingMode.Separate,
+                double scale = 1.0,
+                double maxBlobWidth = 0.0,
+                double maxBlobLength = 0.0,
+                BlobSpecMode specMode = BlobSpecMode.Pixel)
             {
                 var blobs = new List<BlobInfo>();
                 if (crop is null || crop.Empty())
@@ -594,9 +608,9 @@ public partial class InspectionService
                     var height = stats.Get<int>(i, (int)ConnectedComponentsTypes.Height);
                     var areaPx = stats.Get<int>(i, (int)ConnectedComponentsTypes.Area);
 
-                    if (isCalibrated)
+                    if (specMode == BlobSpecMode.Millimeter)
                     {
-                        // 1. Khi ĐÃ CÓ HIỆU CHUẨN: Bắt blob theo W x L (mm)
+                        // 1. Chế độ Spec mm: Bắt blob theo kích thước W x L (mm)
                         // Bỏ qua các blob nhỏ nằm trong dung sai kích thước cho phép (<= Spec Max WxL)
                         // Chỉ bắt những blob VƯỢT QUÁ kích thước cho phép (tức là khuyết tật / dị vật / vết bẩn lỗi)
                         if (maxBlobWidth > 0 || maxBlobLength > 0)
@@ -627,7 +641,7 @@ public partial class InspectionService
                     }
                     else
                     {
-                        // 2. Khi CHƯA CÓ HIỆU CHUẨN: Bắt blob theo minA, maxA (pixel)
+                        // 2. Chế độ Spec Pixel: Bắt blob theo diện tích minA, maxA (px)
                         if (areaPx < minArea || areaPx > maxArea)
                         {
                             continue;
@@ -2179,10 +2193,10 @@ public partial class InspectionService
                         centerFound,
                         totalAngle,
                         b.CountingMode,
-                        isCalibrated,
                         scale,
                         b.MaxBlobWidth,
-                        b.MaxBlobLength);
+                        b.MaxBlobLength,
+                        b.SpecMode);
                     __sw.Stop();
                     result.Timings.NodeTimings[b.Name] = (int)__sw.ElapsedMilliseconds;
 
@@ -2224,13 +2238,13 @@ public partial class InspectionService
                     double? maxMeasuredW = null;
                     double? maxMeasuredL = null;
                     List<int>? invalidBlobs = null;
-                    var checkSize = b.MaxBlobWidth > 0 || b.MaxBlobLength > 0;
+                    var checkSize = b.SpecMode == BlobSpecMode.Millimeter && (b.MaxBlobWidth > 0 || b.MaxBlobLength > 0);
 
                     for (var i = 0; i < blobs.Count; i++)
                     {
                         var blob = blobs[i];
-                        var bw = blob.BoundingBox.Width / scale;
-                        var bh = blob.BoundingBox.Height / scale;
+                        var bw = (b.SpecMode == BlobSpecMode.Millimeter) ? (blob.BoundingBox.Width / scale) : blob.BoundingBox.Width;
+                        var bh = (b.SpecMode == BlobSpecMode.Millimeter) ? (blob.BoundingBox.Height / scale) : blob.BoundingBox.Height;
                         var minDim = Math.Min(bw, bh);
                         var maxDim = Math.Max(bw, bh);
 
@@ -2241,35 +2255,10 @@ public partial class InspectionService
 
                         if (checkSize)
                         {
-                            var fits = true;
-                            if (isCalibrated)
-                            {
-                                // Ở chế độ Calibrated, mọi blob bắt được đều là blob vượt quá WxL
-                                fits = false;
-                            }
-                            else
-                            {
-                                if (b.MaxBlobWidth > 0 && b.MaxBlobLength > 0)
-                                {
-                                    fits = (bw <= b.MaxBlobWidth && bh <= b.MaxBlobLength) ||
-                                           (bh <= b.MaxBlobWidth && bw <= b.MaxBlobLength);
-                                }
-                                else if (b.MaxBlobWidth > 0)
-                                {
-                                    fits = (bw <= b.MaxBlobWidth || bh <= b.MaxBlobWidth);
-                                }
-                                else if (b.MaxBlobLength > 0)
-                                {
-                                    fits = (bw <= b.MaxBlobLength || bh <= b.MaxBlobLength);
-                                }
-                            }
-
-                            if (!fits)
-                            {
-                                passSize = false;
-                                invalidBlobs ??= new List<int>();
-                                invalidBlobs.Add(i);
-                            }
+                            // Ở chế độ Millimeter, mọi blob lọt qua DetectBlobsInCrop đều là blob vượt quá kích thước cho phép
+                            passSize = false;
+                            invalidBlobs ??= new List<int>();
+                            invalidBlobs.Add(i);
                         }
                     }
 
@@ -2288,7 +2277,8 @@ public partial class InspectionService
                         b.MaxBlobLength,
                         maxMeasuredW,
                         maxMeasuredL,
-                        invalidBlobs);
+                        invalidBlobs,
+                        b.SpecMode);
                 }))
                 .ToArray();
 
@@ -3617,7 +3607,8 @@ public partial class InspectionService
                         MaxAllowedBlobs: b.MaxAllowedBlobs,
                         MinBlobDistance: b.MinBlobDistance,
                         MaxBlobWidth: b.MaxBlobWidth,
-                        MaxBlobLength: b.MaxBlobLength));
+                        MaxBlobLength: b.MaxBlobLength,
+                        SpecMode: b.SpecMode));
                     result.Timings.NodeTimings[b.Name] = 0;
                 }
             }

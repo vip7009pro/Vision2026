@@ -810,7 +810,7 @@ namespace VisionInspectionApp.UI.ViewModels
                             Blob_DistanceUnitText));
                     }
 
-                    if (bd.MaxBlobWidth > 0 || bd.MaxBlobLength > 0)
+                    if (bd.SpecMode == BlobSpecMode.Millimeter && (bd.MaxBlobWidth > 0 || bd.MaxBlobLength > 0))
                     {
                         var sizePass = bd.InvalidSizeBlobIndices == null || bd.InvalidSizeBlobIndices.Count == 0;
                         var maxDimFound = Math.Max(bd.MeasuredMaxWidth ?? 0.0, bd.MeasuredMaxLength ?? 0.0);
@@ -825,7 +825,7 @@ namespace VisionInspectionApp.UI.ViewModels
                             0.0,
                             specMaxDim,
                             sizePass,
-                            Blob_DistanceUnitText));
+                            "mm"));
                     }
                 }
             }

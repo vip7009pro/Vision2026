@@ -107,7 +107,8 @@ public sealed record BlobDetectionResult(
     double MaxBlobLength = 0.0,
     double? MeasuredMaxWidth = null,
     double? MeasuredMaxLength = null,
-    List<int>? InvalidSizeBlobIndices = null);
+    List<int>? InvalidSizeBlobIndices = null,
+    BlobSpecMode SpecMode = BlobSpecMode.Pixel);
 
 public sealed record SurfaceCompareDefect(Rect BoundingBox, double Angle, Point2d Centroid, double Area);
 

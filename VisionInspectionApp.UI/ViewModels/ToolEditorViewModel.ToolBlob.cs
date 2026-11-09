@@ -64,6 +64,54 @@ namespace VisionInspectionApp.UI.ViewModels
             "Loại bỏ blob bị đè"
         };
 
+        public IReadOnlyList<string> AvailableBlobSpecModeNames { get; } = new[]
+        {
+            "Theo pixel (MinA, MaxA)",
+            "Theo mm (Kích thước W x L)"
+        };
+
+        public BlobSpecMode Blob_SpecMode
+        {
+            get => SelectedBlobDetectionDef()?.SpecMode ?? BlobSpecMode.Pixel;
+            set
+            {
+                var def = SelectedBlobDetectionDef();
+                if (def is null)
+                    return;
+                if (def.SpecMode == value)
+                    return;
+                def.SpecMode = value;
+                RunFlow();
+                RequestAutoSave();
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(Blob_SpecModeText));
+                OnPropertyChanged(nameof(Blob_IsPixelSpecMode));
+                OnPropertyChanged(nameof(Blob_IsMmSpecMode));
+                OnPropertyChanged(nameof(Blob_SpecUnitText));
+                OnPropertyChanged(nameof(Blob_LastRunMaxDimensionsText));
+                OnPropertyChanged(nameof(Blob_PassStatus));
+                OnPropertyChanged(nameof(Blob_PassColor));
+                OnPropertyChanged(nameof(Blob_LastRunCount));
+                RefreshPreviews();
+            }
+        }
+
+        public string Blob_SpecModeText
+        {
+            get => Blob_SpecMode == BlobSpecMode.Millimeter ? "Theo mm (Kích thước W x L)" : "Theo pixel (MinA, MaxA)";
+            set
+            {
+                var mode = (value != null && value.Contains("mm", StringComparison.OrdinalIgnoreCase))
+                    ? BlobSpecMode.Millimeter
+                    : BlobSpecMode.Pixel;
+                Blob_SpecMode = mode;
+            }
+        }
+
+        public bool Blob_IsPixelSpecMode => Blob_SpecMode == BlobSpecMode.Pixel;
+        public bool Blob_IsMmSpecMode => Blob_SpecMode == BlobSpecMode.Millimeter;
+        public string Blob_SpecUnitText => Blob_SpecMode == BlobSpecMode.Millimeter ? "mm" : "px";
+
         public BlobCountingMode Blob_CountingMode
         {
             get => SelectedBlobDetectionDef()?.CountingMode ?? BlobCountingMode.Separate;
@@ -282,7 +330,7 @@ namespace VisionInspectionApp.UI.ViewModels
         public double Blob_MaxAreaPreviewHeight => Blob_MaxAreaPreviewSide;
         public string Blob_MinAreaPreviewText => GetEquivalentCircleAreaText("MinA", Blob_MinBlobArea);
         public string Blob_MaxAreaPreviewText => GetEquivalentCircleAreaText("MaxA", Blob_MaxBlobArea);
-        public string Blob_MaxSpecPreviewText => $"Tối đa {Blob_MaxBlobWidth:0.##} × {Blob_MaxBlobLength:0.##} {Blob_DistanceUnitText}";
+        public string Blob_MaxSpecPreviewText => $"Tối đa {Blob_MaxBlobWidth:0.##} × {Blob_MaxBlobLength:0.##} mm";
         public string Blob_MaxBlobCountPreview
         {
             get
@@ -346,7 +394,8 @@ namespace VisionInspectionApp.UI.ViewModels
                 var r = _lastRun.BlobDetections.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
                 if (r is null || !r.MeasuredMaxWidth.HasValue || !r.MeasuredMaxLength.HasValue)
                     return "-";
-                return $"{r.MeasuredMaxWidth.Value:0.##} x {r.MeasuredMaxLength.Value:0.##} {Blob_DistanceUnitText}";
+                var unit = r.SpecMode == BlobSpecMode.Millimeter ? "mm" : "px";
+                return $"{r.MeasuredMaxWidth.Value:0.##} x {r.MeasuredMaxLength.Value:0.##} {unit}";
             }
         }
 
