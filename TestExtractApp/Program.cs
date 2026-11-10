@@ -52,6 +52,12 @@ class Program
             return;
         }
 
+        if (args.Length > 0 && (args[0].Equals("speed", StringComparison.OrdinalIgnoreCase) || args[0].Equals("continuous-speed", StringComparison.OrdinalIgnoreCase) || args[0].Equals("continuous-render", StringComparison.OrdinalIgnoreCase) || args[0].Equals("static-ok", StringComparison.OrdinalIgnoreCase)))
+        {
+            ToolEditorContinuousRenderAndSpeedTests.RunAllTests();
+            return;
+        }
+
         if (args.Length > 0 && (args[0].Equals("column", StringComparison.OrdinalIgnoreCase) || args[0].Equals("column-resize", StringComparison.OrdinalIgnoreCase) || args[0].Equals("editor-column", StringComparison.OrdinalIgnoreCase)))
         {
             ToolEditorColumnResizeTests.RunAllTests();

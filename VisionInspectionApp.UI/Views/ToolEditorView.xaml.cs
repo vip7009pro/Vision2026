@@ -212,6 +212,7 @@ public partial class ToolEditorView : UserControl
         if (_subscribedVm != null)
         {
             _subscribedVm.RequestAutoFitGraph -= OnRequestAutoFitGraph;
+            _subscribedVm.RequestAutoFitImagePreview -= OnRequestAutoFitImagePreview;
             _subscribedVm.PropertyChanged -= OnViewModelPropertyChanged;
         }
 
@@ -219,10 +220,19 @@ public partial class ToolEditorView : UserControl
         {
             _subscribedVm = vm;
             _subscribedVm.RequestAutoFitGraph += OnRequestAutoFitGraph;
+            _subscribedVm.RequestAutoFitImagePreview += OnRequestAutoFitImagePreview;
             _subscribedVm.PropertyChanged += OnViewModelPropertyChanged;
             Dispatcher.BeginInvoke(DispatcherPriority.ContextIdle, AutoFitAndCenterGraph);
             Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () => ApplyColumnLayout(vm));
         }
+    }
+
+    private void OnRequestAutoFitImagePreview()
+    {
+        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () =>
+        {
+            PreviewImageViewer?.ResetView();
+        });
     }
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)

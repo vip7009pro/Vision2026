@@ -2816,6 +2816,7 @@ namespace VisionInspectionApp.UI.ViewModels
             RefreshPreviewsNow();
             UpdateRecentPartsVisuals();
             StatusBarText = "▶ Đã quay lại màn hình kiểm tra hiện tại.";
+            RequestAutoFitImagePreview?.Invoke();
         }
 
         [RelayCommand]
@@ -2848,6 +2849,160 @@ namespace VisionInspectionApp.UI.ViewModels
 
         #endregion
 
+        public event Action? RequestAutoFitImagePreview;
+
+        [ObservableProperty]
+        private string _instantaneousSpeedText = "0.0";
+
+        private readonly object _instantaneousSpeedLock = new();
+        private readonly System.Collections.Generic.Queue<long> _instantaneousStopwatchTicks = new();
+        private const int InstantaneousWindowSize = 8;
+        private long _lastPieceCompletionTimestamp = 0;
+
+        private void RecordPieceCompleted()
+        {
+            long currentTick = System.Diagnostics.Stopwatch.GetTimestamp();
+            lock (_instantaneousSpeedLock)
+            {
+                _instantaneousStopwatchTicks.Enqueue(currentTick);
+                while (_instantaneousStopwatchTicks.Count > InstantaneousWindowSize)
+                {
+                    _instantaneousStopwatchTicks.Dequeue();
+                }
+                _lastPieceCompletionTimestamp = currentTick;
+            }
+        }
+
+        private void ResetInstantaneousSpeed()
+        {
+            lock (_instantaneousSpeedLock)
+            {
+                _instantaneousStopwatchTicks.Clear();
+                _lastPieceCompletionTimestamp = 0;
+            }
+            InstantaneousSpeedText = "0.0";
+        }
+
+        private static BitmapSource? _cachedStaticOkImage;
+        private static readonly object _staticOkImageLock = new();
+
+        public static BitmapSource GetOrCreateStaticOkImage()
+        {
+            if (_cachedStaticOkImage != null)
+            {
+                return _cachedStaticOkImage;
+            }
+
+            var dispatcher = System.Windows.Application.Current?.Dispatcher;
+            if (dispatcher != null && !dispatcher.CheckAccess())
+            {
+                return dispatcher.Invoke(GetOrCreateStaticOkImage);
+            }
+
+            lock (_staticOkImageLock)
+            {
+                if (_cachedStaticOkImage != null)
+                {
+                    return _cachedStaticOkImage;
+                }
+
+                const int width = 1280;
+                const int height = 720;
+                var visual = new DrawingVisual();
+                using (var dc = visual.RenderOpen())
+                {
+                    // Nền tối công nghiệp
+                    dc.DrawRectangle(new SolidColorBrush(Color.FromRgb(15, 23, 42)), null, new System.Windows.Rect(0, 0, width, height));
+
+                    // Quầng sáng mờ xung quanh
+                    dc.DrawEllipse(new SolidColorBrush(Color.FromArgb(35, 16, 185, 129)), null, new System.Windows.Point(width / 2.0, 310), 210, 210);
+
+                    // Khiên/Vòng tròn màu xanh lá nổi bật
+                    var greenBrush = new SolidColorBrush(Color.FromRgb(16, 185, 129));
+                    var borderPen = new Pen(new SolidColorBrush(Color.FromRgb(52, 211, 153)), 10);
+                    dc.DrawEllipse(greenBrush, borderPen, new System.Windows.Point(width / 2.0, 310), 150, 150);
+
+                    // Chữ "OK" thật to ở giữa
+                    var typefaceBold = new Typeface(new FontFamily("Segoe UI, Arial, sans-serif"), FontStyles.Normal, FontWeights.ExtraBold, FontStretches.Normal);
+                    var okText = new FormattedText(
+                        "OK",
+                        CultureInfo.InvariantCulture,
+                        FlowDirection.LeftToRight,
+                        typefaceBold,
+                        150,
+                        Brushes.White,
+                        1.0);
+                    dc.DrawText(okText, new System.Windows.Point((width - okText.Width) / 2.0, 310 - okText.Height / 2.0));
+
+                    // Tiêu đề trạng thái trên cùng
+                    var topText = new FormattedText(
+                        "⚡ LIVE CONTINUOUS INSPECTION",
+                        CultureInfo.InvariantCulture,
+                        FlowDirection.LeftToRight,
+                        typefaceBold,
+                        16,
+                        new SolidColorBrush(Color.FromRgb(52, 211, 153)),
+                        1.0);
+                    dc.DrawText(topText, new System.Windows.Point((width - topText.Width) / 2.0, 65));
+
+                    // Nhãn PASS bên dưới
+                    var passText = new FormattedText(
+                        "CHẤT LƯỢNG ĐẠT (PASS)",
+                        CultureInfo.InvariantCulture,
+                        FlowDirection.LeftToRight,
+                        typefaceBold,
+                        32,
+                        new SolidColorBrush(Color.FromRgb(52, 211, 153)),
+                        1.0);
+                    dc.DrawText(passText, new System.Windows.Point((width - passText.Width) / 2.0, 500));
+
+                    // Chú thích tối ưu hiệu năng
+                    var typefaceRegular = new Typeface(new FontFamily("Segoe UI, Arial, sans-serif"), FontStyles.Normal, FontWeights.Normal, FontStretches.Normal);
+                    var hintText = new FormattedText(
+                        "Render Canvas: TẮT (Tối ưu tốc độ tối đa) • Tự động hiển thị chi tiết ảnh khi phát hiện lỗi NG",
+                        CultureInfo.InvariantCulture,
+                        FlowDirection.LeftToRight,
+                        typefaceRegular,
+                        17,
+                        new SolidColorBrush(Color.FromRgb(148, 163, 184)),
+                        1.0);
+                    dc.DrawText(hintText, new System.Windows.Point((width - hintText.Width) / 2.0, 560));
+                }
+
+                var rtb = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
+                rtb.Render(visual);
+
+                var encoder = new PngBitmapEncoder();
+                encoder.Frames.Add(BitmapFrame.Create(rtb));
+                using var ms = new MemoryStream();
+                encoder.Save(ms);
+                ms.Position = 0;
+
+                var bmp = new BitmapImage();
+                bmp.BeginInit();
+                bmp.CacheOption = BitmapCacheOption.OnLoad;
+                bmp.StreamSource = ms;
+                bmp.EndInit();
+                bmp.Freeze();
+
+                _cachedStaticOkImage = bmp;
+                return bmp;
+            }
+        }
+
+        private void SetStaticOkPreview()
+        {
+            var okImg = GetOrCreateStaticOkImage();
+            if (!ReferenceEquals(SelectedNodePreviewImage, okImg))
+            {
+                SelectedNodePreviewImage = okImg;
+            }
+            SelectedNodeOverlayItems = null;
+            FinalPreviewImage = okImg;
+            FinalOverlayItems = null;
+            _finalPreviewDirty = false;
+        }
+
         private void UpdateContinuousStats()
         {
             if (System.Windows.Application.Current?.Dispatcher != null && !System.Windows.Application.Current.Dispatcher.CheckAccess())
@@ -2871,6 +3026,7 @@ namespace VisionInspectionApp.UI.ViewModels
             if (!_continuousStopwatch.IsRunning)
             {
                 ContinuousElapsedAndSpeedText = "Time: 00:00:00 (0.0 pcs/s • 0 EA/h • 0 EA/day)";
+                InstantaneousSpeedText = "0.0";
                 return;
             }
 
@@ -2880,6 +3036,31 @@ namespace VisionInspectionApp.UI.ViewModels
             double speedEaHour = speedPcs * 3600.0;
             double speedEaDay = speedEaHour * 24.0;
             ContinuousElapsedAndSpeedText = $"Time: {elapsed:hh\\:mm\\:ss} ({speedPcs:F1} pcs/s • {speedEaHour:N0} EA/h • {speedEaDay:N0} EA/day)";
+
+            // Tính toán tốc độ tức thời (Instantaneous Speed pcs/s) theo rolling window
+            double instantSpeed = 0.0;
+            long now = System.Diagnostics.Stopwatch.GetTimestamp();
+            lock (_instantaneousSpeedLock)
+            {
+                if (_lastPieceCompletionTimestamp > 0)
+                {
+                    double secondsSinceLastPiece = (double)(now - _lastPieceCompletionTimestamp) / System.Diagnostics.Stopwatch.Frequency;
+                    if (secondsSinceLastPiece <= 1.5 && _instantaneousStopwatchTicks.Count >= 2)
+                    {
+                        long oldest = _instantaneousStopwatchTicks.Peek();
+                        double windowSec = (double)(_lastPieceCompletionTimestamp - oldest) / System.Diagnostics.Stopwatch.Frequency;
+                        if (windowSec > 0.001)
+                        {
+                            instantSpeed = (_instantaneousStopwatchTicks.Count - 1) / windowSec;
+                        }
+                    }
+                    else if (secondsSinceLastPiece <= 1.5 && _instantaneousStopwatchTicks.Count == 1 && LastResult?.Timings?.TotalMs > 0)
+                    {
+                        instantSpeed = 1000.0 / LastResult.Timings.TotalMs;
+                    }
+                }
+            }
+            InstantaneousSpeedText = instantSpeed > 0 ? $"{instantSpeed:F1}" : "0.0";
         }
         public ICommand LoadPreviewImageCommand { get; internal set; }
         public ICommand CaptureCameraImageCommand { get; internal set; }
@@ -2927,11 +3108,22 @@ namespace VisionInspectionApp.UI.ViewModels
         {
             if (!value)
             {
-                SelectedNodePreviewImage = null;
-                FinalPreviewImage = null;
-                _cachedFinalPreviewImage = null;
-                SelectedNodeOverlayItems = null;
-                FinalOverlayItems = null;
+                if (IsRunningContinuous)
+                {
+                    if (_lastRun != null && !_lastRun.Pass)
+                    {
+                        _finalPreviewDirty = true;
+                        RefreshPreviews();
+                    }
+                    else
+                    {
+                        SetStaticOkPreview();
+                    }
+                }
+                else
+                {
+                    ClearAllPreviewState();
+                }
             }
             else
             {
@@ -3553,7 +3745,12 @@ namespace VisionInspectionApp.UI.ViewModels
                         ProcessedImageCount = 0;
                         _continuousStopwatch.Restart();
                         _continuousStatsTimer?.Start();
+                        ResetInstantaneousSpeed();
                         UpdateContinuousStats();
+                        if (!EnableCanvasRendering)
+                        {
+                            SetStaticOkPreview();
+                        }
                     }
                     else
                     {
@@ -3561,6 +3758,7 @@ namespace VisionInspectionApp.UI.ViewModels
                         _continuousStopwatch.Reset();
                         _continuousStatsTimer?.Stop();
                         ProcessedImageCount = 0;
+                        ResetInstantaneousSpeed();
                         UpdateContinuousStats();
                     }
                 }
@@ -4436,14 +4634,16 @@ namespace VisionInspectionApp.UI.ViewModels
 
             _lastRun = inspectionResult;
             ProcessedImageCount++;
+            RecordPieceCompleted();
 
             // Cơ chế UI Frame Throttling & Non-blocking Preview Drop:
             // Chỉ yêu cầu UI render khi:
-            // 1. Đã cách frame render trước ít nhất ContinuousUiThrottleIntervalMs (60ms)
+            // 1. Sản phẩm lỗi NG (ưu tiên hiển thị tức thì không bị rớt) HOẶC đã cách frame render trước ít nhất ContinuousUiThrottleIntervalMs (60ms)
             // 2. UI Thread KHÔNG ĐANG BẬN render frame trước (_isUiRenderingContinuous == 0)
             // Nhờ đó, Worker Task xử lý 100% tốc độ tối đa không bao giờ bị nghẽn hay đầy queue 16 nấc!
             long nowTick = Environment.TickCount64;
-            bool shouldRenderUi = (nowTick - _lastContinuousUiRenderTick >= ContinuousUiThrottleIntervalMs) &&
+            bool isCurrentNg = inspectionResult != null && !inspectionResult.Pass;
+            bool shouldRenderUi = (isCurrentNg || nowTick - _lastContinuousUiRenderTick >= ContinuousUiThrottleIntervalMs) &&
                                   (Interlocked.CompareExchange(ref _isUiRenderingContinuous, 1, 0) == 0);
 
             if (shouldRenderUi)
@@ -4806,6 +5006,7 @@ namespace VisionInspectionApp.UI.ViewModels
             _continuousStopwatch.Reset();
             _continuousStatsTimer?.Stop();
             ProcessedImageCount = 0;
+            ResetInstantaneousSpeed();
             UpdateContinuousStats();
             StatusBarText = "Đã dừng chạy liên tục.";
         }
@@ -4873,6 +5074,7 @@ namespace VisionInspectionApp.UI.ViewModels
             if (IsRunningFolderFlow)
             {
                 ProcessedImageCount++;
+                RecordPieceCompleted();
                 UpdateContinuousStats();
             }
             // ✅ Tránh dựng dashboard 2 lần/frame: setter LastResult ở cuối hàm sẽ tự gọi
@@ -5186,6 +5388,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (IsRunningFolderFlow)
                 {
                     ProcessedImageCount++;
+                    RecordPieceCompleted();
                     UpdateContinuousStats();
                 }
                 // ✅ Tránh dựng dashboard 2 lần/frame: setter LastResult ở cuối hàm sẽ tự gọi
@@ -5218,7 +5421,8 @@ namespace VisionInspectionApp.UI.ViewModels
         /// </summary>
         public void SchedulePreprocessPreviewUpdate()
         {
-            if (!EnableCanvasRendering)
+            bool canRender = EnableCanvasRendering || (IsRunningContinuous && _lastRun != null && !_lastRun.Pass);
+            if (!canRender)
             {
                 return;
             }
@@ -5374,11 +5578,26 @@ namespace VisionInspectionApp.UI.ViewModels
                 return;
             }
 
+            bool isContinuous = IsRunningContinuous;
+            bool isCurrentNg = _lastRun != null && !_lastRun.Pass;
+
             if (!EnableCanvasRendering)
             {
                 CancelPendingRefresh();
-                ClearAllPreviewState();
-                return;
+                if (isContinuous)
+                {
+                    if (!isCurrentNg)
+                    {
+                        SetStaticOkPreview();
+                        return;
+                    }
+                    // Nếu là con NG khi chạy liên tục, cho phép tiếp tục luồng bên dưới để dựng preview NG
+                }
+                else
+                {
+                    ClearAllPreviewState();
+                    return;
+                }
             }
 
             var dispatcher = RefreshCoalescingDispatcherOverride ?? System.Windows.Application.Current?.Dispatcher;
@@ -5471,10 +5690,25 @@ namespace VisionInspectionApp.UI.ViewModels
         /// </summary>
         private void RefreshPreviewsCore()
         {
+            bool isContinuous = IsRunningContinuous;
+            bool isCurrentNg = _lastRun != null && !_lastRun.Pass;
+
             if (!EnableCanvasRendering)
             {
-                ClearAllPreviewState();
-                return;
+                if (isContinuous)
+                {
+                    if (!isCurrentNg)
+                    {
+                        SetStaticOkPreview();
+                        return;
+                    }
+                    // Nếu là con NG khi chạy liên tục, cho phép tiếp tục luồng bên dưới để dựng preview NG
+                }
+                else
+                {
+                    ClearAllPreviewState();
+                    return;
+                }
             }
 
             // Chống tái nhập (reentrancy): không bao giờ lồng nhiều lượt refresh vào nhau.
@@ -5667,7 +5901,8 @@ namespace VisionInspectionApp.UI.ViewModels
 
         private void RefreshFinalPreview(Mat snap)
         {
-            if (!EnableCanvasRendering)
+            bool canRender = EnableCanvasRendering || (IsRunningContinuous && _lastRun != null && !_lastRun.Pass);
+            if (!canRender)
             {
                 FinalPreviewImage = null;
                 _cachedFinalPreviewImage = null;
@@ -5737,7 +5972,8 @@ namespace VisionInspectionApp.UI.ViewModels
     
         private void RefreshSelectedPreview(Mat snap)
         {
-            if (!EnableCanvasRendering)
+            bool canRender = EnableCanvasRendering || (IsRunningContinuous && _lastRun != null && !_lastRun.Pass);
+            if (!canRender)
             {
                 SelectedNodePreviewImage = null;
                 SelectedNodeOverlayItems = null;

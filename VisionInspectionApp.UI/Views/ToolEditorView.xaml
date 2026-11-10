@@ -167,7 +167,7 @@
             </Border>
 
             <!-- 2. Continuous Running Speed & Time (Right-Aligned) -->
-            <Border DockPanel.Dock="Right" Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="10,4" VerticalAlignment="Center" Margin="6,0,0,0" ToolTip="Tốc độ kiểm tra tức thời và tổng thời gian chạy liên tục">
+            <Border DockPanel.Dock="Right" Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="10,4" VerticalAlignment="Center" Margin="6,0,0,0" ToolTip="Tổng thời gian chạy và tốc độ trung bình toàn phiên từ lúc bấm Chạy liên tục">
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock Text="⚡" FontSize="12" VerticalAlignment="Center" Margin="0,0,4,0"/>
                     <TextBlock Text="{Binding ContinuousElapsedAndSpeedText}" FontWeight="Bold" FontSize="11.5" Foreground="#10B981" VerticalAlignment="Center"/>
@@ -5822,7 +5822,7 @@
                                         </TextBlock>
                                     </StackPanel>
 
-                                    <UniformGrid Grid.Column="1" Columns="3" VerticalAlignment="Center">
+                                    <UniformGrid Grid.Column="1" Columns="4" VerticalAlignment="Center">
                                         <Border Margin="2,0" Padding="7,4" CornerRadius="4"
                                                 Background="{DynamicResource PanelBackgroundBrush}"
                                                 BorderBrush="#4CAF50" BorderThickness="1"
@@ -5853,6 +5853,17 @@
                                                 <TextBlock Text="{Binding RecentPartsYieldText}"
                                                            Style="{StaticResource DashChipValueStyle}"
                                                            Foreground="{DynamicResource TextBrush}" />
+                                            </StackPanel>
+                                        </Border>
+                                        <Border Margin="2,0" Padding="7,4" CornerRadius="4"
+                                                Background="{DynamicResource PanelBackgroundBrush}"
+                                                BorderBrush="#0284C7" BorderThickness="1"
+                                                ToolTip="Tốc độ kiểm tra tức thời (pcs/s) đo theo chu kỳ giữa các con hàng gần nhất (Rolling Window). Tự động về 0 khi máy dừng.">
+                                            <StackPanel>
+                                                <TextBlock Text="TỨC THỜI (pcs/s)" Style="{StaticResource DashChipLabelStyle}" />
+                                                <TextBlock Text="{Binding InstantaneousSpeedText}"
+                                                           Style="{StaticResource DashChipValueStyle}"
+                                                           Foreground="#0284C7" />
                                             </StackPanel>
                                         </Border>
                                     </UniformGrid>

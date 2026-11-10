@@ -8,41 +8,47 @@ Hỗ trợ Camera GigE/USB3/USB/RTSP/Android Pro Mode Native Server, nạp ảnh
 - **Phiên bản hiện tại**: .NET 8 WPF, x64/x86 Multi-targeting, C# 12.
 - **Biên dịch**: 0 Errors toàn solution (`VisionInspectionApp.slnx`) cả Debug lẫn Release.
 - **Dự án Android Native**: `AndroidCameraServer` (Gradle 8.11, CompileSDK 34, Android 14) đã biên dịch thành công APK và cài đặt trực tiếp lên Samsung Galaxy S24 Ultra (`SM-S928B`).
-- **Kiểm thử tự động**: PASSED 100% (9/9 test NewJob & BlobSpec Calibrated/Uncalibrated/Pixel vs Mm Mode, 6/6 test BlobCountingMode, 4/4 test Snapshot Frame Ownership, 5/5 test HikStreaming & Color Fidelity, 7/7 test PlcHandshakeNumericMode OK/NG Int16 & Both, 7/7 test PlcHandshakePersistence, 5/5 test PlcSignalType, 6/6 test CodeDetection Result, 5/5 test ObjectCounting, 6/6 test AndroidCameraProMode, 6/6 test PlcContinuousQueue 16 Slots, 7/7 test ToolEditor Column Resize).
+- **Kiểm thử tự động**: PASSED 100% (8/8 test ToolEditorContinuousRenderAndSpeed, 9/9 test NewJob & BlobSpec Calibrated/Uncalibrated/Pixel vs Mm Mode, 6/6 test BlobCountingMode, 4/4 test Snapshot Frame Ownership, 5/5 test HikStreaming & Color Fidelity, 7/7 test PlcHandshakeNumericMode OK/NG Int16 & Both, 7/7 test PlcHandshakePersistence, 5/5 test PlcSignalType, 6/6 test CodeDetection Result, 5/5 test ObjectCounting, 6/6 test AndroidCameraProMode, 6/6 test PlcContinuousQueue 16 Slots, 7/7 test ToolEditor Column Resize).
 - **Cấu hình chuẩn xưởng CMS_VINA**: 
   - Database: `CMS_VINA` (192.168.1.2:6789)
   - OQC Server API: `https://192.168.1.192/vision_upload.php`
   - OTA Update Server: `http://192.168.1.192/update/version.json` & `http://192.168.1.192/ota_server.php`
   - PLC Handshake: `PLC_2` (Mitsubishi FX5U: Ready `M101`, Busy `M102`, Done `M103`, Pass `M104` RisingEdge 20ms, NG `M105` RisingEdge 20ms, Kết quả số `D100` OK=2, NG=3, Queue In `M200`).
 
-## 3. Hoàn thành Task 430: Chuyển Đổi Thủ Công Chế Độ Spec BlobDetection (Theo Pixel Hoặc Theo mm) Thay Vì Tự Động Theo Hiệu Chuẩn
+## 3. Hoàn thành Task 431: Nâng Cấp Preview Tool Editor Khi Bỏ Render Canvas & Bổ Sung Widget Tốc Độ Tức Thời (pcs/s)
 1. **Bối cảnh & Yêu cầu người dùng**:
-   - Người dùng yêu cầu: Không cho chuyển chế độ spec tự động theo hiệu chuẩn nữa. Thay vào đó, tạo tùy chọn trên giao diện để người dùng có thể tự do chọn qua lại các loại spec:
-     - **Theo pixel (MinA, MaxA)**: Bắt blob theo diện tích pixel `[minArea, maxArea]`.
-     - **Theo mm (Kích thước W x L)**: Bắt blob theo kích thước thực tế W x L (mm) bỏ qua dung sai kích thước nhỏ và bắt các khuyết tật vượt ngưỡng.
-     - **Mặc định**: Luôn chọn theo pixel (`BlobSpecMode.Pixel = 0`).
+   - Khi chạy liên tục trong Tool Editor, nếu uncheck "Render Canvas":
+     - Hiển thị 1 ảnh tĩnh "OK" thật to lên preview khi sản phẩm đạt, không tốn tài nguyên render canvas (tối đa hóa FPS).
+     - Chỉ khi kiểm tra đến con hàng NG thì mới hiển thị canvas (ảnh chụp lỗi + overlay bounding box khuyết tật).
+     - Sau đó nếu con tiếp theo OK thì lại tiếp tục không render canvas và hiển thị lại ảnh tĩnh "OK".
+   - Khi click queue / thanh 20 nấc để xem ảnh NG lịch sử, sau đó bấm "✕ Quay lại Live" thì tự động AutoFit View 1 lần cho preview.
+   - Thêm một ô widget hiển thị tốc độ tức thời (pcs/s) ngay phía dưới (bên cạnh các widget TỔNG (ms), COUNT, YIELD 20), tự động về 0 khi máy dừng thay vì bị dãn thời gian như tốc độ trung bình toàn phiên ở góc trên.
 2. **Kiến trúc & Các thành phần đã triển khai**:
-   - **`Class1.cs` (Models)**:
-     - Bổ sung enum `BlobSpecMode`: `Pixel = 0`, `Millimeter = 1`.
-     - Thêm thuộc tính `SpecMode` vào `BlobDetectionDefinition` với giá trị mặc định `BlobSpecMode.Pixel` (đảm bảo tương thích 100% với các file Job JSON cũ).
-   - **`InspectionResultModels.cs` & `InspectionService.Pipeline.cs`**:
-     - `BlobDetectionResult` lưu kèm `BlobSpecMode SpecMode = BlobSpecMode.Pixel`.
-     - Trong `DetectBlobsInCrop`: Phân nhánh lọc blob chuẩn xác dựa trên `specMode`:
-       - `specMode == BlobSpecMode.Millimeter`: Lọc theo kích thước W x L (mm), bỏ qua các blob nằm trong dung sai kích thước cho phép, chỉ bắt blob vượt quá spec WxL.
-       - `specMode == BlobSpecMode.Pixel`: Lọc theo diện tích pixel `[minArea, maxArea]` (kể cả khi Job đã có hiệu chuẩn, lựa chọn của người dùng luôn được ưu tiên tuyệt đối).
-     - Trong đánh giá kích thước (`checkSize`): Chỉ áp dụng cho chế độ Millimeter. Khi ở Pixel mode, kích thước WxL không can thiệp vào `passSize`.
-   - **`ToolEditorViewModel.ToolBlob.cs` & `ToolEditorView.xaml`**:
-     - Thêm danh sách lựa chọn `AvailableBlobSpecModeNames`: `"Theo pixel (MinA, MaxA)"` và `"Theo mm (Kích thước W x L)"`.
-     - Thêm các thuộc tính Binding: `Blob_SpecMode`, `Blob_SpecModeText`, `Blob_IsPixelSpecMode`, `Blob_IsMmSpecMode`, `Blob_SpecUnitText`.
-     - Thêm dropdown ComboBox "Chế độ Spec" trực quan trên bảng Properties của Tool Editor. Khi người dùng thay đổi chế độ, tự động gọi `RunFlow()` và cập nhật ảnh preview tức thời.
-     - Ẩn/hiện độc lập theo `Blob_IsPixelSpecMode` và `Blob_IsMmSpecMode`. Khi ở chế độ mm, nếu Job chưa hiệu chuẩn sẽ hiện badge cảnh báo cam nhắc nhở người dùng (1 px = 1 mm).
-     - Đồng bộ bảng kết quả Spec (`SpecResults`) trong `ToolEditorViewModel.Inspection.cs` và `InspectionViewModel.cs`: Chỉ thêm dòng kiểm tra `BlobSize` khi node ở chế độ Millimeter.
+   - **Tạo ảnh tĩnh "OK" chất lượng cao (`GetOrCreateStaticOkImage`)**:
+     - Tạo ảnh tĩnh 1280x720 nền tối công nghiệp `#0F172A`, vòng tròn xanh lá `#10B981` cùng chữ "OK" to (150pt) ở giữa, nhãn "CHẤT LƯỢNG ĐẠT (PASS)" và thông báo chế độ tối ưu.
+     - Đóng băng (`Freeze()`) và cache dùng chung (`_cachedStaticOkImage`), đảm bảo 0% tải CPU/GPU lặp lại và an toàn đa luồng.
+   - **Luồng hiển thị có điều kiện khi chạy liên tục (`SetStaticOkPreview` & `canRender`)**:
+     - Trong `RefreshPreviewsCore`, `RefreshFinalPreview`, `RefreshSelectedPreview`, `SchedulePreprocessPreviewUpdate`:
+       - Khi `!EnableCanvasRendering`: Nếu đang chạy liên tục (`IsRunningContinuous`), kiểm tra kết quả `_lastRun.Pass`. Nếu OK -> gọi `SetStaticOkPreview()` hiển thị ảnh tĩnh OK và bỏ qua render canvas. Nếu NG -> bật cờ `canRender` cho phép render canvas đầy đủ chi tiết lỗi. Sau đó khi gặp con hàng OK tiếp theo -> tự động quay về ảnh tĩnh "OK".
+     - Trong `RunContinuousInspectionLoopAsync`: Ưu tiên đưa frame NG lên luồng UI ngay lập tức không bị throttle/drop.
+     - Khi bấm bắt đầu Chạy liên tục: Nếu `!EnableCanvasRendering`, hiển thị ngay ảnh tĩnh "OK" thay vì để trống canvas.
+   - **AutoFit View khi quay lại Live (`RequestAutoFitImagePreview`)**:
+     - Bổ sung sự kiện `RequestAutoFitImagePreview` trên `ToolEditorViewModel`.
+     - Trong `ToolEditorView.xaml.cs`: Đăng ký sự kiện và gọi `PreviewImageViewer?.ResetView()`.
+     - Trong `ExitRecentPartView()`: Kích hoạt sự kiện để khi bấm "✕ Quay lại Live" hoặc "✕ Live", khung nhìn preview tự động căn chỉnh vừa vặn 100%.
+   - **Widget Tốc độ tức thời (`InstantaneousSpeedText`)**:
+     - Áp dụng thuật toán Rolling Window đo dấu thời gian của tối đa 8 sản phẩm gần nhất (`_instantaneousStopwatchTicks`, `RecordPieceCompleted()`).
+     - Tự động kiểm tra độ trễ so với con hàng cuối: Nếu quá 1.5 giây không có con hàng mới -> máy đã dừng -> tốc độ tức thời tự động hạ về `0.0 pcs/s`.
+     - Trên `ToolEditorView.xaml`: Đổi `UniformGrid Columns="3"` thành `Columns="4"`, bổ sung chip hiển thị "TỨC THỜI (pcs/s)" màu xanh dương `#0284C7` đặt cạnh `TỔNG (ms)`, `COUNT`, `YIELD 20`.
 3. **Kiểm thử tự động**:
-   - `NewJobAndBlobSpecTests.cs`: **9/9 test PASSED 100%** (bao gồm Test 7 kiểm tra chế độ mm bắt theo WxL, Test 8 kiểm tra chế độ Pixel mặc định lọc theo MinA/MaxA ngay cả khi Job có calib, Test 9 kiểm tra chuyển đổi qua lại giữa Pixel và Millimeter trên ViewModel).
+   - `ToolEditorContinuousRenderAndSpeedTests.cs`: **8/8 test PASSED 100%** (Ảnh tĩnh OK, AutoFit event, OK hiện ảnh tĩnh, NG hiện canvas, OK sau NG, Rolling Window speed, tự động về 0 khi dừng, reset khi Stop).
+   - `NewJobAndBlobSpecTests.cs`: **9/9 test PASSED 100%**.
    - `BlobCountingModeTests.cs`: **6/6 test PASSED 100%**.
+   - `ToolEditorColumnResizeTests.cs`: **7/7 test PASSED 100%**.
    - Biên dịch: Toàn bộ solution `VisionInspectionApp.slnx` đạt **0 Errors**.
 
 ## 4. Các sự kiện & thay đổi gần đây
+- Task 431: Nâng cấp Preview Tool Editor khi bỏ Render Canvas (hiển thị ảnh tĩnh "OK" to khi đạt, chỉ render canvas khi gặp NG, tự động autofit preview khi quay lại live) & Bổ sung widget tốc độ tức thời (pcs/s) cạnh Tổng (ms), COUNT, YIELD; kiểm thử 8/8 PASSED 100%.
 - Task 430: Chuyển đổi thủ công chế độ spec BlobDetection (theo pixel hoặc theo mm) thay vì tự động theo hiệu chuẩn, mặc định theo pixel; kiểm thử 9/9 PASSED 100%.
 - Task 429: Khắc phục triệt để lỗi ObjectDisposedException ("Cannot access a disposed object OpenCvSharp.Mat") khi bấm chụp ảnh trong Tool Editor & Manual Inspection; kiểm thử 4/4 PASSED 100%.
 - Task 428: Tối ưu triệt để stream live & hiệu chuẩn màu sắc Camera Hikrobot 25MP MV-CH250-90TC qua card 10GbE MV-GT1002 đạt 41 FPS & chuẩn màu MVS 100%; kiểm thử 5/5 PASSED 100%.
@@ -50,4 +56,3 @@ Hỗ trợ Camera GigE/USB3/USB/RTSP/Android Pro Mode Native Server, nạp ảnh
 - Task 426: Hoàn thành chế độ xuất kết quả OK/NG dạng số nguyên (Int16 Word: D100, OK=2, NG=3) song hành cùng dạng Bit Bool trong cửa sổ Bắt tay 24/7; kiểm thử 7/7 PASSED 100%.
 - Task 425: Bổ sung chi tiết lỗi NG cho tool CodeDetection trong SpecResults, NgReasonsText và thẻ CodeDetection; kiểm thử 6/6 PASSED 100%.
 - Task 424: Hoàn thành Tool ObjectCounting, sửa dứt điểm lỗi đếm 69 vật thể trên vỉ thuốc -> đếm chuẩn xác 10/10 viên thuốc; kiểm thử 5/5 PASSED 100%.
-- Task 423: Xây dựng Android App VisionCameraServer (Camera2 Pro Mode, 200MP, EV, Focus, Flash Torch) & cài đặt thành công lên S24 Ultra; kiểm thử 6/6 PASSED 100%.
