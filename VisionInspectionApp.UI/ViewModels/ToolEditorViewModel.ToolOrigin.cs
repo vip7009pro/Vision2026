@@ -310,6 +310,10 @@ namespace VisionInspectionApp.UI.ViewModels
             }
         }
 
-        public bool IsOriginShapePyramid => Origin_Algorithm == OriginAlgorithm.ShapePyramid || Origin_Algorithm == OriginAlgorithm.MvpShapeMatch || Origin_Algorithm == OriginAlgorithm.MvpShapeMatch2;
+        public bool IsOriginShapePyramid => Origin_Algorithm == OriginAlgorithm.ShapePyramid 
+            || Origin_Algorithm == OriginAlgorithm.MvpShapeMatch 
+            || Origin_Algorithm == OriginAlgorithm.MvpShapeMatch2 
+            || Origin_Algorithm == OriginAlgorithm.MvpShapeMatch3 
+            || Origin_Algorithm == OriginAlgorithm.MvpShapeMatchInt8;
     }
 }

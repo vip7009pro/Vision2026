@@ -21,6 +21,9 @@ public sealed class OriginMatcher
             }
         }
         _templateFeaturePyramidCache.Clear();
+        MvpShapeMatch2Engine.ClearCache();
+        MvpShapeMatch3Engine.ClearCache();
+        MvpShapeMatchInt8Engine.ClearCache();
     }
 
     private readonly struct GrayMat : IDisposable
@@ -96,6 +99,26 @@ public sealed class OriginMatcher
         using var roiGray = EnsureGrayBorrowed(targetMat);
 
         double effectiveStep = stepDeg > 0.000001 ? stepDeg : (definition.AngleStep > 0 ? definition.AngleStep : 1.0);
+
+        if (definition.OriginAlgorithm == OriginAlgorithm.MvpShapeMatch3)
+        {
+            var baseAngle3 = definition.TemplateRoi.Angle;
+            double searchMin3 = baseAngle3 + minAngleDeg;
+            double searchMax3 = baseAngle3 + maxAngleDeg;
+
+            using var templPrep = PrepareTemplateForMatchBorrowed(templateGray, preprocess);
+            return MvpShapeMatch3Engine.Match(roiGray.Mat, templPrep.Mat, definition, searchMin3, searchMax3, effectiveStep, paddedRect);
+        }
+
+        if (definition.OriginAlgorithm == OriginAlgorithm.MvpShapeMatchInt8)
+        {
+            var baseAngleInt8 = definition.TemplateRoi.Angle;
+            double searchMinInt8 = baseAngleInt8 + minAngleDeg;
+            double searchMaxInt8 = baseAngleInt8 + maxAngleDeg;
+
+            using var templPrep = PrepareTemplateForMatchBorrowed(templateGray, preprocess);
+            return MvpShapeMatchInt8Engine.Match(roiGray.Mat, templPrep.Mat, definition, searchMinInt8, searchMaxInt8, effectiveStep, paddedRect);
+        }
 
         if (definition.OriginAlgorithm == OriginAlgorithm.MvpShapeMatch2)
         {

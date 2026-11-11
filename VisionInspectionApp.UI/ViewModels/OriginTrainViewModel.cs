@@ -352,7 +352,10 @@ namespace VisionInspectionApp.UI.ViewModels
                 Angle = RoiAngle
             };
 
-            if (_originDef.OriginAlgorithm != OriginAlgorithm.MvpShapeMatch2 && _originDef.OriginAlgorithm != OriginAlgorithm.ShapePyramid)
+            if (_originDef.OriginAlgorithm != OriginAlgorithm.MvpShapeMatch2 
+                && _originDef.OriginAlgorithm != OriginAlgorithm.MvpShapeMatch3 
+                && _originDef.OriginAlgorithm != OriginAlgorithm.MvpShapeMatchInt8 
+                && _originDef.OriginAlgorithm != OriginAlgorithm.ShapePyramid)
             {
                 _originDef.OriginAlgorithm = OriginAlgorithm.MvpShapeMatch;
             }
@@ -385,6 +388,8 @@ namespace VisionInspectionApp.UI.ViewModels
 
             OriginMatcher.ClearCache();
             MvpShapeMatch2Engine.ClearCache();
+            MvpShapeMatch3Engine.ClearCache();
+            MvpShapeMatchInt8Engine.ClearCache();
 
             // Crop & Save template image from Image 1 (Global Preprocess only)
             var templateDir = Path.Combine(_workingDir, "templates");

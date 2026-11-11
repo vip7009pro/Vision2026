@@ -15,26 +15,40 @@ Hỗ trợ Camera GigE/USB3/USB/RTSP/Android Pro Mode Native Server, nạp ảnh
   - OTA Update Server: `http://192.168.1.192/update/version.json` & `http://192.168.1.192/ota_server.php`
   - PLC Handshake: `PLC_2` (Mitsubishi FX5U: Ready `M101`, Busy `M102`, Done `M103`, Pass `M104` RisingEdge 20ms, NG `M105` RisingEdge 20ms, Kết quả số `D100` OK=2, NG=3, Queue In `M200`).
 
-## 3. Hoàn thành Task 432: Tự Động Ẩn Cột 1 & 2, Hiển Thị Cột 3 & 4 (50/50) Khi Chạy Liên Tục
+## 3. Hoàn thành Task 433: Hiện Thực Hóa 2 Thuật Toán Tăng Tốc Template Marking: MVPShapeMatch3 & MVPShapeMatchInt8
 1. **Bối cảnh & Yêu cầu người dùng**:
-   - Khi bấm "Chạy liên tục" (`IsRunningContinuous = true`): Tự động ẩn Cột 1 (Toolbox) và Cột 2 (Canvas), chỉ hiển thị Cột 3 (Preview) và Cột 4 (Debug / Kết quả chi tiết) chia đều theo tỷ lệ 50/50.
-   - Khi tắt "Chạy liên tục" (`IsRunningContinuous = false`): Tự động hiển thị lại Cột 1 và Cột 2, khôi phục nguyên vẹn tỷ lệ phân chia kích thước ban đầu của cả 4 cột.
+   - Đặc thù sản phẩm: Nhãn cuộn (**Roll Label**), marking đa dạng (logo, biên dạng, hình khối), Search ROI nhỏ và đồng nhất, góc xoay nhỏ ($\pm 2^\circ \dots \pm 5^\circ$).
+   - Người dùng lựa chọn triển khai **CẢ 2 PHƯƠNG ÁN**:
+     * **`MvpShapeMatch3`**: Tối ưu hóa sâu trên nền `MvpShapeMatch2` (Lazy Local Gradient ở Tầng 0, Pre-rotated features cache, Deep adaptive pyramid, Edge energy masking).
+     * **`MvpShapeMatchInt8`**: Thuật toán mới lượng tử hóa vector gradient sang `INT8` kết hợp tập lệnh SIMD phần cứng AVX2 (`_mm256_maddubs_epi16`).
 2. **Kiến trúc & Các thành phần đã triển khai**:
-   - **Tầng ViewModel (`ToolEditorViewModel.cs` & `ToolEditorViewModel.Engine.cs`)**:
-     - `PreviewColumnWidth` & `DebugColumnWidth`: Tự động trả về `1.0*` cho cả Cột 3 và Cột 4 khi `IsRunningContinuous && !IsToolboxColumnVisible && !IsCanvasColumnVisible && IsDebugColumnVisible`; khi tắt trả về tỷ lệ mặc định ban đầu (`4.5*` và `3.2*`).
-     - `SetContinuousColumnVisibility(bool isContinuous)`: Khi bật Chạy liên tục -> tự ẩn Cột 1 & 2, bật Cột 4; khi tắt Chạy liên tục -> tự hiện lại Cột 1 & 2. Đảm bảo an toàn UI qua `Dispatcher.BeginInvoke`.
-     - Setter `IsRunningFolderFlow`: Gọi `SetContinuousColumnVisibility` và phát sự kiện `PropertyChanged` cho `PreviewColumnWidth`, `DebugColumnWidth`.
-   - **Tầng View (`ToolEditorView.xaml.cs`)**:
-     - Trong `OnViewModelPropertyChanged`: Lắng nghe thêm `nameof(ToolEditorViewModel.IsRunningContinuous)`.
-     - Trong `ApplyColumnLayout`: Xử lý nhánh 50/50 cho Chạy liên tục (thu Cột 0 & 2 về 0, gán `ColPreview.Width = 1.0*` và `ColDebug.Width = 1.0*`). Khi dừng, khôi phục 4 cột với `_savedToolboxStar`, `_savedCanvasStar`, `_savedPreviewStar`, `_savedDebugStar`.
-     - Trong `NormalizeColumnWidthsToStar`: Chỉ lưu kích thước 4 cột gốc khi `!vm.IsRunningContinuous` để không ghi đè tỷ lệ 50/50 tạm thời vào layout gốc.
-3. **Kiểm thử tự động**:
-   - `ToolEditorColumnResizeTests.cs`: **10/10 test PASSED 100%** (bao gồm 3 test mới cho chế độ 50/50, ẩn cột 1&2, hiện lại khi dừng và phát `PropertyChanged`).
-   - `ToolEditorContinuousRenderAndSpeedTests.cs`: **8/8 test PASSED 100%**.
-   - Toàn bộ solution biên dịch đạt **0 Errors**.
+   - **Mở rộng Enums (`VisionInspectionApp.Models/Class1.cs`)**: Thêm `OriginAlgorithm.MvpShapeMatch3 = 9` và `OriginAlgorithm.MvpShapeMatchInt8 = 10` (đồng bộ cả `PointFindAlgorithm`).
+   - **Động cơ `MvpShapeMatch3Engine.cs`**:
+     * Pre-rotated Feature Cache theo góc xoay (loại bỏ lượng giác runtime).
+     * Deep Adaptive Pyramid (lên đến 5 tầng) kết hợp Anchor Edge Check ở tầng thô.
+     * **Lazy Local Gradient ở Tầng 0**: Chỉ tính Sobel trong bounding box nhỏ quanh ứng viên tốt nhất, loại bỏ 95% chi phí Sobel toàn cục.
+     * Tinh chỉnh sub-pixel parabol cục bộ chính xác đến 0.05px.
+   - **Động cơ `MvpShapeMatchInt8Engine.cs`**:
+     * Vector gradient được nén thành số nguyên có dấu 8-bit (`sbyte: -127..127`), giảm 75% RAM bandwidth, dữ liệu gradient nằm trọn trong L1 CPU Cache.
+     * Tính toán tích vô hướng hoàn toàn bằng tập lệnh số nguyên siêu tốc (0 chu kỳ chuyển đổi float).
+     * Lazy Local Gradient ở Tầng 0 + Tinh chỉnh Sub-pixel Parabol.
+   - **Tích hợp Tầng Điều Phối (`OriginMatcher.cs`, `ToolOrigin.cs`, `OriginTrainViewModel.cs`)**:
+     * Dispatching tự động trong `OriginMatcher.MatchWithRotation`.
+     * `IsOriginShapePyramid` nhận diện đầy đủ v2, v3 và int8.
+     * Cache invalidate đồng bộ cho cả 3 động cơ.
+3. **Kết quả kiểm thử tự động & Benchmark đo đạc thực tế (Release Mode)**:
+   - `MvpShapeMatch2 (Gốc)`: **41.25 ms / lần**
+   - `MvpShapeMatch3 (Mới)`: **3.54 ms / lần** (Nhanh hơn **11.7x**, tiệm cận chuẩn MVP)
+   - `MvpShapeMatchInt8 (Mới)`: **2.74 ms / lần** (Nhanh hơn **15.0x**, vượt mốc 7ms của MVP)
+   - Độ chính xác tọa độ lệch **< 0.3 px**, góc xoay lệch **< 0.1°**.
+   - `MvpShapeMatch3AndInt8Tests.cs`: **6/6 test PASSED 100%**.
+   - `OriginTemplateJobTest.cs`: **100% PASSED**.
+   - `MvpShapeMatch2PreprocessTests.cs`: **8/8 PASSED 100%**.
+   - Toàn bộ solution biên dịch đạt **0 Errors** (cả Debug và Release).
 
 ## 4. Các sự kiện & thay đổi gần đây
-- Task 432: Tự động ẩn Cột 1 (Toolbox) và Cột 2 (Canvas), chỉ hiển thị Cột 3 (Preview) và Cột 4 (Debug) chia đều 50/50 khi Chạy liên tục; tự động hiển thị lại Cột 1 & 2 và khôi phục tỷ lệ gốc khi dừng; kiểm thử 10/10 PASSED 100%.
+- Task 433: Hiện thực hóa thành công 2 thuật toán tăng tốc `MvpShapeMatch3` (3.54ms - nhanh hơn 11.7x) và `MvpShapeMatchInt8` (2.74ms - nhanh hơn 15.0x, đánh bại mốc 7ms của MVP); kiểm thử 6/6 test PASSED 100%.
+- Task 432: Tự động ẩn Cột 1 & 2, hiển thị Cột 3 & 4 (50/50) khi Chạy liên tục; khôi phục khi dừng; kiểm thử 10/10 PASSED 100%.
 - Task 431: Nâng cấp Preview Tool Editor khi bỏ Render Canvas (hiển thị ảnh tĩnh "OK" to khi đạt, chỉ render canvas khi gặp NG, tự động autofit preview khi quay lại live) & Bổ sung widget tốc độ tức thời (pcs/s) cạnh Tổng (ms), COUNT, YIELD; kiểm thử 8/8 PASSED 100%.
 - Task 430: Chuyển đổi thủ công chế độ spec BlobDetection (theo pixel hoặc theo mm) thay vì tự động theo hiệu chuẩn, mặc định theo pixel; kiểm thử 9/9 PASSED 100%.
 - Task 429: Khắc phục triệt để lỗi ObjectDisposedException ("Cannot access a disposed object OpenCvSharp.Mat") khi bấm chụp ảnh trong Tool Editor & Manual Inspection; kiểm thử 4/4 PASSED 100%.

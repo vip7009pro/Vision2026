@@ -100,6 +100,12 @@ class Program
             return;
         }
 
+        if (args.Length > 0 && (args[0].Equals("mvp3", StringComparison.OrdinalIgnoreCase) || args[0].Equals("int8", StringComparison.OrdinalIgnoreCase) || args[0].Equals("mvp-int8", StringComparison.OrdinalIgnoreCase) || args[0].Equals("shape3", StringComparison.OrdinalIgnoreCase)))
+        {
+            MvpShapeMatch3AndInt8Tests.RunAllTests();
+            return;
+        }
+
         if (args.Length > 0 && args[0].Equals("mvp2", StringComparison.OrdinalIgnoreCase))
         {
             MvpShapeMatch2PreprocessTests.RunAllTests();
@@ -244,6 +250,7 @@ class Program
         ToolCalibFactorTests.RunAllTests();
         ReleaseConfigPersistenceTests.RunAllTests();
         MvpShapeMatch2PreprocessTests.RunAllTests();
+        MvpShapeMatch3AndInt8Tests.RunAllTests();
         ContourCompareTests.RunAllTests();
         HmiDesignerPersistenceTests.RunAllTests();
         HmiStateAndLifecycleTests.RunAllTests();

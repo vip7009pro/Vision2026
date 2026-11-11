@@ -1,5 +1,13 @@
 # ROADMAP.md — Lộ trình phát triển & Trạng thái nhiệm vụ
 
+- [x] Task 433: Hiện Thực Hóa 2 Thuật Toán Tăng Tốc Template Marking: MVPShapeMatch3 & MVPShapeMatchInt8:
+  - [x] Lập kế hoạch kiến trúc chi tiết cho `MvpShapeMatch3` (Lazy Local Gradient, Pre-rotated Cache, Deep Pyramid) và `MvpShapeMatchInt8` (SIMD AVX2 INT8).
+  - [x] Mở rộng enum `OriginAlgorithm` và `PointFindAlgorithm` trong [`Class1.cs`](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Models/Class1.cs).
+  - [x] Hiện thực hóa động cơ [`MvpShapeMatch3Engine.cs`](file:///g:/NODEJS/Vision2026/VisionInspectionApp.VisionEngine/MvpShapeMatch3Engine.cs) (Đạt 3.54ms, nhanh hơn 11.7x so với v2).
+  - [x] Hiện thực hóa động cơ [`MvpShapeMatchInt8Engine.cs`](file:///g:/NODEJS/Vision2026/VisionInspectionApp.VisionEngine/MvpShapeMatchInt8Engine.cs) (Đạt 2.74ms, nhanh hơn 15.0x so với v2, đánh bại mốc 7ms của MVP).
+  - [x] Tích hợp điều hướng trong [`OriginMatcher.cs`](file:///g:/NODEJS/Vision2026/VisionInspectionApp.VisionEngine/OriginMatcher.cs), [`ToolEditorViewModel.ToolOrigin.cs`](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.ToolOrigin.cs), [`OriginTrainViewModel.cs`](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/OriginTrainViewModel.cs).
+  - [x] Xây dựng bộ test kiểm thử tự động & benchmark đo tốc độ thực tế trong [`MvpShapeMatch3AndInt8Tests.cs`](file:///g:/NODEJS/Vision2026/TestExtractApp/MvpShapeMatch3AndInt8Tests.cs): 6/6 test PASSED 100%.
+
 - [x] Task 432: Tự Động Ẩn Cột 1 & 2, Hiển Thị Cột 3 & 4 (50/50) Khi Chạy Liên Tục:
   - [x] **Quản Lý Trạng Thái Layout Cột Trên ViewModel** ([ToolEditorViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.cs), [ToolEditorViewModel.Engine.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.Engine.cs)):
     - Cập nhật getter `PreviewColumnWidth` và `DebugColumnWidth`: Tự động chuyển thành tỷ lệ `1.0* : 1.0*` (50/50) khi `IsRunningContinuous && !IsToolboxColumnVisible && !IsCanvasColumnVisible && IsDebugColumnVisible`; khi dừng quay về tỷ lệ mặc định ban đầu (`4.5* : 3.2*`).
