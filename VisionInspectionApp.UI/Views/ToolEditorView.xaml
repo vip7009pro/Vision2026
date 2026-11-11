@@ -4910,6 +4910,35 @@
                     <StackPanel>
                         <TextBlock Text="🎯 Region of Interest (ROI Mask)" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,6"/>
 
+                        <!-- Tùy chọn Màu Vùng Che (Mask Fill Color) -->
+                        <Grid Margin="0,0,0,6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="90"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Màu vùng che:" VerticalAlignment="Center" FontSize="11" Foreground="{DynamicResource TextMutedBrush}"/>
+                            <ComboBox Grid.Column="1" ItemsSource="{Binding AvailablePreprocessMaskColors}" SelectedItem="{Binding PreprocessMaskColor, UpdateSourceTrigger=PropertyChanged}" FontSize="11" ToolTip="Chọn màu che khi áp dụng mặt nạ (vùng ngoài Include hoặc trong Exclude)">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock>
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Style.Triggers>
+                                                        <Trigger Property="DataContext" Value="{x:Static models:PreprocessMaskColor.Black}">
+                                                            <Setter Property="Text" Value="⬛ Đen (Black)"/>
+                                                        </Trigger>
+                                                        <Trigger Property="DataContext" Value="{x:Static models:PreprocessMaskColor.White}">
+                                                            <Setter Property="Text" Value="⬜ Trắng (White)"/>
+                                                        </Trigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                        </Grid>
+
                         <!-- Buttons to add ROI Shapes -->
                         <UniformGrid Columns="3" Margin="0,0,0,6">
                             <Button Content="➕ ⏹️ Square" Command="{Binding Preprocess_AddRectangleRoiCommand}" Margin="0,0,2,0" Padding="2" FontSize="10" ToolTip="Thêm ROI Hình Chữ Nhật/Vuông"/>

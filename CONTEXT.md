@@ -8,45 +8,35 @@ Hỗ trợ Camera GigE/USB3/USB/RTSP/Android Pro Mode Native Server, nạp ảnh
 - **Phiên bản hiện tại**: .NET 8 WPF, x64/x86 Multi-targeting, C# 12.
 - **Biên dịch**: 0 Errors toàn solution (`VisionInspectionApp.slnx`) cả Debug lẫn Release.
 - **Dự án Android Native**: `AndroidCameraServer` (Gradle 8.11, CompileSDK 34, Android 14) đã biên dịch thành công APK và cài đặt trực tiếp lên Samsung Galaxy S24 Ultra (`SM-S928B`).
-- **Kiểm thử tự động**: PASSED 100% (10/10 test ToolEditorColumnResize & Continuous 50/50, 8/8 test ToolEditorContinuousRenderAndSpeed, 9/9 test NewJob & BlobSpec Calibrated/Uncalibrated/Pixel vs Mm Mode, 6/6 test BlobCountingMode, 4/4 test Snapshot Frame Ownership, 5/5 test HikStreaming & Color Fidelity, 7/7 test PlcHandshakeNumericMode OK/NG Int16 & Both, 7/7 test PlcHandshakePersistence, 5/5 test PlcSignalType, 6/6 test CodeDetection Result, 5/5 test ObjectCounting, 6/6 test AndroidCameraProMode, 6/6 test PlcContinuousQueue 16 Slots).
+- **Kiểm thử tự động**: PASSED 100% (8/8 test PreprocessRoiMaskingTest, 6/6 test MvpShapeMatch3 & Int8, 8/8 test MvpShapeMatch2 Preprocess, 10/10 test ToolEditorColumnResize & Continuous 50/50, 8/8 test ToolEditorContinuousRenderAndSpeed, 9/9 test NewJob & BlobSpec Calibrated/Uncalibrated/Pixel vs Mm Mode, 6/6 test BlobCountingMode, 4/4 test Snapshot Frame Ownership, 5/5 test HikStreaming & Color Fidelity, 7/7 test PlcHandshakeNumericMode OK/NG Int16 & Both, 7/7 test PlcHandshakePersistence, 5/5 test PlcSignalType, 6/6 test CodeDetection Result, 5/5 test ObjectCounting, 6/6 test AndroidCameraProMode, 6/6 test PlcContinuousQueue 16 Slots).
 - **Cấu hình chuẩn xưởng CMS_VINA**: 
   - Database: `CMS_VINA` (192.168.1.2:6789)
   - OQC Server API: `https://192.168.1.192/vision_upload.php`
   - OTA Update Server: `http://192.168.1.192/update/version.json` & `http://192.168.1.192/ota_server.php`
   - PLC Handshake: `PLC_2` (Mitsubishi FX5U: Ready `M101`, Busy `M102`, Done `M103`, Pass `M104` RisingEdge 20ms, NG `M105` RisingEdge 20ms, Kết quả số `D100` OK=2, NG=3, Queue In `M200`).
 
-## 3. Hoàn thành Task 433: Hiện Thực Hóa 2 Thuật Toán Tăng Tốc Template Marking: MVPShapeMatch3 & MVPShapeMatchInt8
-1. **Bối cảnh & Yêu cầu người dùng**:
-   - Đặc thù sản phẩm: Nhãn cuộn (**Roll Label**), marking đa dạng (logo, biên dạng, hình khối), Search ROI nhỏ và đồng nhất, góc xoay nhỏ ($\pm 2^\circ \dots \pm 5^\circ$).
-   - Người dùng lựa chọn triển khai **CẢ 2 PHƯƠNG ÁN**:
-     * **`MvpShapeMatch3`**: Tối ưu hóa sâu trên nền `MvpShapeMatch2` (Lazy Local Gradient ở Tầng 0, Pre-rotated features cache, Deep adaptive pyramid, Edge energy masking).
-     * **`MvpShapeMatchInt8`**: Thuật toán mới lượng tử hóa vector gradient sang `INT8` kết hợp tập lệnh SIMD phần cứng AVX2 (`_mm256_maddubs_epi16`).
-2. **Kiến trúc & Các thành phần đã triển khai**:
-   - **Mở rộng Enums (`VisionInspectionApp.Models/Class1.cs`)**: Thêm `OriginAlgorithm.MvpShapeMatch3 = 9` và `OriginAlgorithm.MvpShapeMatchInt8 = 10` (đồng bộ cả `PointFindAlgorithm`).
-   - **Động cơ `MvpShapeMatch3Engine.cs`**:
-     * Pre-rotated Feature Cache theo góc xoay (loại bỏ lượng giác runtime).
-     * Deep Adaptive Pyramid (lên đến 5 tầng) kết hợp Anchor Edge Check ở tầng thô.
-     * **Lazy Local Gradient ở Tầng 0**: Chỉ tính Sobel trong bounding box nhỏ quanh ứng viên tốt nhất, loại bỏ 95% chi phí Sobel toàn cục.
-     * Tinh chỉnh sub-pixel parabol cục bộ chính xác đến 0.05px.
-   - **Động cơ `MvpShapeMatchInt8Engine.cs`**:
-     * Vector gradient được nén thành số nguyên có dấu 8-bit (`sbyte: -127..127`), giảm 75% RAM bandwidth, dữ liệu gradient nằm trọn trong L1 CPU Cache.
-     * Tính toán tích vô hướng hoàn toàn bằng tập lệnh số nguyên siêu tốc (0 chu kỳ chuyển đổi float).
-     * Lazy Local Gradient ở Tầng 0 + Tinh chỉnh Sub-pixel Parabol.
-   - **Tích hợp Tầng Điều Phối (`OriginMatcher.cs`, `ToolOrigin.cs`, `OriginTrainViewModel.cs`)**:
-     * Dispatching tự động trong `OriginMatcher.MatchWithRotation`.
-     * `IsOriginShapePyramid` nhận diện đầy đủ v2, v3 và int8.
-     * Cache invalidate đồng bộ cho cả 3 động cơ.
-3. **Kết quả kiểm thử tự động & Benchmark đo đạc thực tế (Release Mode)**:
-   - `MvpShapeMatch2 (Gốc)`: **41.25 ms / lần**
-   - `MvpShapeMatch3 (Mới)`: **3.54 ms / lần** (Nhanh hơn **11.7x**, tiệm cận chuẩn MVP)
-   - `MvpShapeMatchInt8 (Mới)`: **2.74 ms / lần** (Nhanh hơn **15.0x**, vượt mốc 7ms của MVP)
-   - Độ chính xác tọa độ lệch **< 0.3 px**, góc xoay lệch **< 0.1°**.
-   - `MvpShapeMatch3AndInt8Tests.cs`: **6/6 test PASSED 100%**.
-   - `OriginTemplateJobTest.cs`: **100% PASSED**.
-   - `MvpShapeMatch2PreprocessTests.cs`: **8/8 PASSED 100%**.
-   - Toàn bộ solution biên dịch đạt **0 Errors** (cả Debug và Release).
+## 3. Hoàn thành Task 434: Bổ Sung Tùy Chọn Màu Vùng Che (Đen / Trắng) Cho Tool Preprocess (ROI Masking)
+1. **Yêu cầu & Mục đích**:
+   - Tool Preprocess hỗ trợ che mặt nạ ROI Masking (Include/Exclude, Rectangle/Circle/Polygon, Bám Origin).
+   - Trước đây vùng bị che luôn có màu đen (`Scalar.All(0)`). Khi kiểm tra sản phẩm nền sáng/trắng (nhãn cuộn Roll Label), viền che đen tạo tương phản giả dẫn đến thuật toán Blob/Edge/Caliper nhận nhầm khuyết tật.
+   - Bổ sung tùy chọn cho người dùng chọn màu vùng che: **Đen (Black)** hoặc **Trắng (White)**.
+2. **Các thành phần đã triển khai**:
+   - **Mô hình dữ liệu (`VisionInspectionApp.Models/Class1.cs`)**:
+     * Thêm enum `PreprocessMaskColor { Black = 0, White = 1 }`.
+     * Bổ sung thuộc tính `MaskColor` trong `PreprocessSettings` (mặc định `Black = 0` bảo toàn 100% backward compatibility).
+   - **Động cơ xử lý ảnh (`ImagePreprocessor.cs`)**:
+     * Khởi tạo ma trận `blended` với `Scalar.All(maskBgScalar)` (`0.0` nếu Black, `255.0` nếu White).
+     * Hoạt động chính xác trên cả ảnh đơn sắc Grayscale (CV_8UC1) và ảnh màu BGR (CV_8UC3, full RGB 255).
+   - **Giao diện người dùng & ViewModel (`ToolEditorViewModel.cs`, `TeachViewModel.cs`, `ToolEditorView.xaml`)**:
+     * Thêm property `AvailablePreprocessMaskColors` và `PreprocessMaskColor` tự động kích hoạt `SchedulePreprocessPreviewUpdate()`, `RefreshPreviews()`, `RequestAutoSave()`.
+     * Đồng bộ thuộc tính khi chọn node trong `RaiseToolPropertyPanelsChanged()`.
+     * Cung cấp ComboBox trực quan "Màu vùng che" với icon `⬛ Đen (Black)` và `⬜ Trắng (White)` ngay trong Card "🎯 Region of Interest (ROI Mask)" trên Tool Editor.
+   - **Kiểm thử tự động (`PreprocessRoiMaskingTest.cs`, `Program.cs`)**:
+     * Thêm 3 test kiểm thử: `TestMaskColorDefaultIsBlack`, `TestMaskColorWhiteIncludeAndExclude_Gray`, `TestMaskColorWhite_ColorBgr`.
+     * **8/8 test PASSED 100%**. Toàn bộ solution biên dịch đạt **0 Errors** cả Debug và Release.
 
 ## 4. Các sự kiện & thay đổi gần đây
+- Task 434: Bổ sung tùy chọn màu vùng che Đen / Trắng cho Tool Preprocess ROI Masking; kiểm thử 8/8 test PASSED 100%.
 - Task 433: Hiện thực hóa thành công 2 thuật toán tăng tốc `MvpShapeMatch3` (3.54ms - nhanh hơn 11.7x) và `MvpShapeMatchInt8` (2.74ms - nhanh hơn 15.0x, đánh bại mốc 7ms của MVP); kiểm thử 6/6 test PASSED 100%.
 - Task 432: Tự động ẩn Cột 1 & 2, hiển thị Cột 3 & 4 (50/50) khi Chạy liên tục; khôi phục khi dừng; kiểm thử 10/10 PASSED 100%.
 - Task 431: Nâng cấp Preview Tool Editor khi bỏ Render Canvas (hiển thị ảnh tĩnh "OK" to khi đạt, chỉ render canvas khi gặp NG, tự động autofit preview khi quay lại live) & Bổ sung widget tốc độ tức thời (pcs/s) cạnh Tổng (ms), COUNT, YIELD; kiểm thử 8/8 PASSED 100%.

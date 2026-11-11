@@ -1405,7 +1405,8 @@ public sealed class ImagePreprocessor
                     }
                 }
 
-                var blended = new Mat(current.Size(), current.Type(), Scalar.All(0));
+                double maskBgScalar = settings.MaskColor == PreprocessMaskColor.White ? 255.0 : 0.0;
+                var blended = new Mat(current.Size(), current.Type(), Scalar.All(maskBgScalar));
                 current.CopyTo(blended, roiMask);
                 AdvanceCurrent(blended);
             }

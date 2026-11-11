@@ -823,6 +823,12 @@ public enum PreprocessRoiMode
     Exclude = 1
 }
 
+public enum PreprocessMaskColor
+{
+    Black = 0,
+    White = 1
+}
+
 public sealed class PreprocessRoiDefinition : System.ComponentModel.INotifyPropertyChanged
 {
     private PreprocessRoiShape _shape = PreprocessRoiShape.Rectangle;
@@ -1181,6 +1187,11 @@ public sealed class PreprocessSettings
     public AutoEdgeMethod AutoEdgeMethod { get; set; } = AutoEdgeMethod.Ensemble;
     public double AutoEdgeMinConfidence { get; set; } = 0.6;
     public bool AutoEdgeInvert { get; set; }
+
+    /// <summary>
+    /// Màu nền cho vùng bị che khi áp dụng ROI Masking (Include/Exclude): Đen (0) hoặc Trắng (255).
+    /// </summary>
+    public PreprocessMaskColor MaskColor { get; set; } = PreprocessMaskColor.Black;
 }
 
 public enum PreprocessThresholdType

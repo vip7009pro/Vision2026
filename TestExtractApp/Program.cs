@@ -100,6 +100,12 @@ class Program
             return;
         }
 
+        if (args.Length > 0 && (args[0].Equals("mask", StringComparison.OrdinalIgnoreCase) || args[0].Equals("preprocess-mask", StringComparison.OrdinalIgnoreCase) || args[0].Equals("roi-mask", StringComparison.OrdinalIgnoreCase)))
+        {
+            PreprocessRoiMaskingTest.RunTests();
+            return;
+        }
+
         if (args.Length > 0 && (args[0].Equals("mvp3", StringComparison.OrdinalIgnoreCase) || args[0].Equals("int8", StringComparison.OrdinalIgnoreCase) || args[0].Equals("mvp-int8", StringComparison.OrdinalIgnoreCase) || args[0].Equals("shape3", StringComparison.OrdinalIgnoreCase)))
         {
             MvpShapeMatch3AndInt8Tests.RunAllTests();

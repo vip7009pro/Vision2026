@@ -18,6 +18,9 @@ public static class PreprocessRoiMaskingTest
         TestRectangleExcludeMask();
         TestCircleAndPolygonMask();
         TestFollowOriginPoseRotation();
+        TestMaskColorDefaultIsBlack();
+        TestMaskColorWhiteIncludeAndExclude_Gray();
+        TestMaskColorWhite_ColorBgr();
 
         Console.WriteLine(">>> ALL PREPROCESS ROI MASKING TESTS PASSED SUCCESSFULLY! <<<\n");
     }
@@ -205,5 +208,137 @@ public static class PreprocessRoiMaskingTest
             throw new Exception($"TestFollowOriginPoseRotation (FollowOrigin=false) Failed: Expected rotated position (X=300, Y=200) to be 0 but got {staticOutsideRotatedVal}");
 
         Console.WriteLine("[PASS] TestFollowOriginPoseRotation (FollowOrigin=false): Masking ROI correctly remained static at original teach coordinates.");
+    }
+
+    private static void TestMaskColorDefaultIsBlack()
+    {
+        var settings = new PreprocessSettings();
+        if (settings.MaskColor != PreprocessMaskColor.Black)
+            throw new Exception($"TestMaskColorDefaultIsBlack Failed: Expected default MaskColor to be Black (0) for backward compatibility, but got {settings.MaskColor}");
+
+        var pre = new ImagePreprocessor();
+        using var src = new Mat(300, 300, MatType.CV_8UC1, new Scalar(200));
+        var rois = new List<PreprocessRoiDefinition>
+        {
+            new PreprocessRoiDefinition
+            {
+                Shape = PreprocessRoiShape.Rectangle,
+                Mode = PreprocessRoiMode.Include,
+                FollowOrigin = false,
+                X = 50,
+                Y = 50,
+                Width = 100,
+                Height = 100
+            }
+        };
+
+        using var dst = pre.Run(src, settings, rois);
+        byte insideVal = dst.At<byte>(100, 100);
+        byte outsideVal = dst.At<byte>(10, 10);
+
+        if (insideVal != 200)
+            throw new Exception($"TestMaskColorDefaultIsBlack Failed: Inside pixel expected 200 but got {insideVal}");
+        if (outsideVal != 0)
+            throw new Exception($"TestMaskColorDefaultIsBlack Failed: Outside pixel expected 0 (Black) but got {outsideVal}");
+
+        Console.WriteLine("[PASS] TestMaskColorDefaultIsBlack: Default mask color is Black (0) and preserved backward compatibility.");
+    }
+
+    private static void TestMaskColorWhiteIncludeAndExclude_Gray()
+    {
+        var pre = new ImagePreprocessor();
+        using var src = new Mat(300, 300, MatType.CV_8UC1, new Scalar(100));
+        var settings = new PreprocessSettings
+        {
+            MaskColor = PreprocessMaskColor.White
+        };
+
+        // 1. Kiểm tra Include ROI với nền che màu Trắng (255)
+        var roisInclude = new List<PreprocessRoiDefinition>
+        {
+            new PreprocessRoiDefinition
+            {
+                Shape = PreprocessRoiShape.Rectangle,
+                Mode = PreprocessRoiMode.Include,
+                FollowOrigin = false,
+                X = 80,
+                Y = 80,
+                Width = 140,
+                Height = 140
+            }
+        };
+
+        using var dstInclude = pre.Run(src, settings, roisInclude);
+        byte insideIncVal = dstInclude.At<byte>(150, 150);
+        byte outsideIncVal = dstInclude.At<byte>(20, 20);
+
+        if (insideIncVal != 100)
+            throw new Exception($"TestMaskColorWhiteIncludeAndExclude_Gray (Include) Failed: Inside pixel expected 100 but got {insideIncVal}");
+        if (outsideIncVal != 255)
+            throw new Exception($"TestMaskColorWhiteIncludeAndExclude_Gray (Include) Failed: Outside masked pixel expected 255 (White) but got {outsideIncVal}");
+
+        // 2. Kiểm tra Exclude ROI với vùng che màu Trắng (255)
+        var roisExclude = new List<PreprocessRoiDefinition>
+        {
+            new PreprocessRoiDefinition
+            {
+                Shape = PreprocessRoiShape.Rectangle,
+                Mode = PreprocessRoiMode.Exclude,
+                FollowOrigin = false,
+                X = 100,
+                Y = 100,
+                Width = 100,
+                Height = 100
+            }
+        };
+
+        using var dstExclude = pre.Run(src, settings, roisExclude);
+        byte insideExcVal = dstExclude.At<byte>(150, 150);
+        byte outsideExcVal = dstExclude.At<byte>(20, 20);
+
+        if (insideExcVal != 255)
+            throw new Exception($"TestMaskColorWhiteIncludeAndExclude_Gray (Exclude) Failed: Excluded masked pixel expected 255 (White) but got {insideExcVal}");
+        if (outsideExcVal != 100)
+            throw new Exception($"TestMaskColorWhiteIncludeAndExclude_Gray (Exclude) Failed: Outside unaffected pixel expected 100 but got {outsideExcVal}");
+
+        Console.WriteLine("[PASS] TestMaskColorWhiteIncludeAndExclude_Gray: Include & Exclude correctly filled masked area with White (255) on Grayscale.");
+    }
+
+    private static void TestMaskColorWhite_ColorBgr()
+    {
+        var pre = new ImagePreprocessor();
+        // Tạo ảnh màu BGR với giá trị (30, 80, 160)
+        using var srcColor = new Mat(200, 200, MatType.CV_8UC3, new Scalar(30, 80, 160));
+        var settings = new PreprocessSettings
+        {
+            MaskColor = PreprocessMaskColor.White,
+            UseGray = false // Giữ nguyên ảnh màu để test kênh màu
+        };
+
+        var rois = new List<PreprocessRoiDefinition>
+        {
+            new PreprocessRoiDefinition
+            {
+                Shape = PreprocessRoiShape.Rectangle,
+                Mode = PreprocessRoiMode.Include,
+                FollowOrigin = false,
+                X = 50,
+                Y = 50,
+                Width = 100,
+                Height = 100
+            }
+        };
+
+        using var dst = pre.Run(srcColor, settings, rois);
+        Vec3b insideVal = dst.At<Vec3b>(100, 100);
+        Vec3b outsideVal = dst.At<Vec3b>(10, 10);
+
+        if (insideVal.Item0 != 30 || insideVal.Item1 != 80 || insideVal.Item2 != 160)
+            throw new Exception($"TestMaskColorWhite_ColorBgr Failed: Inside pixel expected (30, 80, 160) but got ({insideVal.Item0}, {insideVal.Item1}, {insideVal.Item2})");
+
+        if (outsideVal.Item0 != 255 || outsideVal.Item1 != 255 || outsideVal.Item2 != 255)
+            throw new Exception($"TestMaskColorWhite_ColorBgr Failed: Outside masked pixel expected White (255, 255, 255) but got ({outsideVal.Item0}, {outsideVal.Item1}, {outsideVal.Item2})");
+
+        Console.WriteLine("[PASS] TestMaskColorWhite_ColorBgr: Masked area correctly filled with full White (255, 255, 255) on 3-channel BGR image.");
     }
 }

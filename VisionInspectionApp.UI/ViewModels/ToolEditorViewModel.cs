@@ -1325,6 +1325,7 @@ namespace VisionInspectionApp.UI.ViewModels
             OnPropertyChanged(nameof(PreprocessRois));
             if (IsPreprocessNode)
             {
+                OnPropertyChanged(nameof(PreprocessMaskColor));
                 OnPropertyChanged(nameof(UseGray));
                 OnPropertyChanged(nameof(IlluminationCorrection));
                 OnPropertyChanged(nameof(IlluminationKernel));
@@ -3228,6 +3229,24 @@ namespace VisionInspectionApp.UI.ViewModels
                 s.AutoEdgeInvert = value;
                 SchedulePreprocessPreviewUpdate();
                 OnPropertyChanged();
+            }
+        }
+
+        public IEnumerable<PreprocessMaskColor> AvailablePreprocessMaskColors => Enum.GetValues<PreprocessMaskColor>();
+
+        public PreprocessMaskColor PreprocessMaskColor
+        {
+            get => GetActivePreprocessSettingsForUi()?.MaskColor ?? PreprocessMaskColor.Black;
+            set
+            {
+                var s = GetActivePreprocessSettingsForUi();
+                if (s is null) return;
+                if (s.MaskColor == value) return;
+                s.MaskColor = value;
+                SchedulePreprocessPreviewUpdate();
+                OnPropertyChanged();
+                RefreshPreviews();
+                RequestAutoSave();
             }
         }
     

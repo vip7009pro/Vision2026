@@ -608,6 +608,20 @@ public sealed partial class TeachViewModel : ObservableObject
         }
     }
 
+    public IEnumerable<PreprocessMaskColor> AvailablePreprocessMaskColors => Enum.GetValues<PreprocessMaskColor>();
+
+    public PreprocessMaskColor MaskColor
+    {
+        get => VisionConfig.Preprocess.MaskColor;
+        set
+        {
+            if (VisionConfig.Preprocess.MaskColor == value) return;
+            VisionConfig.Preprocess.MaskColor = value;
+            OnPropertyChanged();
+            RefreshDisplayedImage();
+        }
+    }
+
     [ObservableProperty]
     private string _distanceName = "D1";
 

@@ -1,5 +1,15 @@
 # ROADMAP.md — Lộ trình phát triển & Trạng thái nhiệm vụ
 
+- [x] Task 434: Bổ Sung Tùy Chọn Màu Vùng Che (Đen / Trắng) Cho Tool Preprocess (ROI Masking):
+  - [x] **Mô hình dữ liệu**: Thêm enum `PreprocessMaskColor { Black = 0, White = 1 }` và thuộc tính `MaskColor` vào `PreprocessSettings` trong [`VisionInspectionApp.Models/Class1.cs`](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Models/Class1.cs). Mặc định là `Black` đảm bảo tương thích ngược 100%.
+  - [x] **Động cơ xử lý ảnh**: Cập nhật [`ImagePreprocessor.cs`](file:///g:/NODEJS/Vision2026/VisionInspectionApp.VisionEngine/Class1.cs) trong khối ROI Masking: khởi tạo `blended` với `Scalar.All(255.0)` khi `MaskColor == White` và `Scalar.All(0.0)` khi `MaskColor == Black`. Hỗ trợ cả ảnh đơn sắc (Grayscale) và ảnh màu (BGR 3 kênh).
+  - [x] **Giao diện & Data Binding**:
+    - Bổ sung `AvailablePreprocessMaskColors` và `PreprocessMaskColor` trong [`ToolEditorViewModel.cs`](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.cs) và [`TeachViewModel.cs`](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/TeachViewModel.cs), đồng bộ tự động trong `RaiseToolPropertyPanelsChanged`.
+    - Bổ sung ComboBox trực quan "Màu vùng che" với icon `⬛ Đen (Black)` và `⬜ Trắng (White)` trong Card ROI Masking của [`ToolEditorView.xaml`](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/ToolEditorView.xaml).
+  - [x] **Kiểm thử tự động**:
+    - Mở rộng [`PreprocessRoiMaskingTest.cs`](file:///g:/NODEJS/Vision2026/TestExtractApp/PreprocessRoiMaskingTest.cs) với 3 test mới: `TestMaskColorDefaultIsBlack`, `TestMaskColorWhiteIncludeAndExclude_Gray`, `TestMaskColorWhite_ColorBgr`. Đạt **8/8 test PASSED 100%**.
+    - Toàn bộ solution biên dịch Debug và Release đạt **0 Errors**.
+
 - [x] Task 433: Hiện Thực Hóa 2 Thuật Toán Tăng Tốc Template Marking: MVPShapeMatch3 & MVPShapeMatchInt8:
   - [x] Lập kế hoạch kiến trúc chi tiết cho `MvpShapeMatch3` (Lazy Local Gradient, Pre-rotated Cache, Deep Pyramid) và `MvpShapeMatchInt8` (SIMD AVX2 INT8).
   - [x] Mở rộng enum `OriginAlgorithm` và `PointFindAlgorithm` trong [`Class1.cs`](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Models/Class1.cs).
