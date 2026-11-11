@@ -30,8 +30,11 @@ public static class ToolEditorColumnResizeTests
         Test_05_HideAllOtherColumns_PreviewBecomesSoleStarFullWidth();
         Test_06_PropertyChangedEvents_FiredForAllAffectedLayoutProperties();
         Test_07_RestoreHiddenColumns_ReinstatesStarWidthAndMinWidth();
+        Test_08_ContinuousMode_AutoHidesColumns1And2_ShowsColumns3And4_Split5050();
+        Test_09_StopContinuousMode_RestoresColumns1And2_RestoresDefaultStarWidths();
+        Test_10_ContinuousMode_FiresPropertyChangedForPreviewAndDebugWidths();
 
-        Console.WriteLine("✅ ALL 7 TOOL EDITOR COLUMN RESIZE TESTS PASSED!");
+        Console.WriteLine("✅ ALL 10 TOOL EDITOR COLUMN RESIZE & CONTINUOUS 50/50 TESTS PASSED!");
         Console.WriteLine("=========================================================\n");
     }
 
@@ -214,6 +217,97 @@ public static class ToolEditorColumnResizeTests
             "DebugColumnWidth phải phục hồi là Star");
         Assert(vm.DebugColumnMinWidth >= 200, "DebugColumnMinWidth phải phục hồi >= 200");
         Assert(vm.DebugSplitterWidth.Value == 4, "DebugSplitterWidth phải phục hồi là 4");
+
+        Console.WriteLine("PASSED");
+    }
+
+    private static void Test_08_ContinuousMode_AutoHidesColumns1And2_ShowsColumns3And4_Split5050()
+    {
+        Console.Write("--- [8/10] Chạy liên tục (IsRunningFolderFlow = true): Tự động ẩn Cột 1 & 2, Cột 3 & 4 chia 50/50... ");
+
+        var vm = new ToolEditorViewModel();
+        Assert(vm.IsToolboxColumnVisible, "Ban đầu Cột 1 phải hiển thị");
+        Assert(vm.IsCanvasColumnVisible, "Ban đầu Cột 2 phải hiển thị");
+        Assert(!vm.IsRunningContinuous, "Ban đầu không chạy liên tục");
+
+        // Bật chạy liên tục
+        vm.IsRunningFolderFlow = true;
+
+        Assert(vm.IsRunningContinuous, "IsRunningContinuous phải là true");
+        Assert(!vm.IsToolboxColumnVisible, "Cột 1 (Toolbox) phải tự động ẩn khi Chạy liên tục");
+        Assert(!vm.IsCanvasColumnVisible, "Cột 2 (Canvas) phải tự động ẩn khi Chạy liên tục");
+        Assert(vm.IsDebugColumnVisible, "Cột 4 (Debug) phải hiển thị");
+
+        Assert(vm.ToolboxColumnWidth.Value == 0, "ToolboxColumnWidth phải bằng 0");
+        Assert(vm.CanvasColumnWidth.Value == 0, "CanvasColumnWidth phải bằng 0");
+
+        Assert(vm.PreviewColumnWidth.GridUnitType == GridUnitType.Star, "PreviewColumnWidth phải là Star");
+        Assert(vm.PreviewColumnWidth.Value == 1.0, $"PreviewColumnWidth phải là 1.0*, thực tế: {vm.PreviewColumnWidth.Value}");
+
+        Assert(vm.DebugColumnWidth.GridUnitType == GridUnitType.Star, "DebugColumnWidth phải là Star");
+        Assert(vm.DebugColumnWidth.Value == 1.0, $"DebugColumnWidth phải là 1.0*, thực tế: {vm.DebugColumnWidth.Value}");
+
+        Console.WriteLine("PASSED (Cột 1&2 ẩn về 0, Cột 3&4 chia tỷ lệ chuẩn 1.0:1.0 Star -> 50/50)");
+    }
+
+    private static void Test_09_StopContinuousMode_RestoresColumns1And2_RestoresDefaultStarWidths()
+    {
+        Console.Write("--- [9/10] Dừng chạy liên tục (IsRunningFolderFlow = false): Tự động hiện lại Cột 1 & 2, phục hồi tỷ lệ gốc... ");
+
+        var vm = new ToolEditorViewModel();
+        vm.IsRunningFolderFlow = true;
+        Assert(!vm.IsToolboxColumnVisible && !vm.IsCanvasColumnVisible, "Đang chạy liên tục: Cột 1 & 2 đã ẩn");
+
+        // Dừng chạy liên tục
+        vm.IsRunningFolderFlow = false;
+
+        Assert(!vm.IsRunningContinuous, "IsRunningContinuous phải về false");
+        Assert(vm.IsToolboxColumnVisible, "Cột 1 (Toolbox) phải tự động hiển thị lại khi dừng");
+        Assert(vm.IsCanvasColumnVisible, "Cột 2 (Canvas) phải tự động hiển thị lại khi dừng");
+
+        Assert(vm.ToolboxColumnWidth.GridUnitType == GridUnitType.Star && vm.ToolboxColumnWidth.Value == 2.0,
+            $"ToolboxColumnWidth phải phục hồi 2.0*, thực tế: {vm.ToolboxColumnWidth.Value}");
+        Assert(vm.CanvasColumnWidth.GridUnitType == GridUnitType.Star && vm.CanvasColumnWidth.Value == 3.5,
+            $"CanvasColumnWidth phải phục hồi 3.5*, thực tế: {vm.CanvasColumnWidth.Value}");
+        Assert(vm.PreviewColumnWidth.GridUnitType == GridUnitType.Star && vm.PreviewColumnWidth.Value == 4.5,
+            $"PreviewColumnWidth phải phục hồi 4.5*, thực tế: {vm.PreviewColumnWidth.Value}");
+        Assert(vm.DebugColumnWidth.GridUnitType == GridUnitType.Star && vm.DebugColumnWidth.Value == 3.2,
+            $"DebugColumnWidth phải phục hồi 3.2*, thực tế: {vm.DebugColumnWidth.Value}");
+
+        Console.WriteLine("PASSED (Cột 1&2 hiện lại, 4 cột khôi phục tỷ lệ mặc định ban đầu)");
+    }
+
+    private static void Test_10_ContinuousMode_FiresPropertyChangedForPreviewAndDebugWidths()
+    {
+        Console.Write("--- [10/10] Kiểm tra sự kiện PropertyChanged được phát ra khi bật/tắt chạy liên tục... ");
+
+        var vm = new ToolEditorViewModel();
+        var changedProps = new HashSet<string>();
+
+        vm.PropertyChanged += (s, e) =>
+        {
+            if (e.PropertyName != null) changedProps.Add(e.PropertyName);
+        };
+
+        // Bật chạy liên tục
+        changedProps.Clear();
+        vm.IsRunningFolderFlow = true;
+
+        Assert(changedProps.Contains(nameof(ToolEditorViewModel.IsRunningContinuous)), "Phải phát IsRunningContinuous");
+        Assert(changedProps.Contains(nameof(ToolEditorViewModel.IsToolboxColumnVisible)), "Phải phát IsToolboxColumnVisible");
+        Assert(changedProps.Contains(nameof(ToolEditorViewModel.IsCanvasColumnVisible)), "Phải phát IsCanvasColumnVisible");
+        Assert(changedProps.Contains(nameof(ToolEditorViewModel.PreviewColumnWidth)), "Phải phát PreviewColumnWidth");
+        Assert(changedProps.Contains(nameof(ToolEditorViewModel.DebugColumnWidth)), "Phải phát DebugColumnWidth");
+
+        // Dừng chạy liên tục
+        changedProps.Clear();
+        vm.IsRunningFolderFlow = false;
+
+        Assert(changedProps.Contains(nameof(ToolEditorViewModel.IsRunningContinuous)), "Phải phát IsRunningContinuous khi Stop");
+        Assert(changedProps.Contains(nameof(ToolEditorViewModel.IsToolboxColumnVisible)), "Phải phát IsToolboxColumnVisible khi Stop");
+        Assert(changedProps.Contains(nameof(ToolEditorViewModel.IsCanvasColumnVisible)), "Phải phát IsCanvasColumnVisible khi Stop");
+        Assert(changedProps.Contains(nameof(ToolEditorViewModel.PreviewColumnWidth)), "Phải phát PreviewColumnWidth khi Stop");
+        Assert(changedProps.Contains(nameof(ToolEditorViewModel.DebugColumnWidth)), "Phải phát DebugColumnWidth khi Stop");
 
         Console.WriteLine("PASSED");
     }

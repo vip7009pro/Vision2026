@@ -239,7 +239,8 @@ public partial class ToolEditorView : UserControl
     {
         if (e.PropertyName is nameof(ToolEditorViewModel.IsToolboxColumnVisible)
             or nameof(ToolEditorViewModel.IsCanvasColumnVisible)
-            or nameof(ToolEditorViewModel.IsDebugColumnVisible))
+            or nameof(ToolEditorViewModel.IsDebugColumnVisible)
+            or nameof(ToolEditorViewModel.IsRunningContinuous))
         {
             if (DataContext is ToolEditorViewModel vm)
             {
@@ -263,18 +264,21 @@ public partial class ToolEditorView : UserControl
     {
         if (DataContext is not ToolEditorViewModel vm) return;
 
-        // Lưu kích thước thực tế sau khi người dùng kéo splitter
-        if (vm.IsToolboxColumnVisible && ColToolbox.ActualWidth > 30)
-            _savedToolboxStar = ColToolbox.ActualWidth;
+        // Lưu kích thước thực tế sau khi người dùng kéo splitter (chỉ khi không ở chế độ chạy liên tục 50/50)
+        if (!vm.IsRunningContinuous)
+        {
+            if (vm.IsToolboxColumnVisible && ColToolbox.ActualWidth > 30)
+                _savedToolboxStar = ColToolbox.ActualWidth;
 
-        if (vm.IsCanvasColumnVisible && ColCanvas.ActualWidth > 30)
-            _savedCanvasStar = ColCanvas.ActualWidth;
+            if (vm.IsCanvasColumnVisible && ColCanvas.ActualWidth > 30)
+                _savedCanvasStar = ColCanvas.ActualWidth;
 
-        if (ColPreview.ActualWidth > 30)
-            _savedPreviewStar = ColPreview.ActualWidth;
+            if (ColPreview.ActualWidth > 30)
+                _savedPreviewStar = ColPreview.ActualWidth;
 
-        if (vm.IsDebugColumnVisible && ColDebug.ActualWidth > 30)
-            _savedDebugStar = ColDebug.ActualWidth;
+            if (vm.IsDebugColumnVisible && ColDebug.ActualWidth > 30)
+                _savedDebugStar = ColDebug.ActualWidth;
+        }
 
         // Ép lại các cột đang hiển thị thành Star tương ứng với kích thước vừa kéo
         // loại bỏ hoàn toàn các giá trị Pixel cục bộ do GridSplitter gán vào DependencyProperty Width
@@ -283,6 +287,32 @@ public partial class ToolEditorView : UserControl
 
     private void ApplyColumnLayout(ToolEditorViewModel vm)
     {
+        // 0. Khi chạy liên tục: Tự động ẩn Cột 1 (Toolbox) & Cột 2 (Canvas), chỉ hiển thị Cột 3 (Preview) & Cột 4 (Debug) tỷ lệ 50/50
+        if (vm.IsRunningContinuous && !vm.IsToolboxColumnVisible && !vm.IsCanvasColumnVisible && vm.IsDebugColumnVisible)
+        {
+            // Cột Toolbox (Cột 0 & Splitter Cột 1)
+            ColToolbox.MinWidth = 0;
+            ColToolbox.Width = new GridLength(0);
+            ColToolboxSplitter.Width = new GridLength(0);
+            if (SplitterToolbox != null) SplitterToolbox.Visibility = Visibility.Collapsed;
+
+            // Cột Canvas (Cột 2 & Splitter Cột 3)
+            ColCanvas.MinWidth = 0;
+            ColCanvas.Width = new GridLength(0);
+            ColCanvasSplitter.Width = new GridLength(0);
+            if (SplitterCanvas != null) SplitterCanvas.Visibility = Visibility.Collapsed;
+
+            // Cột Preview (Cột 4) và Cột Debug (Cột 6) tỷ lệ 50/50
+            ColPreview.MinWidth = 250;
+            ColPreview.Width = new GridLength(1.0, GridUnitType.Star);
+
+            ColDebug.MinWidth = 220;
+            ColDebug.Width = new GridLength(1.0, GridUnitType.Star);
+            ColDebugSplitter.Width = new GridLength(4);
+            if (SplitterDebug != null) SplitterDebug.Visibility = Visibility.Visible;
+            return;
+        }
+
         // 1. Cột Toolbox (Cột 0 & Splitter Cột 1)
         if (vm.IsToolboxColumnVisible)
         {

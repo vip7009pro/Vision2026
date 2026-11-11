@@ -46,9 +46,15 @@ namespace VisionInspectionApp.UI.ViewModels
         public GridLength CanvasSplitterWidth => IsCanvasColumnVisible ? new GridLength(4) : new GridLength(0);
         public double CanvasColumnMinWidth => IsCanvasColumnVisible ? 200 : 0;
 
-        public GridLength PreviewColumnWidth => new GridLength(4.5, GridUnitType.Star);
+        public GridLength PreviewColumnWidth => (IsRunningContinuous && !IsToolboxColumnVisible && !IsCanvasColumnVisible && IsDebugColumnVisible)
+            ? new GridLength(1.0, GridUnitType.Star)
+            : new GridLength(4.5, GridUnitType.Star);
 
-        public GridLength DebugColumnWidth => IsDebugColumnVisible ? new GridLength(3.2, GridUnitType.Star) : new GridLength(0);
+        public GridLength DebugColumnWidth => IsDebugColumnVisible
+            ? ((IsRunningContinuous && !IsToolboxColumnVisible && !IsCanvasColumnVisible)
+                ? new GridLength(1.0, GridUnitType.Star)
+                : new GridLength(3.2, GridUnitType.Star))
+            : new GridLength(0);
         public GridLength DebugSplitterWidth => IsDebugColumnVisible ? new GridLength(4) : new GridLength(0);
         public double DebugColumnMinWidth => IsDebugColumnVisible ? 220 : 0;
 
@@ -57,6 +63,8 @@ namespace VisionInspectionApp.UI.ViewModels
             OnPropertyChanged(nameof(ToolboxColumnWidth));
             OnPropertyChanged(nameof(ToolboxSplitterWidth));
             OnPropertyChanged(nameof(ToolboxColumnMinWidth));
+            OnPropertyChanged(nameof(PreviewColumnWidth));
+            OnPropertyChanged(nameof(DebugColumnWidth));
         }
 
         partial void OnIsCanvasColumnVisibleChanged(bool value)
@@ -64,6 +72,8 @@ namespace VisionInspectionApp.UI.ViewModels
             OnPropertyChanged(nameof(CanvasColumnWidth));
             OnPropertyChanged(nameof(CanvasSplitterWidth));
             OnPropertyChanged(nameof(CanvasColumnMinWidth));
+            OnPropertyChanged(nameof(PreviewColumnWidth));
+            OnPropertyChanged(nameof(DebugColumnWidth));
         }
 
         partial void OnIsDebugColumnVisibleChanged(bool value)
@@ -71,6 +81,7 @@ namespace VisionInspectionApp.UI.ViewModels
             OnPropertyChanged(nameof(DebugColumnWidth));
             OnPropertyChanged(nameof(DebugSplitterWidth));
             OnPropertyChanged(nameof(DebugColumnMinWidth));
+            OnPropertyChanged(nameof(PreviewColumnWidth));
         }
 
         // ==================== CACHE DỰNG LẠI PREVIEW ====================

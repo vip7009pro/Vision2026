@@ -3737,7 +3737,10 @@ namespace VisionInspectionApp.UI.ViewModels
                     _isRunningFolderFlow = value;
                     OnPropertyChanged();
                     OnPropertyChanged(nameof(IsRunningContinuous));
+                    OnPropertyChanged(nameof(PreviewColumnWidth));
+                    OnPropertyChanged(nameof(DebugColumnWidth));
                     UpdateRunFlowButtonProperties();
+                    SetContinuousColumnVisibility(value);
 
                     if (value)
                     {
@@ -3762,6 +3765,28 @@ namespace VisionInspectionApp.UI.ViewModels
                         UpdateContinuousStats();
                     }
                 }
+            }
+        }
+
+        private void SetContinuousColumnVisibility(bool isContinuous)
+        {
+            var dispatcher = System.Windows.Application.Current?.Dispatcher;
+            if (dispatcher != null && !dispatcher.CheckAccess())
+            {
+                dispatcher.BeginInvoke(new Action(() => SetContinuousColumnVisibility(isContinuous)));
+                return;
+            }
+
+            if (isContinuous)
+            {
+                IsToolboxColumnVisible = false;
+                IsCanvasColumnVisible = false;
+                IsDebugColumnVisible = true;
+            }
+            else
+            {
+                IsToolboxColumnVisible = true;
+                IsCanvasColumnVisible = true;
             }
         }
 
