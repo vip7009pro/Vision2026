@@ -91,7 +91,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (string.Equals(def.Text, value, StringComparison.Ordinal))
                     return;
                 def.Text = value;
-                RaiseToolPropertyPanelsChanged();
+                OnPropertyChanged(nameof(TextNode_Text));
                 RefreshPreviews();
                 RequestAutoSave();
             }
@@ -108,7 +108,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (def.X == value)
                     return;
                 def.X = value;
-                RaiseToolPropertyPanelsChanged();
+                OnPropertyChanged(nameof(TextNode_X));
                 RefreshPreviews();
                 RequestAutoSave();
             }
@@ -125,7 +125,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (def.Y == value)
                     return;
                 def.Y = value;
-                RaiseToolPropertyPanelsChanged();
+                OnPropertyChanged(nameof(TextNode_Y));
                 RefreshPreviews();
                 RequestAutoSave();
             }
@@ -143,7 +143,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (string.Equals(def.DefaultColor, value, StringComparison.Ordinal))
                     return;
                 def.DefaultColor = value;
-                RaiseToolPropertyPanelsChanged();
+                OnPropertyChanged(nameof(TextNode_DefaultColor));
                 RefreshPreviews();
                 RequestAutoSave();
             }

@@ -154,7 +154,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (def.Mode == value)
                     return;
                 def.Mode = value;
-                RaiseToolPropertyPanelsChanged();
+                OnPropertyChanged(nameof(LineLineDistance_Mode));
                 RefreshPreviews();
                 RequestAutoSave();
             }
@@ -171,7 +171,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (def.Mode == value)
                     return;
                 def.Mode = value;
-                RaiseToolPropertyPanelsChanged();
+                OnPropertyChanged(nameof(PointLineDistance_Mode));
                 RefreshPreviews();
                 RequestAutoSave();
             }
@@ -255,7 +255,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (def.Mode == value)
                     return;
                 def.Mode = value;
-                RaiseToolPropertyPanelsChanged();
+                OnPropertyChanged(nameof(SegmentLineDistance_Mode));
                 RefreshPreviews();
                 RequestAutoSave();
             }
@@ -272,7 +272,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (def.ExtensionMode == value)
                     return;
                 def.ExtensionMode = value;
-                RaiseToolPropertyPanelsChanged();
+                OnPropertyChanged(nameof(SegmentLineDistance_ExtensionMode));
                 RefreshPreviews();
                 RequestAutoSave();
             }

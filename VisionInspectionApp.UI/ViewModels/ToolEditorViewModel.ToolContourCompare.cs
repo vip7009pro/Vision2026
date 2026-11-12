@@ -188,7 +188,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (def is null) return;
                 if (def.MatchMethod == value) return;
                 def.MatchMethod = value;
-                RaiseToolPropertyPanelsChanged();
+                OnPropertyChanged(nameof(ContourCompare_MatchMethod));
                 RefreshPreviews();
                 RequestAutoSave();
             }
@@ -205,7 +205,6 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (Math.Abs(def.CannyThreshold1 - v) < 1e-4) return;
                 def.CannyThreshold1 = v;
                 OnPropertyChanged(nameof(ContourCompare_CannyThreshold1));
-                RaiseToolPropertyPanelsChanged();
                 RefreshContourCompareTemplatePreview();
                 RefreshPreviews();
                 RequestAutoSave();
@@ -223,7 +222,6 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (Math.Abs(def.CannyThreshold2 - v) < 1e-4) return;
                 def.CannyThreshold2 = v;
                 OnPropertyChanged(nameof(ContourCompare_CannyThreshold2));
-                RaiseToolPropertyPanelsChanged();
                 RefreshContourCompareTemplatePreview();
                 RefreshPreviews();
                 RequestAutoSave();
@@ -240,7 +238,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 var v = Math.Max(1, value);
                 if (def.MinContourArea == v) return;
                 def.MinContourArea = v;
-                RaiseToolPropertyPanelsChanged();
+                OnPropertyChanged(nameof(ContourCompare_MinContourArea));
                 RefreshContourCompareTemplatePreview();
                 RefreshPreviews();
                 RequestAutoSave();
@@ -257,7 +255,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 var v = Math.Clamp(value, 0.001, 10.0);
                 if (Math.Abs(def.MaxShapeMatchScore - v) < 1e-4) return;
                 def.MaxShapeMatchScore = v;
-                RaiseToolPropertyPanelsChanged();
+                OnPropertyChanged(nameof(ContourCompare_MaxShapeMatchScore));
                 RefreshPreviews();
                 RequestAutoSave();
             }
@@ -273,7 +271,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 var v = Math.Clamp(value, 0.1, 500.0);
                 if (Math.Abs(def.MaxHausdorffDistPx - v) < 1e-4) return;
                 def.MaxHausdorffDistPx = v;
-                RaiseToolPropertyPanelsChanged();
+                OnPropertyChanged(nameof(ContourCompare_MaxHausdorffDistPx));
                 RefreshPreviews();
                 RequestAutoSave();
             }
@@ -289,7 +287,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 var v = Math.Clamp(value, 0.1, 100.0);
                 if (Math.Abs(def.MaxAreaDiffPercent - v) < 1e-4) return;
                 def.MaxAreaDiffPercent = v;
-                RaiseToolPropertyPanelsChanged();
+                OnPropertyChanged(nameof(ContourCompare_MaxAreaDiffPercent));
                 RefreshPreviews();
                 RequestAutoSave();
             }

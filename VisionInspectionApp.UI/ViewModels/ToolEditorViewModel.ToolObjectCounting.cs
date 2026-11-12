@@ -210,7 +210,6 @@ namespace VisionInspectionApp.UI.ViewModels
                 OnPropertyChanged(nameof(ObjectCounting_MinCount));
                 OnPropertyChanged(nameof(ObjectCounting_MaxCount));
                 OnPropertyChanged(nameof(ObjectCounting_SpecRangeText));
-                RaiseToolPropertyPanelsChanged();
                 RefreshPreviews();
                 RequestAutoSave();
             }
@@ -232,7 +231,6 @@ namespace VisionInspectionApp.UI.ViewModels
                 OnPropertyChanged(nameof(ObjectCounting_MinCount));
                 OnPropertyChanged(nameof(ObjectCounting_MaxCount));
                 OnPropertyChanged(nameof(ObjectCounting_SpecRangeText));
-                RaiseToolPropertyPanelsChanged();
                 RefreshPreviews();
                 RequestAutoSave();
             }
@@ -253,7 +251,6 @@ namespace VisionInspectionApp.UI.ViewModels
                 OnPropertyChanged(nameof(ObjectCounting_MinCount));
                 OnPropertyChanged(nameof(ObjectCounting_MaxCount));
                 OnPropertyChanged(nameof(ObjectCounting_SpecRangeText));
-                RaiseToolPropertyPanelsChanged();
                 RefreshPreviews();
                 RequestAutoSave();
             }
@@ -274,7 +271,6 @@ namespace VisionInspectionApp.UI.ViewModels
                 OnPropertyChanged(nameof(ObjectCounting_MinCount));
                 OnPropertyChanged(nameof(ObjectCounting_MaxCount));
                 OnPropertyChanged(nameof(ObjectCounting_SpecRangeText));
-                RaiseToolPropertyPanelsChanged();
                 RefreshPreviews();
                 RequestAutoSave();
             }
@@ -304,7 +300,6 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (Math.Abs(def.MinScore - v) < 1e-4) return;
                 def.MinScore = v;
                 OnPropertyChanged(nameof(ObjectCounting_MinScore));
-                RaiseToolPropertyPanelsChanged();
                 RefreshPreviews();
                 RequestAutoSave();
             }
@@ -321,7 +316,6 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (Math.Abs(def.MinAngle - v) < 1e-4) return;
                 def.MinAngle = v;
                 OnPropertyChanged(nameof(ObjectCounting_MinAngle));
-                RaiseToolPropertyPanelsChanged();
                 RefreshPreviews();
                 RequestAutoSave();
             }
@@ -338,7 +332,6 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (Math.Abs(def.MaxAngle - v) < 1e-4) return;
                 def.MaxAngle = v;
                 OnPropertyChanged(nameof(ObjectCounting_MaxAngle));
-                RaiseToolPropertyPanelsChanged();
                 RefreshPreviews();
                 RequestAutoSave();
             }
@@ -355,7 +348,6 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (Math.Abs(def.AngleStep - v) < 1e-4) return;
                 def.AngleStep = v;
                 OnPropertyChanged(nameof(ObjectCounting_AngleStep));
-                RaiseToolPropertyPanelsChanged();
                 RefreshPreviews();
                 RequestAutoSave();
             }
@@ -372,7 +364,6 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (Math.Abs(def.MaxOverlap - v) < 1e-4) return;
                 def.MaxOverlap = v;
                 OnPropertyChanged(nameof(ObjectCounting_MaxOverlap));
-                RaiseToolPropertyPanelsChanged();
                 RefreshPreviews();
                 RequestAutoSave();
             }
@@ -388,7 +379,6 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (def.Algorithm == value) return;
                 def.Algorithm = value;
                 OnPropertyChanged(nameof(ObjectCounting_Algorithm));
-                RaiseToolPropertyPanelsChanged();
                 RefreshPreviews();
                 RequestAutoSave();
             }

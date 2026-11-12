@@ -40,7 +40,7 @@
     <Grid x:Name="PART_RootGrid" Background="{StaticResource GrayGridBackgroundBrush}" ClipToBounds="True">
         <Canvas x:Name="PART_Content" HorizontalAlignment="Left" VerticalAlignment="Top" RenderTransformOrigin="0,0">
             <Image x:Name="PART_Image" Stretch="Fill"
-                   RenderOptions.BitmapScalingMode="HighQuality"
+                   RenderOptions.BitmapScalingMode="LowQuality"
                    RenderOptions.EdgeMode="Aliased" />
             <local:FastOverlayCanvas x:Name="PART_FastOverlay"
                                      ShowCrosshair="{Binding ShowCrosshair, RelativeSource={RelativeSource AncestorType=local:ImageViewerControl}}" />

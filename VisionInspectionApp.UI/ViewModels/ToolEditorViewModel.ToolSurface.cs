@@ -92,7 +92,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (def.DiffThreshold == v)
                     return;
                 def.DiffThreshold = v;
-                RaiseToolPropertyPanelsChanged();
+                OnPropertyChanged(nameof(SurfaceCompare_DiffThreshold));
                 RefreshPreviews();
                 RequestAutoSave();
             }
@@ -112,7 +112,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (def.MorphKernel == v)
                     return;
                 def.MorphKernel = v;
-                RaiseToolPropertyPanelsChanged();
+                OnPropertyChanged(nameof(SurfaceCompare_MorphKernel));
                 RefreshPreviews();
                 RequestAutoSave();
             }
@@ -130,7 +130,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (def.EdgeTolerancePx == v)
                     return;
                 def.EdgeTolerancePx = v;
-                RaiseToolPropertyPanelsChanged();
+                OnPropertyChanged(nameof(SurfaceCompare_EdgeTolerancePx));
                 RefreshPreviews();
                 RequestAutoSave();
             }
@@ -150,7 +150,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 def.MinBlobArea = v;
                 if (def.MaxBlobArea < def.MinBlobArea)
                     def.MaxBlobArea = def.MinBlobArea;
-                RaiseToolPropertyPanelsChanged();
+                OnPropertyChanged(nameof(SurfaceCompare_MinBlobArea));
                 OnPropertyChanged(nameof(SurfaceCompare_MinAreaPreviewWidth));
                 OnPropertyChanged(nameof(SurfaceCompare_MinAreaPreviewHeight));
                 OnPropertyChanged(nameof(SurfaceCompare_MaxAreaPreviewWidth));
@@ -176,7 +176,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (def.MaxBlobArea == v)
                     return;
                 def.MaxBlobArea = v;
-                RaiseToolPropertyPanelsChanged();
+                OnPropertyChanged(nameof(SurfaceCompare_MaxBlobArea));
                 OnPropertyChanged(nameof(SurfaceCompare_MinAreaPreviewWidth));
                 OnPropertyChanged(nameof(SurfaceCompare_MinAreaPreviewHeight));
                 OnPropertyChanged(nameof(SurfaceCompare_MaxAreaPreviewWidth));
@@ -215,7 +215,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (def.MinCount == v)
                     return;
                 def.MinCount = v;
-                RaiseToolPropertyPanelsChanged();
+                OnPropertyChanged(nameof(SurfaceCompare_MinCount));
                 RefreshPreviews();
                 RequestAutoSave();
             }
@@ -233,7 +233,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (def.MaxCount == v)
                     return;
                 def.MaxCount = v;
-                RaiseToolPropertyPanelsChanged();
+                OnPropertyChanged(nameof(SurfaceCompare_MaxCount));
                 RefreshPreviews();
                 RequestAutoSave();
             }
@@ -261,7 +261,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (def is null) return;
                 if (def.Algorithm == value) return;
                 def.Algorithm = value;
-                RaiseToolPropertyPanelsChanged();
+                OnPropertyChanged(nameof(SurfaceCompare_Algorithm));
                 RefreshPreviews();
                 RequestAutoSave();
             }
@@ -278,7 +278,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (v % 2 == 0) v += 1;
                 if (def.SsimWindowSize == v) return;
                 def.SsimWindowSize = v;
-                RaiseToolPropertyPanelsChanged();
+                OnPropertyChanged(nameof(SurfaceCompare_SsimWindowSize));
                 RefreshPreviews();
                 RequestAutoSave();
             }
@@ -294,7 +294,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 var v = Math.Clamp(value, 0.05, 0.99);
                 if (Math.Abs(def.SsimThreshold - v) < 1e-4) return;
                 def.SsimThreshold = v;
-                RaiseToolPropertyPanelsChanged();
+                OnPropertyChanged(nameof(SurfaceCompare_SsimThreshold));
                 RefreshPreviews();
                 RequestAutoSave();
             }
@@ -310,7 +310,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 var v = Math.Clamp(value, 0.0, 1.0);
                 if (Math.Abs(def.GradientWeight - v) < 1e-4) return;
                 def.GradientWeight = v;
-                RaiseToolPropertyPanelsChanged();
+                OnPropertyChanged(nameof(SurfaceCompare_GradientWeight));
                 RefreshPreviews();
                 RequestAutoSave();
             }
@@ -325,7 +325,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (def is null) return;
                 if (def.AutoAlign == value) return;
                 def.AutoAlign = value;
-                RaiseToolPropertyPanelsChanged();
+                OnPropertyChanged(nameof(SurfaceCompare_AutoAlign));
                 RefreshPreviews();
                 RequestAutoSave();
             }
@@ -341,7 +341,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 var v = Math.Clamp(value, 1, 30);
                 if (def.AutoAlignMaxShiftPx == v) return;
                 def.AutoAlignMaxShiftPx = v;
-                RaiseToolPropertyPanelsChanged();
+                OnPropertyChanged(nameof(SurfaceCompare_AutoAlignMaxShiftPx));
                 RefreshPreviews();
                 RequestAutoSave();
             }
@@ -356,7 +356,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (def is null) return;
                 if (def.SubPixelAlign == value) return;
                 def.SubPixelAlign = value;
-                RaiseToolPropertyPanelsChanged();
+                OnPropertyChanged(nameof(SurfaceCompare_SubPixelAlign));
                 RefreshPreviews();
                 RequestAutoSave();
             }
@@ -371,7 +371,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (def is null) return;
                 if (def.NormalizeLighting == value) return;
                 def.NormalizeLighting = value;
-                RaiseToolPropertyPanelsChanged();
+                OnPropertyChanged(nameof(SurfaceCompare_NormalizeLighting));
                 RefreshPreviews();
                 RequestAutoSave();
             }

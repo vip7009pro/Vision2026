@@ -31,51 +31,58 @@ namespace VisionInspectionApp.UI.ViewModels
 
         private enum AnchorDir { Left, Right, Top, Bottom }
 
-        public Geometry PathData
-        {
-            get
-            {
-                var (p1, dir1) = GetFromAnchor();
-                var (p2, dir2) = GetToAnchor();
+        private Geometry? _cachedPathData;
 
-                var fig = new PathFigure
-                {
-                    StartPoint = p1,
-                    IsClosed = false,
-                    IsFilled = false
-                };
-
-                double dx = Math.Abs(p2.X - p1.X);
-                double dy = Math.Abs(p2.Y - p1.Y);
-                double dist = Math.Sqrt(dx * dx + dy * dy);
-                double smoothness = Math.Max(25.0, Math.Min(dist * 0.4, 140.0));
-
-                Point cp1 = dir1 switch
-                {
-                    AnchorDir.Right => new Point(p1.X + smoothness, p1.Y),
-                    AnchorDir.Left => new Point(p1.X - smoothness, p1.Y),
-                    AnchorDir.Bottom => new Point(p1.X, p1.Y + smoothness),
-                    AnchorDir.Top => new Point(p1.X, p1.Y - smoothness),
-                    _ => new Point(p1.X + smoothness, p1.Y)
-                };
-
-                Point cp2 = dir2 switch
-                {
-                    AnchorDir.Right => new Point(p2.X + smoothness, p2.Y),
-                    AnchorDir.Left => new Point(p2.X - smoothness, p2.Y),
-                    AnchorDir.Bottom => new Point(p2.X, p2.Y + smoothness),
-                    AnchorDir.Top => new Point(p2.X, p2.Y - smoothness),
-                    _ => new Point(p2.X - smoothness, p2.Y)
-                };
-
-                fig.Segments.Add(new BezierSegment(cp1, cp2, p2, true));
-                return new PathGeometry(new[] { fig });
-            }
-        }
+        public Geometry PathData => _cachedPathData ??= BuildPathData();
 
         public void NotifyGeometryChanged()
         {
+            _cachedPathData = null;
             OnPropertyChanged(nameof(PathData));
+        }
+
+        private Geometry BuildPathData()
+        {
+            var (p1, dir1) = GetFromAnchor();
+            var (p2, dir2) = GetToAnchor();
+
+            var fig = new PathFigure
+            {
+                StartPoint = p1,
+                IsClosed = false,
+                IsFilled = false
+            };
+
+            double dx = Math.Abs(p2.X - p1.X);
+            double dy = Math.Abs(p2.Y - p1.Y);
+            double dist = Math.Sqrt(dx * dx + dy * dy);
+            double smoothness = Math.Max(25.0, Math.Min(dist * 0.4, 140.0));
+
+            Point cp1 = dir1 switch
+            {
+                AnchorDir.Right => new Point(p1.X + smoothness, p1.Y),
+                AnchorDir.Left => new Point(p1.X - smoothness, p1.Y),
+                AnchorDir.Bottom => new Point(p1.X, p1.Y + smoothness),
+                AnchorDir.Top => new Point(p1.X, p1.Y - smoothness),
+                _ => new Point(p1.X + smoothness, p1.Y)
+            };
+
+            Point cp2 = dir2 switch
+            {
+                AnchorDir.Right => new Point(p2.X + smoothness, p2.Y),
+                AnchorDir.Left => new Point(p2.X - smoothness, p2.Y),
+                AnchorDir.Bottom => new Point(p2.X, p2.Y + smoothness),
+                AnchorDir.Top => new Point(p2.X, p2.Y - smoothness),
+                _ => new Point(p2.X - smoothness, p2.Y)
+            };
+
+            fig.Segments.Add(new BezierSegment(cp1, cp2, p2, true));
+            var geom = new PathGeometry(new[] { fig });
+            if (geom.CanFreeze)
+            {
+                geom.Freeze();
+            }
+            return geom;
         }
 
         private (Point Point, AnchorDir Dir) GetFromAnchor()

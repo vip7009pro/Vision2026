@@ -1137,7 +1137,6 @@ namespace VisionInspectionApp.UI.ViewModels
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(ImageSource_PdfIsMatchCamera));
                 OnPropertyChanged(nameof(ImageSource_PdfIsFixedDpi));
-                RaiseToolPropertyPanelsChanged();
                 RequestAutoSave();
             }
         }
@@ -2266,7 +2265,6 @@ namespace VisionInspectionApp.UI.ViewModels
             HookPreprocessRoiEvents(newRoi);
             def.Rois.Add(newRoi);
             OnPropertyChanged(nameof(PreprocessRois));
-            RaiseToolPropertyPanelsChanged();
             SchedulePreprocessPreviewUpdate();
             RefreshPreviews();
             RequestAutoSave();
@@ -2279,7 +2277,6 @@ namespace VisionInspectionApp.UI.ViewModels
             roi.PropertyChanged -= OnPreprocessRoiPropertyChanged;
             def.Rois.Remove(roi);
             OnPropertyChanged(nameof(PreprocessRois));
-            RaiseToolPropertyPanelsChanged();
             SchedulePreprocessPreviewUpdate();
             RefreshPreviews();
             RequestAutoSave();
@@ -2291,7 +2288,6 @@ namespace VisionInspectionApp.UI.ViewModels
             if (def is null || roi is null) return;
             roi.Mode = roi.Mode == PreprocessRoiMode.Include ? PreprocessRoiMode.Exclude : PreprocessRoiMode.Include;
             OnPropertyChanged(nameof(PreprocessRois));
-            RaiseToolPropertyPanelsChanged();
             SchedulePreprocessPreviewUpdate();
             RefreshPreviews();
             RequestAutoSave();
@@ -2324,7 +2320,6 @@ namespace VisionInspectionApp.UI.ViewModels
 
             HookPreprocessRoiEvents(roi);
             OnPropertyChanged(nameof(PreprocessRois));
-            RaiseToolPropertyPanelsChanged();
             SchedulePreprocessPreviewUpdate();
             RefreshPreviews();
             RequestAutoSave();
@@ -2343,7 +2338,6 @@ namespace VisionInspectionApp.UI.ViewModels
                         point.PropertyChanged -= OnPreprocessRoiPropertyChanged;
                         roi.PolygonPoints.Remove(point);
                         OnPropertyChanged(nameof(PreprocessRois));
-                        RaiseToolPropertyPanelsChanged();
                         SchedulePreprocessPreviewUpdate();
                         RefreshPreviews();
                         RequestAutoSave();

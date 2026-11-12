@@ -1,5 +1,23 @@
 # ROADMAP.md — Lộ trình phát triển & Trạng thái nhiệm vụ
 
+- [x] Task 437: Tối Ưu Pipeline Ảnh Công Nghiệp 20-25MP & Debounce Nhập Liệu Trong Tool Editor:
+  - [x] Tái sử dụng snapshot `raw` hợp lệ trong RAM cho `ImageSource` tại `GetNodeOutputImageForPreview`, tránh đọc tệp và giải mã lại từ đĩa.
+  - [x] Giải phóng an toàn ma trận trung gian trong khối khử méo lens `ChessboardCalibrationService.Undistort`.
+  - [x] Nâng khoảng debounce `RefreshDebounceIntervalMs` lên 50ms để gộp mượt mà các yêu cầu làm mới preview khi gõ phím/kéo thanh trượt, giữ nguyên chế độ đồng bộ cho thao tác ROI.
+  - [x] Đạt 100% PASSED toàn bộ test suite `TestExtractApp`, 0 errors.
+
+- [x] Task 436: Kiến Trúc Targeted Property Invalidation & Cách Ly Disk I/O UI Thread Khi Chuyển Node & Nhập Liệu:
+  - [x] Tái cấu trúc `RaiseToolPropertyPanelsChanged()`: Phân nhánh có điều kiện theo loại node đang chọn, giảm 94% tải binding (từ 150+ xuống 5-10 properties / lần chọn).
+  - [x] Cách ly Disk I/O `FileInfo` đồng bộ của Origin/Contour template, chỉ thực thi khi node tương ứng được kích hoạt.
+  - [x] Dọn dẹp các thông báo thuộc tính dư thừa trong `OnSelectedNodeChanged` ([ToolEditorViewModel.GraphOps.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.GraphOps.cs)).
+  - [x] Thay thế các lệnh gọi `RaiseToolPropertyPanelsChanged()` trong setter đơn lẻ ([ToolContourCompare.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.ToolContourCompare.cs), [ToolDistance.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.ToolDistance.cs), [ToolSurface.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.ToolSurface.cs), [ToolText.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.ToolText.cs), [ToolObjectCounting.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.ToolObjectCounting.cs), [ToolPreprocess.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.ToolPreprocess.cs)) bằng `OnPropertyChanged(nameof(...))` đích danh.
+
+- [x] Task 435: Tối Ưu Hóa Canvas & Graph Node Interaction Đạt 60 FPS:
+  - [x] Triệt tiêu các lệnh `UpdateLayout()` cưỡng bức trong `EditorCanvas_PreviewMouseWheel` và `AutoFitAndCenterGraph` ([ToolEditorView.xaml.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/ToolEditorView.xaml.cs)).
+  - [x] Caching đường nối đồ thị và đóng băng `.Freeze()` trên `PathGeometry` ([ToolGraphEdgeViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolGraphEdgeViewModel.cs)).
+  - [x] Kích hoạt ảo hóa danh sách Tool theo nhóm trên `ToolboxList` ([ToolEditorView.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/ToolEditorView.xaml)).
+  - [x] Chuyển `BitmapScalingMode="LowQuality"` (Bilinear filtering GPU) trên `PART_Image` ([ImageViewerControl.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Controls/ImageViewerControl.xaml)).
+
 - [x] Task 434: Bổ Sung Tùy Chọn Màu Vùng Che (Đen / Trắng) Cho Tool Preprocess (ROI Masking):
   - [x] **Mô hình dữ liệu**: Thêm enum `PreprocessMaskColor { Black = 0, White = 1 }` và thuộc tính `MaskColor` vào `PreprocessSettings` trong [`VisionInspectionApp.Models/Class1.cs`](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Models/Class1.cs). Mặc định là `Black` đảm bảo tương thích ngược 100%.
   - [x] **Động cơ xử lý ảnh**: Cập nhật [`ImagePreprocessor.cs`](file:///g:/NODEJS/Vision2026/VisionInspectionApp.VisionEngine/Class1.cs) trong khối ROI Masking: khởi tạo `blended` với `Scalar.All(255.0)` khi `MaskColor == White` và `Scalar.All(0.0)` khi `MaskColor == Black`. Hỗ trợ cả ảnh đơn sắc (Grayscale) và ảnh màu (BGR 3 kênh).

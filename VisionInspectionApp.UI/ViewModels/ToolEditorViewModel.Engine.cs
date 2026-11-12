@@ -113,7 +113,7 @@ namespace VisionInspectionApp.UI.ViewModels
 
         // ==================== PERFORMANCE PHASE 1: REFRESH COALESCING ====================
         /// <summary>Khoảng debounce gộp nhiều yêu cầu RefreshPreviews() vào 1 lượt duy nhất.</summary>
-        private const int RefreshDebounceIntervalMs = 15;
+        private const int RefreshDebounceIntervalMs = 50;
 
         /// <summary>Timer gộp (coalesce) các yêu cầu làm mới Preview.</summary>
         private DispatcherTimer? _refreshThrottleTimer;
@@ -588,13 +588,25 @@ namespace VisionInspectionApp.UI.ViewModels
                 var imgSourceDef = _config.ImageSources?.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
                 if (imgSourceDef is not null)
                 {
-                    var loadedMat = LoadImageFromSourceForPreview(imgSourceDef);
-                        var calib = ChessboardCalibrationService.GetEffectiveCalibration(_config);
-                        if (imgSourceDef.EnableUndistort && calib is not null && calib.IsCalibrated)
+                    Mat loadedMat;
+                    if (raw is not null && !raw.IsDisposed && !raw.Empty())
+                    {
+                        loadedMat = raw.Clone();
+                    }
+                    else
+                    {
+                        loadedMat = LoadImageFromSourceForPreview(imgSourceDef);
+                    }
+
+                    var calib = ChessboardCalibrationService.GetEffectiveCalibration(_config);
+                    if (imgSourceDef.EnableUndistort && calib is not null && calib.IsCalibrated)
+                    {
+                        using (loadedMat)
                         {
                             return ChessboardCalibrationService.Undistort(loadedMat, calib);
                         }
-                        return loadedMat;
+                    }
+                    return loadedMat;
                 }
                 return raw.Clone();
             }

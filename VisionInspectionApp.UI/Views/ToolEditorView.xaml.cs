@@ -1127,9 +1127,8 @@ public partial class ToolEditorView : UserControl
         var contentY = (CanvasScrollViewer.VerticalOffset + mouseInViewport.Y) / oldZoom;
 
         vm.CanvasZoom = newZoom;
-        EditorCanvas.UpdateLayout();
-        CanvasScrollViewer.UpdateLayout();
-
+        // Bỏ UpdateLayout() đồng bộ trên EditorCanvas 10.000x10.000 để tránh block UI thread;
+        // điều hướng ScrollViewer trực tiếp và để WPF xử lý layout trên Render pass tự nhiên.
         CanvasScrollViewer.ScrollToHorizontalOffset(contentX * newZoom - mouseInViewport.X);
         CanvasScrollViewer.ScrollToVerticalOffset(contentY * newZoom - mouseInViewport.Y);
 
@@ -1252,8 +1251,6 @@ public partial class ToolEditorView : UserControl
         fitZoom = Math.Clamp(fitZoom, 0.3, 1.5);
 
         vm.CanvasZoom = fitZoom;
-        EditorCanvas.UpdateLayout();
-        CanvasScrollViewer.UpdateLayout();
 
         double graphCenterX = (baseOffset + (minX + maxX) / 2.0) * fitZoom;
         double graphCenterY = (baseOffset + (minY + maxY) / 2.0) * fitZoom;

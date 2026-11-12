@@ -105,23 +105,6 @@ namespace VisionInspectionApp.UI.ViewModels
             // nhờ đó thao tác chọn node + xóa node + đổi thuộc tính trong cùng 1 khoảng debounce
             // chỉ tốn ĐÚNG 1 lượt dựng Preview => hết lag khi chuyển qua lại giữa các node.
             RefreshPreviews();
-            OnPropertyChanged(nameof(Blob_LastRunCount));
-            OnPropertyChanged(nameof(Blob_MaxAllowedBlobs));
-            OnPropertyChanged(nameof(Blob_MinBlobDistance));
-            OnPropertyChanged(nameof(Blob_MaxBlobWidth));
-            OnPropertyChanged(nameof(Blob_MaxBlobLength));
-            OnPropertyChanged(nameof(Blob_SpecMode));
-            OnPropertyChanged(nameof(Blob_SpecModeText));
-            OnPropertyChanged(nameof(Blob_IsPixelSpecMode));
-            OnPropertyChanged(nameof(Blob_IsMmSpecMode));
-            OnPropertyChanged(nameof(Blob_SpecUnitText));
-            OnPropertyChanged(nameof(Blob_DistanceUnitText));
-            OnPropertyChanged(nameof(Blob_IsCalibrated));
-            OnPropertyChanged(nameof(Blob_IsNotCalibrated));
-            OnPropertyChanged(nameof(Blob_LastRunMinDistanceText));
-            OnPropertyChanged(nameof(Blob_LastRunMaxDimensionsText));
-            OnPropertyChanged(nameof(Blob_PassStatus));
-            OnPropertyChanged(nameof(Blob_PassColor));
         }
     
         public void ClearNodeSelection()

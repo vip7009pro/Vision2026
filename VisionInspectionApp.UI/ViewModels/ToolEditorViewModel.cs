@@ -1319,12 +1319,61 @@ namespace VisionInspectionApp.UI.ViewModels
         private void RaiseToolPropertyPanelsChanged()
         {
             SyncSelectedDbNode(SelectedNode);
-            RefreshOriginTemplatePreview();
             RefreshAutoTunePanelState();
+
+            // 1. Cập nhật cờ hiển thị các Card công cụ trên ToolEditorView (để WPF ẩn/hiện đúng panel)
             OnPropertyChanged(nameof(IsPreprocessNode));
-            OnPropertyChanged(nameof(PreprocessRois));
+            OnPropertyChanged(nameof(IsLineNode));
+            OnPropertyChanged(nameof(IsCaliperNode));
+            OnPropertyChanged(nameof(IsOriginNode));
+            OnPropertyChanged(nameof(IsPointNode));
+            OnPropertyChanged(nameof(IsAnyDistanceNode));
+            OnPropertyChanged(nameof(IsDistanceNode));
+            OnPropertyChanged(nameof(IsLineLineDistanceNode));
+            OnPropertyChanged(nameof(IsPointLineDistanceNode));
+            OnPropertyChanged(nameof(IsSegmentLineDistanceNode));
+            OnPropertyChanged(nameof(IsAngleNode));
+            OnPropertyChanged(nameof(IsEdgePairNode));
+            OnPropertyChanged(nameof(IsEdgePairDetectNode));
+            OnPropertyChanged(nameof(IsDiameterNode));
+            OnPropertyChanged(nameof(IsDistanceCalibratableNode));
+            OnPropertyChanged(nameof(IsConditionNode));
+            OnPropertyChanged(nameof(IsTextNode));
+            OnPropertyChanged(nameof(IsImageSourceNode));
+            OnPropertyChanged(nameof(IsImageOutputNode));
+            OnPropertyChanged(nameof(IsBlobDetectionNode));
+            OnPropertyChanged(nameof(IsSurfaceCompareNode));
+            OnPropertyChanged(nameof(IsNodeSelected));
+            OnPropertyChanged(nameof(IsContourCompareNode));
+            OnPropertyChanged(nameof(IsCodeDetectionNode));
+            OnPropertyChanged(nameof(IsOcrNode));
+            OnPropertyChanged(nameof(IsCropNode));
+            OnPropertyChanged(nameof(IsColorDiffNode));
+            OnPropertyChanged(nameof(IsImgArithmeticNode));
+            OnPropertyChanged(nameof(IsCreatePointNode));
+            OnPropertyChanged(nameof(IsCreateLineNode));
+            OnPropertyChanged(nameof(IsCreateRectNode));
+            OnPropertyChanged(nameof(IsCreateCircleNode));
+            OnPropertyChanged(nameof(IsPlcReadNode));
+            OnPropertyChanged(nameof(IsPlcWriteNode));
+            OnPropertyChanged(nameof(IsPlcWaitNode));
+            OnPropertyChanged(nameof(IsPlcTriggerNode));
+            OnPropertyChanged(nameof(IsPlcBatchReadNode));
+            OnPropertyChanged(nameof(IsPlcBatchWriteNode));
+            OnPropertyChanged(nameof(IsResultTransferNode));
+            OnPropertyChanged(nameof(IsAnyPlcNode));
+            OnPropertyChanged(nameof(IsObjectCountingNode));
+            OnPropertyChanged(nameof(SelectedRunValue));
+            OnPropertyChanged(nameof(SelectedRunPass));
+            OnPropertyChanged(nameof(SelectedRunText));
+            OnPropertyChanged(nameof(ShowRoisInSelectedPreview));
+            OnPropertyChanged(nameof(ShowRoisInFinalPreview));
+
+            // 2. Targeted Invalidation: Chỉ phát sự kiện thuộc tính chi tiết cho đúng công cụ đang được chọn,
+            // triệt tiêu bão DataBinding và cách ly hoàn toàn Disk I/O UI Thread khỏi các công cụ khác.
             if (IsPreprocessNode)
             {
+                OnPropertyChanged(nameof(PreprocessRois));
                 OnPropertyChanged(nameof(PreprocessMaskColor));
                 OnPropertyChanged(nameof(UseGray));
                 OnPropertyChanged(nameof(IlluminationCorrection));
@@ -1378,32 +1427,151 @@ namespace VisionInspectionApp.UI.ViewModels
                 OnPropertyChanged(nameof(AutoEdgeMinConfidence));
                 OnPropertyChanged(nameof(AutoEdgeInvert));
             }
-            OnPropertyChanged(nameof(IsLineNode));
-            OnPropertyChanged(nameof(IsCaliperNode));
-            OnPropertyChanged(nameof(IsOriginNode));
-            OnPropertyChanged(nameof(AvailableOriginAlgorithms));
-            OnPropertyChanged(nameof(Origin_Algorithm));
-            OnPropertyChanged(nameof(Origin_MinScore));
-            OnPropertyChanged(nameof(Origin_MinAngle));
-            OnPropertyChanged(nameof(Origin_MaxAngle));
-            OnPropertyChanged(nameof(Origin_AngleStep));
-            OnPropertyChanged(nameof(Origin_EdgeThresholdMin));
-            OnPropertyChanged(nameof(Origin_EdgeThresholdMax));
-            OnPropertyChanged(nameof(IsOriginShapePyramid));
-            OnPropertyChanged(nameof(IsPointNode));
-            OnPropertyChanged(nameof(IsAnyDistanceNode));
-            OnPropertyChanged(nameof(IsDistanceNode));
-            OnPropertyChanged(nameof(IsLineLineDistanceNode));
-            OnPropertyChanged(nameof(IsPointLineDistanceNode));
-            OnPropertyChanged(nameof(IsSegmentLineDistanceNode));
-            OnPropertyChanged(nameof(IsAngleNode));
-            OnPropertyChanged(nameof(IsEdgePairNode));
-            OnPropertyChanged(nameof(IsEdgePairDetectNode));
-            OnPropertyChanged(nameof(IsDiameterNode));
-            OnPropertyChanged(nameof(IsDistanceCalibratableNode));
-            OnPropertyChanged(nameof(IsConditionNode));
-            OnPropertyChanged(nameof(IsTextNode));
-            OnPropertyChanged(nameof(IsImageSourceNode));
+
+            if (IsOriginNode)
+            {
+                RefreshOriginTemplatePreview();
+                OnPropertyChanged(nameof(AvailableOriginAlgorithms));
+                OnPropertyChanged(nameof(Origin_Algorithm));
+                OnPropertyChanged(nameof(Origin_MinScore));
+                OnPropertyChanged(nameof(Origin_MinAngle));
+                OnPropertyChanged(nameof(Origin_MaxAngle));
+                OnPropertyChanged(nameof(Origin_AngleStep));
+                OnPropertyChanged(nameof(Origin_EdgeThresholdMin));
+                OnPropertyChanged(nameof(Origin_EdgeThresholdMax));
+                OnPropertyChanged(nameof(IsOriginShapePyramid));
+            }
+
+            if (IsPointNode)
+            {
+                OnPropertyChanged(nameof(AvailablePointFindAlgorithms));
+                OnPropertyChanged(nameof(Point_Algorithm));
+                OnPropertyChanged(nameof(Point_MinScore));
+                OnPropertyChanged(nameof(Point_OffsetX));
+                OnPropertyChanged(nameof(Point_OffsetY));
+                OnPropertyChanged(nameof(IsPointEdgePointAlgorithm));
+                OnPropertyChanged(nameof(Point_Edge_Orientation));
+                OnPropertyChanged(nameof(Point_Edge_Polarity));
+                OnPropertyChanged(nameof(Point_Edge_StripCount));
+                OnPropertyChanged(nameof(Point_Edge_StripWidth));
+                OnPropertyChanged(nameof(Point_Edge_StripLength));
+                OnPropertyChanged(nameof(Point_Edge_MinEdgeStrength));
+                OnPropertyChanged(nameof(PointEdgePreviewEnabled));
+                OnPropertyChanged(nameof(PointEdgePreviewImage));
+                OnPropertyChanged(nameof(AvailablePointNames));
+            }
+
+            if (IsLineNode)
+            {
+                OnPropertyChanged(nameof(AvailableLineNames));
+                OnPropertyChanged(nameof(Line_Canny1));
+                OnPropertyChanged(nameof(Line_Canny2));
+                OnPropertyChanged(nameof(Line_HoughThreshold));
+                OnPropertyChanged(nameof(Line_MinLineLength));
+                OnPropertyChanged(nameof(Line_MaxLineGap));
+            }
+
+            if (IsCaliperNode)
+            {
+                OnPropertyChanged(nameof(AvailableCaliperOrientations));
+                OnPropertyChanged(nameof(AvailableEdgePolarities));
+                OnPropertyChanged(nameof(Caliper_Orientation));
+                OnPropertyChanged(nameof(Caliper_Polarity));
+                OnPropertyChanged(nameof(Caliper_StripCount));
+                OnPropertyChanged(nameof(Caliper_StripWidth));
+                OnPropertyChanged(nameof(Caliper_StripLength));
+                OnPropertyChanged(nameof(Caliper_MinEdgeStrength));
+                OnPropertyChanged(nameof(Caliper_LastRunFound));
+                OnPropertyChanged(nameof(Caliper_LastRunAvgStrength));
+            }
+
+            if (IsLinePairDetectionNode)
+            {
+                OnPropertyChanged(nameof(Lpd_Canny1));
+                OnPropertyChanged(nameof(Lpd_Canny2));
+                OnPropertyChanged(nameof(Lpd_HoughThreshold));
+                OnPropertyChanged(nameof(Lpd_MinLineLength));
+                OnPropertyChanged(nameof(Lpd_MaxLineGap));
+            }
+
+            if (IsEdgePairNode || IsEdgePairDetectNode)
+            {
+                OnPropertyChanged(nameof(EdgePair_RefA));
+                OnPropertyChanged(nameof(EdgePair_RefB));
+                OnPropertyChanged(nameof(Epd_Orientation));
+                OnPropertyChanged(nameof(Epd_Polarity));
+                OnPropertyChanged(nameof(Epd_StripCount));
+                OnPropertyChanged(nameof(Epd_StripWidth));
+                OnPropertyChanged(nameof(Epd_StripLength));
+                OnPropertyChanged(nameof(Epd_MinEdgeStrength));
+                OnPropertyChanged(nameof(Epd_MinEdgeSeparationPx));
+            }
+
+            if (IsCircleFinderNode || IsDiameterNode)
+            {
+                OnPropertyChanged(nameof(AvailableCircleFindAlgorithms));
+                OnPropertyChanged(nameof(Cf_Algorithm));
+                OnPropertyChanged(nameof(Cf_StripCount));
+                OnPropertyChanged(nameof(Cf_StripWidth));
+                OnPropertyChanged(nameof(Cf_StripLength));
+                OnPropertyChanged(nameof(Cf_Polarity));
+                OnPropertyChanged(nameof(Cf_EdgeSelection));
+                OnPropertyChanged(nameof(Cf_MinEdgeStrength));
+                OnPropertyChanged(nameof(Cf_MinAngleDeg));
+                OnPropertyChanged(nameof(Cf_MaxAngleDeg));
+                OnPropertyChanged(nameof(Cf_MinRadiusPx));
+                OnPropertyChanged(nameof(Cf_MaxRadiusPx));
+                OnPropertyChanged(nameof(Cf_HoughDp));
+                OnPropertyChanged(nameof(Cf_HoughMinDistPx));
+                OnPropertyChanged(nameof(Cf_HoughParam1));
+                OnPropertyChanged(nameof(Cf_HoughParam2));
+                OnPropertyChanged(nameof(Cf_Canny1));
+                OnPropertyChanged(nameof(Cf_Canny2));
+                OnPropertyChanged(nameof(Cf_MinCircularity));
+                OnPropertyChanged(nameof(AvailableCircleFinderNames));
+                OnPropertyChanged(nameof(Cf_NominalDiameter));
+            }
+
+            if (IsAnyDistanceNode)
+            {
+                OnPropertyChanged(nameof(AvailableDistanceRefNames));
+                OnPropertyChanged(nameof(Distance_PointA));
+                OnPropertyChanged(nameof(Distance_PointB));
+                OnPropertyChanged(nameof(LineLineDistance_LineA));
+                OnPropertyChanged(nameof(LineLineDistance_LineB));
+                OnPropertyChanged(nameof(PointLineDistance_Point));
+                OnPropertyChanged(nameof(PointLineDistance_Line));
+                OnPropertyChanged(nameof(SegmentLineDistance_LineA));
+                OnPropertyChanged(nameof(SegmentLineDistance_LineB));
+                OnPropertyChanged(nameof(Angle_LineA));
+                OnPropertyChanged(nameof(Angle_LineB));
+                OnPropertyChanged(nameof(AvailableLineLineDistanceModes));
+                OnPropertyChanged(nameof(AvailablePointLineDistanceModes));
+                OnPropertyChanged(nameof(AvailableSegmentLineDistanceModes));
+                OnPropertyChanged(nameof(AvailableSegmentLineExtensionModes));
+                OnPropertyChanged(nameof(LineLineDistance_Mode));
+                OnPropertyChanged(nameof(PointLineDistance_Mode));
+                OnPropertyChanged(nameof(SegmentLineDistance_Mode));
+                OnPropertyChanged(nameof(SegmentLineDistance_ExtensionMode));
+                OnPropertyChanged(nameof(Distance_Nominal));
+                OnPropertyChanged(nameof(Distance_TolPlus));
+                OnPropertyChanged(nameof(Distance_TolMinus));
+            }
+
+            if (IsConditionNode)
+            {
+                OnPropertyChanged(nameof(Condition_InputCount));
+                OnPropertyChanged(nameof(Condition_Expression));
+            }
+
+            if (IsTextNode)
+            {
+                OnPropertyChanged(nameof(TextNode_Text));
+                OnPropertyChanged(nameof(TextNode_X));
+                OnPropertyChanged(nameof(TextNode_Y));
+                OnPropertyChanged(nameof(TextNode_DefaultColor));
+            }
+
             if (IsImageSourceNode)
             {
                 var curDef = SelectedImageSourceDef();
@@ -1411,348 +1579,238 @@ namespace VisionInspectionApp.UI.ViewModels
                 OnPropertyChanged(nameof(ImageSource_EnableLighting));
                 OnPropertyChanged(nameof(ImageSource_LightingChannelCount));
                 OnPropertyChanged(nameof(ImageSource_LightingChannels));
+                OnPropertyChanged(nameof(ImageSource_SourceType));
+                OnPropertyChanged(nameof(ImageSource_IsFile));
+                OnPropertyChanged(nameof(ImageSource_IsFolder));
+                OnPropertyChanged(nameof(ImageSource_IsCamera));
+                OnPropertyChanged(nameof(ImageSource_IsPdf));
+                OnPropertyChanged(nameof(ImageSource_IsPdfPanActive));
+                OnPropertyChanged(nameof(ImageSource_PdfIsPanDragEnabled));
+                OnPropertyChanged(nameof(ImageSource_PdfPath));
+                OnPropertyChanged(nameof(ImageSource_PdfPageNumber));
+                OnPropertyChanged(nameof(ImageSource_PdfTotalPages));
+                OnPropertyChanged(nameof(ImageSource_PdfScale));
+                OnPropertyChanged(nameof(ImageSource_PdfRenderedImagePath));
+                OnPropertyChanged(nameof(ImageSource_PdfImageInfo));
+                OnPropertyChanged(nameof(ImageSource_HasPdfRenderedImage));
+                OnPropertyChanged(nameof(ImageSource_FilePath));
+                OnPropertyChanged(nameof(ImageSource_FolderPath));
+                OnPropertyChanged(nameof(ImageSource_CameraIndex));
+                if (ImageSource_IsCamera && AvailableCameraItems.Count == 0)
+                    RefreshAvailableCameraItems();
+                OnPropertyChanged(nameof(SelectedCameraItem));
+                OnPropertyChanged(nameof(ImageSource_RtspUrl));
+                OnPropertyChanged(nameof(ImageSource_LoopFolder));
+                OnPropertyChanged(nameof(ImageSource_FolderIntervalMs));
+                OnPropertyChanged(nameof(ImageSource_TriggerMode));
+                OnPropertyChanged(nameof(ImageSource_IsSoftTrigger));
+                OnPropertyChanged(nameof(ImageSource_IsLineTrigger));
+                OnPropertyChanged(nameof(ImageSource_IsPlcTrigger));
+                OnPropertyChanged(nameof(ImageSource_LineTriggerName));
+                OnPropertyChanged(nameof(ImageSource_PlcTriggerPlcId));
+                OnPropertyChanged(nameof(ImageSource_PlcTriggerTagName));
+                OnPropertyChanged(nameof(ImageSource_PlcTriggerEdge));
+                OnPropertyChanged(nameof(ImageSource_EnableUndistort));
             }
-            OnPropertyChanged(nameof(ImageSource_TriggerMode));
-            OnPropertyChanged(nameof(ImageSource_IsSoftTrigger));
-            OnPropertyChanged(nameof(ImageSource_IsLineTrigger));
-            OnPropertyChanged(nameof(ImageSource_IsPlcTrigger));
-            OnPropertyChanged(nameof(ImageSource_LineTriggerName));
-            OnPropertyChanged(nameof(ImageSource_PlcTriggerPlcId));
-            OnPropertyChanged(nameof(ImageSource_PlcTriggerTagName));
-            OnPropertyChanged(nameof(ImageSource_PlcTriggerEdge));
-            OnPropertyChanged(nameof(ImageSource_EnableUndistort));
-            OnPropertyChanged(nameof(IsImageOutputNode));
-            OnPropertyChanged(nameof(AvailableImageNodes));
-            OnPropertyChanged(nameof(ImageOutput_InputNodeChoice));
-            OnPropertyChanged(nameof(ImageOutput_SaveFolderPath));
-            OnPropertyChanged(nameof(ImageOutput_FileNameFormat));
-            OnPropertyChanged(nameof(ImageOutput_Format));
-            OnPropertyChanged(nameof(ImageOutput_EnableOutput));
-            OnPropertyChanged(nameof(ImageOutput_IncludeOverlay));
-            OnPropertyChanged(nameof(ImageOutput_ShowRoi));
-            OnPropertyChanged(nameof(ImageOutput_ShowResultTable));
-            OnPropertyChanged(nameof(ImageOutput_TextFontSize));
-            OnPropertyChanged(nameof(ImageOutput_OverlayScale));
-            OnPropertyChanged(nameof(ImageOutput_SaveCondition));
-            OnPropertyChanged(nameof(IsBlobDetectionNode));
-            OnPropertyChanged(nameof(Blob_Polarity));
-            OnPropertyChanged(nameof(Blob_CountingMode));
-            OnPropertyChanged(nameof(Blob_CountingModeText));
-            OnPropertyChanged(nameof(Blob_Threshold));
-            OnPropertyChanged(nameof(Blob_MinBlobArea));
-            OnPropertyChanged(nameof(Blob_MaxBlobArea));
-            OnPropertyChanged(nameof(Blob_MaxAllowedBlobs));
-            OnPropertyChanged(nameof(Blob_MinBlobDistance));
-            OnPropertyChanged(nameof(Blob_MaxBlobWidth));
-            OnPropertyChanged(nameof(Blob_MaxBlobLength));
-            OnPropertyChanged(nameof(Blob_SpecMode));
-            OnPropertyChanged(nameof(Blob_SpecModeText));
-            OnPropertyChanged(nameof(Blob_IsPixelSpecMode));
-            OnPropertyChanged(nameof(Blob_IsMmSpecMode));
-            OnPropertyChanged(nameof(Blob_SpecUnitText));
-            OnPropertyChanged(nameof(Blob_DistanceUnitText));
-            OnPropertyChanged(nameof(Blob_IsCalibrated));
-            OnPropertyChanged(nameof(Blob_IsNotCalibrated));
-            OnPropertyChanged(nameof(Blob_MaxSpecPreviewText));
-            OnPropertyChanged(nameof(Blob_LastRunCount));
-            OnPropertyChanged(nameof(Blob_LastRunMinDistanceText));
-            OnPropertyChanged(nameof(Blob_LastRunMaxDimensionsText));
-            OnPropertyChanged(nameof(Blob_PassStatus));
-            OnPropertyChanged(nameof(Blob_PassColor));
-            OnPropertyChanged(nameof(IsSurfaceCompareNode));
-            OnPropertyChanged(nameof(IsNodeSelected));
-            OnPropertyChanged(nameof(IsContourCompareNode));
-            OnPropertyChanged(nameof(IsCodeDetectionNode));
-            OnPropertyChanged(nameof(IsOcrNode));
-            RaiseOcrPropertiesChanged();
-            OnPropertyChanged(nameof(IsCropNode));
-            OnPropertyChanged(nameof(SelectedCrop));
-            OnPropertyChanged(nameof(Crop_X));
-            OnPropertyChanged(nameof(Crop_Y));
-            OnPropertyChanged(nameof(Crop_Width));
-            OnPropertyChanged(nameof(Crop_Height));
-            OnPropertyChanged(nameof(IsColorDiffNode));
-            OnPropertyChanged(nameof(SelectedColorDiff));
-            OnPropertyChanged(nameof(ColorDiff_UseRefColor));
-            OnPropertyChanged(nameof(ColorDiff_RefL));
-            OnPropertyChanged(nameof(ColorDiff_RefA));
-            OnPropertyChanged(nameof(ColorDiff_RefB));
-            OnPropertyChanged(nameof(ColorDiff_MaxDeltaE));
-            OnPropertyChanged(nameof(IsImgArithmeticNode));
-            OnPropertyChanged(nameof(SelectedImgArithmetic));
-            OnPropertyChanged(nameof(ImgArithmetic_Op));
-            OnPropertyChanged(nameof(ImgArithmetic_WeightA));
-            OnPropertyChanged(nameof(ImgArithmetic_WeightB));
-            OnPropertyChanged(nameof(ImgArithmetic_Offset));
 
-            // Tool Creation Nodes
-            OnPropertyChanged(nameof(IsCreatePointNode));
-            OnPropertyChanged(nameof(SelectedCreatePoint));
-            OnPropertyChanged(nameof(CreatePoint_X));
-            OnPropertyChanged(nameof(CreatePoint_Y));
-            OnPropertyChanged(nameof(CreatePoint_PointRef));
+            if (IsImageOutputNode)
+            {
+                OnPropertyChanged(nameof(AvailableImageNodes));
+                OnPropertyChanged(nameof(ImageOutput_InputNodeChoice));
+                OnPropertyChanged(nameof(ImageOutput_SaveFolderPath));
+                OnPropertyChanged(nameof(ImageOutput_FileNameFormat));
+                OnPropertyChanged(nameof(ImageOutput_Format));
+                OnPropertyChanged(nameof(ImageOutput_EnableOutput));
+                OnPropertyChanged(nameof(ImageOutput_IncludeOverlay));
+                OnPropertyChanged(nameof(ImageOutput_ShowRoi));
+                OnPropertyChanged(nameof(ImageOutput_ShowResultTable));
+                OnPropertyChanged(nameof(ImageOutput_TextFontSize));
+                OnPropertyChanged(nameof(ImageOutput_OverlayScale));
+                OnPropertyChanged(nameof(ImageOutput_SaveCondition));
+            }
 
-            OnPropertyChanged(nameof(IsCreateLineNode));
-            OnPropertyChanged(nameof(SelectedCreateLine));
-            OnPropertyChanged(nameof(CreateLine_Mode));
-            OnPropertyChanged(nameof(CreateLine_IsTwoPointsMode));
-            OnPropertyChanged(nameof(CreateLine_IsPointAndAngleMode));
-            OnPropertyChanged(nameof(CreateLine_Point1Ref));
-            OnPropertyChanged(nameof(CreateLine_X1));
-            OnPropertyChanged(nameof(CreateLine_Y1));
-            OnPropertyChanged(nameof(CreateLine_Point2Ref));
-            OnPropertyChanged(nameof(CreateLine_X2));
-            OnPropertyChanged(nameof(CreateLine_Y2));
-            OnPropertyChanged(nameof(CreateLine_PointRef));
-            OnPropertyChanged(nameof(CreateLine_X));
-            OnPropertyChanged(nameof(CreateLine_Y));
-            OnPropertyChanged(nameof(CreateLine_Angle));
-            OnPropertyChanged(nameof(CreateLine_Length));
+            if (IsBlobDetectionNode)
+            {
+                OnPropertyChanged(nameof(AvailableBlobPolarities));
+                OnPropertyChanged(nameof(Blob_Polarity));
+                OnPropertyChanged(nameof(Blob_CountingMode));
+                OnPropertyChanged(nameof(Blob_CountingModeText));
+                OnPropertyChanged(nameof(Blob_Threshold));
+                OnPropertyChanged(nameof(Blob_MinBlobArea));
+                OnPropertyChanged(nameof(Blob_MaxBlobArea));
+                OnPropertyChanged(nameof(Blob_MaxAllowedBlobs));
+                OnPropertyChanged(nameof(Blob_MinBlobDistance));
+                OnPropertyChanged(nameof(Blob_MaxBlobWidth));
+                OnPropertyChanged(nameof(Blob_MaxBlobLength));
+                OnPropertyChanged(nameof(Blob_SpecMode));
+                OnPropertyChanged(nameof(Blob_SpecModeText));
+                OnPropertyChanged(nameof(Blob_IsPixelSpecMode));
+                OnPropertyChanged(nameof(Blob_IsMmSpecMode));
+                OnPropertyChanged(nameof(Blob_SpecUnitText));
+                OnPropertyChanged(nameof(Blob_DistanceUnitText));
+                OnPropertyChanged(nameof(Blob_IsCalibrated));
+                OnPropertyChanged(nameof(Blob_IsNotCalibrated));
+                OnPropertyChanged(nameof(Blob_MaxSpecPreviewText));
+                OnPropertyChanged(nameof(Blob_LastRunCount));
+                OnPropertyChanged(nameof(Blob_LastRunMinDistanceText));
+                OnPropertyChanged(nameof(Blob_LastRunMaxDimensionsText));
+                OnPropertyChanged(nameof(Blob_PassStatus));
+                OnPropertyChanged(nameof(Blob_PassColor));
+            }
 
-            OnPropertyChanged(nameof(IsCreateRectNode));
-            OnPropertyChanged(nameof(SelectedCreateRect));
-            OnPropertyChanged(nameof(CreateRect_PointRef));
-            OnPropertyChanged(nameof(CreateRect_X));
-            OnPropertyChanged(nameof(CreateRect_Y));
-            OnPropertyChanged(nameof(CreateRect_Width));
-            OnPropertyChanged(nameof(CreateRect_Height));
-            OnPropertyChanged(nameof(CreateRect_Angle));
-            OnPropertyChanged(nameof(CreateRect_Anchor));
+            if (IsSurfaceCompareNode)
+            {
+                OnPropertyChanged(nameof(SurfaceCompare_DiffThreshold));
+                OnPropertyChanged(nameof(SurfaceCompare_MinBlobArea));
+                OnPropertyChanged(nameof(SurfaceCompare_MaxBlobArea));
+                OnPropertyChanged(nameof(SurfaceCompare_MinAreaPreviewWidth));
+                OnPropertyChanged(nameof(SurfaceCompare_MinAreaPreviewHeight));
+                OnPropertyChanged(nameof(SurfaceCompare_MaxAreaPreviewWidth));
+                OnPropertyChanged(nameof(SurfaceCompare_MaxAreaPreviewHeight));
+                OnPropertyChanged(nameof(SurfaceCompare_MinAreaPreviewText));
+                OnPropertyChanged(nameof(SurfaceCompare_MaxAreaPreviewText));
+                OnPropertyChanged(nameof(SurfaceCompare_MinCount));
+                OnPropertyChanged(nameof(SurfaceCompare_MaxCount));
+                OnPropertyChanged(nameof(SurfaceCompare_MorphKernel));
+                OnPropertyChanged(nameof(SurfaceCompare_EdgeTolerancePx));
+                OnPropertyChanged(nameof(SurfaceCompare_Algorithm));
+                OnPropertyChanged(nameof(SurfaceCompare_SsimWindowSize));
+                OnPropertyChanged(nameof(SurfaceCompare_SsimThreshold));
+                OnPropertyChanged(nameof(SurfaceCompare_GradientWeight));
+                OnPropertyChanged(nameof(SurfaceCompare_AutoAlign));
+                OnPropertyChanged(nameof(SurfaceCompare_AutoAlignMaxShiftPx));
+            }
 
-            OnPropertyChanged(nameof(IsCreateCircleNode));
-            OnPropertyChanged(nameof(SelectedCreateCircle));
-            OnPropertyChanged(nameof(CreateCircle_Mode));
-            OnPropertyChanged(nameof(CreateCircle_IsCenterAndRadiusMode));
-            OnPropertyChanged(nameof(CreateCircle_IsTwoPointsMode));
-            OnPropertyChanged(nameof(CreateCircle_CenterPointRef));
-            OnPropertyChanged(nameof(CreateCircle_CenterX));
-            OnPropertyChanged(nameof(CreateCircle_CenterY));
-            OnPropertyChanged(nameof(CreateCircle_Radius));
-            OnPropertyChanged(nameof(CreateCircle_BoundaryPointRef));
-            OnPropertyChanged(nameof(CreateCircle_BoundaryX));
-            OnPropertyChanged(nameof(CreateCircle_BoundaryY));
+            if (IsContourCompareNode)
+            {
+                OnPropertyChanged(nameof(AvailableContourMatchMethods));
+                OnPropertyChanged(nameof(ContourCompare_MatchMethod));
+                OnPropertyChanged(nameof(ContourCompare_CannyThreshold1));
+                OnPropertyChanged(nameof(ContourCompare_CannyThreshold2));
+                OnPropertyChanged(nameof(ContourCompare_MinContourArea));
+                OnPropertyChanged(nameof(ContourCompare_MaxShapeMatchScore));
+                OnPropertyChanged(nameof(ContourCompare_MaxHausdorffDistPx));
+                OnPropertyChanged(nameof(ContourCompare_MaxAreaDiffPercent));
+                OnPropertyChanged(nameof(ContourCompare_LastRunScore));
+                OnPropertyChanged(nameof(ContourCompare_LastRunMaxDist));
+                OnPropertyChanged(nameof(ContourCompare_LastRunAreaDiff));
+                OnPropertyChanged(nameof(ContourCompare_LastRunStatus));
+                OnPropertyChanged(nameof(ContourCompare_TemplatePreviewImage));
+                OnPropertyChanged(nameof(ContourCompare_TemplateInfoText));
+                RefreshContourCompareTemplatePreview();
+            }
 
-            // PLC Nodes
-            OnPropertyChanged(nameof(IsPlcReadNode));
-            OnPropertyChanged(nameof(IsPlcWriteNode));
-            OnPropertyChanged(nameof(IsPlcWaitNode));
-            OnPropertyChanged(nameof(IsPlcTriggerNode));
-            OnPropertyChanged(nameof(IsPlcBatchReadNode));
-            OnPropertyChanged(nameof(IsPlcBatchWriteNode));
-            OnPropertyChanged(nameof(IsResultTransferNode));
-            RefreshResultTransferItems();
-            OnPropertyChanged(nameof(IsAnyPlcNode));
-            OnPropertyChanged(nameof(AvailablePlcNames));
-            OnPropertyChanged(nameof(AvailablePlcTagNames));
-            OnPropertyChanged(nameof(PlcNode_PlcId));
-            OnPropertyChanged(nameof(PlcNode_TagName));
-            OnPropertyChanged(nameof(PlcNode_TagDataType));
-            OnPropertyChanged(nameof(PlcNode_CurrentValue));
-            OnPropertyChanged(nameof(PlcNode_WriteValue));
-            OnPropertyChanged(nameof(PlcNode_Operator));
-            OnPropertyChanged(nameof(PlcNode_TargetValue));
-            OnPropertyChanged(nameof(PlcNode_TimeoutMs));
-            OnPropertyChanged(nameof(PlcNode_EdgeMode));
-            OnPropertyChanged(nameof(PlcNode_BatchTagListString));
-            OnPropertyChanged(nameof(PlcNode_BatchWriteValuesString));
-            OnPropertyChanged(nameof(AvailableContourMatchMethods));
-            OnPropertyChanged(nameof(ContourCompare_MatchMethod));
-            OnPropertyChanged(nameof(ContourCompare_CannyThreshold1));
-            OnPropertyChanged(nameof(ContourCompare_CannyThreshold2));
-            OnPropertyChanged(nameof(ContourCompare_MinContourArea));
-            OnPropertyChanged(nameof(ContourCompare_MaxShapeMatchScore));
-            OnPropertyChanged(nameof(ContourCompare_MaxHausdorffDistPx));
-            OnPropertyChanged(nameof(ContourCompare_MaxAreaDiffPercent));
-            OnPropertyChanged(nameof(ContourCompare_LastRunScore));
-            OnPropertyChanged(nameof(ContourCompare_LastRunMaxDist));
-            OnPropertyChanged(nameof(ContourCompare_LastRunAreaDiff));
-            OnPropertyChanged(nameof(ContourCompare_LastRunStatus));
-            OnPropertyChanged(nameof(ContourCompare_TemplatePreviewImage));
-            OnPropertyChanged(nameof(ContourCompare_TemplateInfoText));
-            RefreshContourCompareTemplatePreview();
-            OnPropertyChanged(nameof(AvailablePointFindAlgorithms));
-            OnPropertyChanged(nameof(Point_Algorithm));
-            OnPropertyChanged(nameof(Point_MinScore));
-            OnPropertyChanged(nameof(Point_OffsetX));
-            OnPropertyChanged(nameof(Point_OffsetY));
-            OnPropertyChanged(nameof(IsPointEdgePointAlgorithm));
-            OnPropertyChanged(nameof(Point_Edge_Orientation));
-            OnPropertyChanged(nameof(Point_Edge_Polarity));
-            OnPropertyChanged(nameof(Point_Edge_StripCount));
-            OnPropertyChanged(nameof(Point_Edge_StripWidth));
-            OnPropertyChanged(nameof(Point_Edge_StripLength));
-            OnPropertyChanged(nameof(Point_Edge_MinEdgeStrength));
-            OnPropertyChanged(nameof(PointEdgePreviewEnabled));
-            OnPropertyChanged(nameof(PointEdgePreviewImage));
-            OnPropertyChanged(nameof(IsCircleFinderNode));
-            OnPropertyChanged(nameof(AvailableCircleFindAlgorithms));
-            OnPropertyChanged(nameof(Cf_Algorithm));
-            OnPropertyChanged(nameof(Cf_StripCount));
-            OnPropertyChanged(nameof(Cf_StripWidth));
-            OnPropertyChanged(nameof(Cf_StripLength));
-            OnPropertyChanged(nameof(Cf_Polarity));
-            OnPropertyChanged(nameof(Cf_EdgeSelection));
-            OnPropertyChanged(nameof(Cf_MinEdgeStrength));
-            OnPropertyChanged(nameof(Cf_MinAngleDeg));
-            OnPropertyChanged(nameof(Cf_MaxAngleDeg));
-            OnPropertyChanged(nameof(Cf_MinRadiusPx));
-            OnPropertyChanged(nameof(Cf_MaxRadiusPx));
-            OnPropertyChanged(nameof(Cf_HoughDp));
-            OnPropertyChanged(nameof(Cf_HoughMinDistPx));
-            OnPropertyChanged(nameof(Cf_HoughParam1));
-            OnPropertyChanged(nameof(Cf_HoughParam2));
-            OnPropertyChanged(nameof(Cf_Canny1));
-            OnPropertyChanged(nameof(Cf_Canny2));
-            OnPropertyChanged(nameof(Cf_MinCircularity));
-            OnPropertyChanged(nameof(AvailableCircleFinderNames));
-            OnPropertyChanged(nameof(AvailableIlluminationCorrectionPresets));
-            OnPropertyChanged(nameof(AvailablePointNames));
-            OnPropertyChanged(nameof(AvailableDistanceRefNames));
-            OnPropertyChanged(nameof(AvailableLineNames));
-            OnPropertyChanged(nameof(Distance_PointA));
-            OnPropertyChanged(nameof(Distance_PointB));
-            OnPropertyChanged(nameof(LineLineDistance_LineA));
-            OnPropertyChanged(nameof(LineLineDistance_LineB));
-            OnPropertyChanged(nameof(PointLineDistance_Point));
-            OnPropertyChanged(nameof(PointLineDistance_Line));
-            OnPropertyChanged(nameof(SegmentLineDistance_LineA));
-            OnPropertyChanged(nameof(SegmentLineDistance_LineB));
-            OnPropertyChanged(nameof(Angle_LineA));
-            OnPropertyChanged(nameof(Angle_LineB));
-            OnPropertyChanged(nameof(EdgePair_RefA));
-            OnPropertyChanged(nameof(EdgePair_RefB));
-            OnPropertyChanged(nameof(AvailableLineLineDistanceModes));
-            OnPropertyChanged(nameof(AvailablePointLineDistanceModes));
-            OnPropertyChanged(nameof(AvailableSegmentLineDistanceModes));
-            OnPropertyChanged(nameof(AvailableSegmentLineExtensionModes));
-            OnPropertyChanged(nameof(LineLineDistance_Mode));
-            OnPropertyChanged(nameof(PointLineDistance_Mode));
-            OnPropertyChanged(nameof(SegmentLineDistance_Mode));
-            OnPropertyChanged(nameof(SegmentLineDistance_ExtensionMode));
-            OnPropertyChanged(nameof(Condition_InputCount));
-            OnPropertyChanged(nameof(Condition_Expression));
-            OnPropertyChanged(nameof(TextNode_Text));
-            OnPropertyChanged(nameof(TextNode_X));
-            OnPropertyChanged(nameof(TextNode_Y));
-            OnPropertyChanged(nameof(TextNode_DefaultColor));
-            OnPropertyChanged(nameof(ImageSource_SourceType));
-            OnPropertyChanged(nameof(ImageSource_IsFile));
-            OnPropertyChanged(nameof(ImageSource_IsFolder));
-            OnPropertyChanged(nameof(ImageSource_IsCamera));
-            OnPropertyChanged(nameof(ImageSource_IsPdf));
-            OnPropertyChanged(nameof(ImageSource_IsPdfPanActive));
-            OnPropertyChanged(nameof(ImageSource_PdfIsPanDragEnabled));
-            OnPropertyChanged(nameof(ImageSource_PdfPath));
-            OnPropertyChanged(nameof(ImageSource_PdfPageNumber));
-            OnPropertyChanged(nameof(ImageSource_PdfTotalPages));
-            OnPropertyChanged(nameof(ImageSource_PdfScale));
-            OnPropertyChanged(nameof(ImageSource_PdfRenderedImagePath));
-            OnPropertyChanged(nameof(ImageSource_PdfImageInfo));
-            OnPropertyChanged(nameof(ImageSource_HasPdfRenderedImage));
-            OnPropertyChanged(nameof(ImageSource_FilePath));
-            OnPropertyChanged(nameof(ImageSource_FolderPath));
-            OnPropertyChanged(nameof(ImageSource_CameraIndex));
-            // Refresh camera list asynchronously when empty
-            if (ImageSource_IsCamera && AvailableCameraItems.Count == 0)
-                RefreshAvailableCameraItems();
-            OnPropertyChanged(nameof(SelectedCameraItem));
-            OnPropertyChanged(nameof(ImageSource_RtspUrl));
-            OnPropertyChanged(nameof(ImageSource_LoopFolder));
-            OnPropertyChanged(nameof(ImageSource_FolderIntervalMs));
-            OnPropertyChanged(nameof(UseGray));
-            OnPropertyChanged(nameof(IlluminationCorrection));
-            OnPropertyChanged(nameof(IlluminationKernel));
-            OnPropertyChanged(nameof(ClaheClipLimit));
-            OnPropertyChanged(nameof(ClaheTileGrid));
-            OnPropertyChanged(nameof(UseGaussianBlur));
-            OnPropertyChanged(nameof(BlurKernel));
-            OnPropertyChanged(nameof(UseThreshold));
-            OnPropertyChanged(nameof(ThresholdType));
-            OnPropertyChanged(nameof(IsThresholdBinary));
-            OnPropertyChanged(nameof(IsThresholdLocal));
-            OnPropertyChanged(nameof(ThresholdValue));
-            OnPropertyChanged(nameof(ThresholdLow));
-            OnPropertyChanged(nameof(ThresholdHigh));
-            OnPropertyChanged(nameof(InvertBinary));
-            OnPropertyChanged(nameof(MaskWidth));
-            OnPropertyChanged(nameof(MaskHeight));
-            OnPropertyChanged(nameof(LocalOffset));
-            OnPropertyChanged(nameof(InvertLocal));
-            OnPropertyChanged(nameof(UseCanny));
-            OnPropertyChanged(nameof(Canny1));
-            OnPropertyChanged(nameof(Canny2));
-            OnPropertyChanged(nameof(UseMorphology));
-            OnPropertyChanged(nameof(Line_Canny1));
-            OnPropertyChanged(nameof(Line_Canny2));
-            OnPropertyChanged(nameof(Line_HoughThreshold));
-            OnPropertyChanged(nameof(Line_MinLineLength));
-            OnPropertyChanged(nameof(Line_MaxLineGap));
-            OnPropertyChanged(nameof(Lpd_Canny1));
-            OnPropertyChanged(nameof(Lpd_Canny2));
-            OnPropertyChanged(nameof(Lpd_HoughThreshold));
-            OnPropertyChanged(nameof(Lpd_MinLineLength));
-            OnPropertyChanged(nameof(Lpd_MaxLineGap));
-            OnPropertyChanged(nameof(Distance_Nominal));
-            OnPropertyChanged(nameof(Distance_TolPlus));
-            OnPropertyChanged(nameof(Distance_TolMinus));
-            OnPropertyChanged(nameof(Cf_NominalDiameter));
-            OnPropertyChanged(nameof(SelectedRunValue));
-            OnPropertyChanged(nameof(SelectedRunPass));
-            OnPropertyChanged(nameof(SelectedRunText));
-            OnPropertyChanged(nameof(ShowCodeDetectionSection));
-            OnPropertyChanged(nameof(AvailableBlobPolarities));
-            OnPropertyChanged(nameof(Blob_Polarity));
-            OnPropertyChanged(nameof(Blob_Threshold));
-            OnPropertyChanged(nameof(Blob_MinBlobArea));
-            OnPropertyChanged(nameof(Blob_MaxBlobArea));
-            OnPropertyChanged(nameof(Blob_LastRunCount));
-            OnPropertyChanged(nameof(SurfaceCompare_DiffThreshold));
-            OnPropertyChanged(nameof(SurfaceCompare_MinBlobArea));
-            OnPropertyChanged(nameof(SurfaceCompare_MaxBlobArea));
-            OnPropertyChanged(nameof(SurfaceCompare_MinAreaPreviewWidth));
-            OnPropertyChanged(nameof(SurfaceCompare_MinAreaPreviewHeight));
-            OnPropertyChanged(nameof(SurfaceCompare_MaxAreaPreviewWidth));
-            OnPropertyChanged(nameof(SurfaceCompare_MaxAreaPreviewHeight));
-            OnPropertyChanged(nameof(SurfaceCompare_MinAreaPreviewText));
-            OnPropertyChanged(nameof(SurfaceCompare_MaxAreaPreviewText));
-            OnPropertyChanged(nameof(SurfaceCompare_MinCount));
-            OnPropertyChanged(nameof(SurfaceCompare_MaxCount));
-            OnPropertyChanged(nameof(SurfaceCompare_MorphKernel));
-            OnPropertyChanged(nameof(SurfaceCompare_EdgeTolerancePx));
-            OnPropertyChanged(nameof(SurfaceCompare_Algorithm));
-            OnPropertyChanged(nameof(SurfaceCompare_SsimWindowSize));
-            OnPropertyChanged(nameof(SurfaceCompare_SsimThreshold));
-            OnPropertyChanged(nameof(SurfaceCompare_GradientWeight));
-            OnPropertyChanged(nameof(SurfaceCompare_AutoAlign));
-            OnPropertyChanged(nameof(SurfaceCompare_AutoAlignMaxShiftPx));
-            OnPropertyChanged(nameof(ContourCompare_MatchMethod));
-            OnPropertyChanged(nameof(ContourCompare_CannyThreshold1));
-            OnPropertyChanged(nameof(ContourCompare_CannyThreshold2));
-            OnPropertyChanged(nameof(ContourCompare_MinContourArea));
-            OnPropertyChanged(nameof(ContourCompare_MaxShapeMatchScore));
-            OnPropertyChanged(nameof(ContourCompare_MaxHausdorffDistPx));
-            OnPropertyChanged(nameof(ContourCompare_MaxAreaDiffPercent));
-            OnPropertyChanged(nameof(AvailableCaliperOrientations));
-            OnPropertyChanged(nameof(AvailableEdgePolarities));
-            OnPropertyChanged(nameof(Caliper_Orientation));
-            OnPropertyChanged(nameof(Caliper_Polarity));
-            OnPropertyChanged(nameof(Caliper_StripCount));
-            OnPropertyChanged(nameof(Caliper_StripWidth));
-            OnPropertyChanged(nameof(Caliper_StripLength));
-            OnPropertyChanged(nameof(Caliper_MinEdgeStrength));
-            OnPropertyChanged(nameof(Caliper_LastRunFound));
-            OnPropertyChanged(nameof(Caliper_LastRunAvgStrength));
-            OnPropertyChanged(nameof(Epd_Orientation));
-            OnPropertyChanged(nameof(Epd_Polarity));
-            OnPropertyChanged(nameof(Epd_StripCount));
-            OnPropertyChanged(nameof(Epd_StripWidth));
-            OnPropertyChanged(nameof(Epd_StripLength));
-            OnPropertyChanged(nameof(Epd_MinEdgeStrength));
-            OnPropertyChanged(nameof(Epd_MinEdgeSeparationPx));
-            OnPropertyChanged(nameof(ShowRoisInSelectedPreview));
-            OnPropertyChanged(nameof(ShowRoisInFinalPreview));
+            if (IsCodeDetectionNode)
+            {
+                OnPropertyChanged(nameof(ShowCodeDetectionSection));
+            }
 
-            OnPropertyChanged(nameof(IsObjectCountingNode));
+            if (IsOcrNode)
+            {
+                RaiseOcrPropertiesChanged();
+            }
+
+            if (IsCropNode)
+            {
+                OnPropertyChanged(nameof(SelectedCrop));
+                OnPropertyChanged(nameof(Crop_X));
+                OnPropertyChanged(nameof(Crop_Y));
+                OnPropertyChanged(nameof(Crop_Width));
+                OnPropertyChanged(nameof(Crop_Height));
+            }
+
+            if (IsColorDiffNode)
+            {
+                OnPropertyChanged(nameof(SelectedColorDiff));
+                OnPropertyChanged(nameof(ColorDiff_UseRefColor));
+                OnPropertyChanged(nameof(ColorDiff_RefL));
+                OnPropertyChanged(nameof(ColorDiff_RefA));
+                OnPropertyChanged(nameof(ColorDiff_RefB));
+                OnPropertyChanged(nameof(ColorDiff_MaxDeltaE));
+            }
+
+            if (IsImgArithmeticNode)
+            {
+                OnPropertyChanged(nameof(SelectedImgArithmetic));
+                OnPropertyChanged(nameof(ImgArithmetic_Op));
+                OnPropertyChanged(nameof(ImgArithmetic_WeightA));
+                OnPropertyChanged(nameof(ImgArithmetic_WeightB));
+                OnPropertyChanged(nameof(ImgArithmetic_Offset));
+            }
+
+            if (IsCreatePointNode)
+            {
+                OnPropertyChanged(nameof(SelectedCreatePoint));
+                OnPropertyChanged(nameof(CreatePoint_X));
+                OnPropertyChanged(nameof(CreatePoint_Y));
+                OnPropertyChanged(nameof(CreatePoint_PointRef));
+            }
+
+            if (IsCreateLineNode)
+            {
+                OnPropertyChanged(nameof(SelectedCreateLine));
+                OnPropertyChanged(nameof(CreateLine_Mode));
+                OnPropertyChanged(nameof(CreateLine_IsTwoPointsMode));
+                OnPropertyChanged(nameof(CreateLine_IsPointAndAngleMode));
+                OnPropertyChanged(nameof(CreateLine_Point1Ref));
+                OnPropertyChanged(nameof(CreateLine_X1));
+                OnPropertyChanged(nameof(CreateLine_Y1));
+                OnPropertyChanged(nameof(CreateLine_Point2Ref));
+                OnPropertyChanged(nameof(CreateLine_X2));
+                OnPropertyChanged(nameof(CreateLine_Y2));
+                OnPropertyChanged(nameof(CreateLine_PointRef));
+                OnPropertyChanged(nameof(CreateLine_X));
+                OnPropertyChanged(nameof(CreateLine_Y));
+                OnPropertyChanged(nameof(CreateLine_Angle));
+                OnPropertyChanged(nameof(CreateLine_Length));
+            }
+
+            if (IsCreateRectNode)
+            {
+                OnPropertyChanged(nameof(SelectedCreateRect));
+                OnPropertyChanged(nameof(CreateRect_PointRef));
+                OnPropertyChanged(nameof(CreateRect_X));
+                OnPropertyChanged(nameof(CreateRect_Y));
+                OnPropertyChanged(nameof(CreateRect_Width));
+                OnPropertyChanged(nameof(CreateRect_Height));
+                OnPropertyChanged(nameof(CreateRect_Angle));
+                OnPropertyChanged(nameof(CreateRect_Anchor));
+            }
+
+            if (IsCreateCircleNode)
+            {
+                OnPropertyChanged(nameof(SelectedCreateCircle));
+                OnPropertyChanged(nameof(CreateCircle_Mode));
+                OnPropertyChanged(nameof(CreateCircle_IsCenterAndRadiusMode));
+                OnPropertyChanged(nameof(CreateCircle_IsTwoPointsMode));
+                OnPropertyChanged(nameof(CreateCircle_CenterPointRef));
+                OnPropertyChanged(nameof(CreateCircle_CenterX));
+                OnPropertyChanged(nameof(CreateCircle_CenterY));
+                OnPropertyChanged(nameof(CreateCircle_Radius));
+                OnPropertyChanged(nameof(CreateCircle_BoundaryPointRef));
+                OnPropertyChanged(nameof(CreateCircle_BoundaryX));
+                OnPropertyChanged(nameof(CreateCircle_BoundaryY));
+            }
+
+            if (IsAnyPlcNode)
+            {
+                if (IsResultTransferNode)
+                    RefreshResultTransferItems();
+                OnPropertyChanged(nameof(AvailablePlcNames));
+                OnPropertyChanged(nameof(AvailablePlcTagNames));
+                OnPropertyChanged(nameof(PlcNode_PlcId));
+                OnPropertyChanged(nameof(PlcNode_TagName));
+                OnPropertyChanged(nameof(PlcNode_TagDataType));
+                OnPropertyChanged(nameof(PlcNode_CurrentValue));
+                OnPropertyChanged(nameof(PlcNode_WriteValue));
+                OnPropertyChanged(nameof(PlcNode_Operator));
+                OnPropertyChanged(nameof(PlcNode_TargetValue));
+                OnPropertyChanged(nameof(PlcNode_TimeoutMs));
+                OnPropertyChanged(nameof(PlcNode_EdgeMode));
+                OnPropertyChanged(nameof(PlcNode_BatchTagListString));
+                OnPropertyChanged(nameof(PlcNode_BatchWriteValuesString));
+            }
+
             if (IsObjectCountingNode)
             {
                 OnPropertyChanged(nameof(AvailableObjectCountingAlgorithms));

@@ -693,7 +693,10 @@
                                  PreviewMouseLeftButtonDown="ToolboxList_PreviewMouseLeftButtonDown" 
                                  PreviewMouseMove="ToolboxList_PreviewMouseMove" 
                                  BorderThickness="0" Background="Transparent"
-                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                 VirtualizingPanel.IsVirtualizing="True"
+                                 VirtualizingPanel.IsVirtualizingWhenGrouping="True"
+                                 VirtualizingPanel.ScrollUnit="Pixel">
                             <ListBox.GroupStyle>
                                 <GroupStyle>
                                     <GroupStyle.HeaderTemplate>
