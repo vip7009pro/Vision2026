@@ -1,5 +1,13 @@
 # ROADMAP.md — Lộ trình phát triển & Trạng thái nhiệm vụ
 
+- [x] Task 439: Rà soát chương trình PLC FX5U `grok xml.xml` — tìm lỗi FIFO không tăng địa chỉ (Z0/Z1 chưa nạp, chỉ số 32-bit chưa ×2, chồng lấn D2100), so sánh 16-bit với encoder 32-bit, double coil Y1, điều kiện pop ngược (M61).
+- [x] Task 438: Tối Ưu Hóa Pipeline Chạy Liên Tục (Zero-Copy Frame Flow & Đồng Bộ Tốc Độ >= 5 pcs/s):
+  - [x] **Triệt tiêu bản sao chép thừa (Memory Bandwidth Decongestion)**: Bỏ clone $75\text{MB}$ trong `SetImageSourceCache` và trì hoãn cập nhật `_sharedImage` chỉ khi UI render (120ms / NG / queue drained); giảm từ 4 bản clone xuống 1 bản duy nhất cho cả pipeline.
+  - [x] **Thumbnail Proxy cho Recent Parts**: Với sản phẩm PASS, chỉ lưu proxy thu nhỏ ($640 \times 360$ ~ $690\text{KB}$ thay vì $75\text{MB}$); bảo toàn $75\text{MB}$ nguyên bản cho sản phẩm NG; giảm 99% áp lực bộ nhớ LOH cho thanh 20 con hàng gần nhất.
+  - [x] **Drop-Before-Clone cho Hàng đợi 16 nấc**: Thu hồi và dispose frame cũ trước khi clone frame mới khi channel đầy, tránh giữ 17 ảnh full-size trong RAM cùng lúc.
+  - [x] **Coalesce & Throttling Dispatcher UI**: Chuyển `UpdateQueueVisuals` và `UpdateRecentPartsVisuals` sang cơ chế cờ pending `DispatcherPriority.Background`, triệt tiêu hoàn toàn bão Dispatcher queue.
+  - [x] **Kiểm thử tự động & Biên dịch**: Đạt 100% PASSED toàn bộ test suite `TestExtractApp`, 0 errors.
+
 - [x] Task 437: Tối Ưu Pipeline Ảnh Công Nghiệp 20-25MP & Debounce Nhập Liệu Trong Tool Editor:
   - [x] Tái sử dụng snapshot `raw` hợp lệ trong RAM cho `ImageSource` tại `GetNodeOutputImageForPreview`, tránh đọc tệp và giải mã lại từ đĩa.
   - [x] Giải phóng an toàn ma trận trung gian trong khối khử méo lens `ChessboardCalibrationService.Undistort`.

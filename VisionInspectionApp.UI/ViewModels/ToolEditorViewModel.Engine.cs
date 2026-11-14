@@ -2328,14 +2328,36 @@ namespace VisionInspectionApp.UI.ViewModels
         [ObservableProperty] private bool _queueSlot14Active;
         [ObservableProperty] private bool _queueSlot15Active;
 
+        private int _isQueueVisualUpdatePending = 0;
+
         public void UpdateQueueVisuals()
         {
             if (System.Windows.Application.Current?.Dispatcher != null && !System.Windows.Application.Current.Dispatcher.CheckAccess())
             {
-                System.Windows.Application.Current.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Normal, new Action(UpdateQueueVisuals));
+                if (Interlocked.CompareExchange(ref _isQueueVisualUpdatePending, 1, 0) == 0)
+                {
+                    System.Windows.Application.Current.Dispatcher.BeginInvoke(
+                        System.Windows.Threading.DispatcherPriority.Background,
+                        new Action(() =>
+                        {
+                            try
+                            {
+                                UpdateQueueVisualsDirect();
+                            }
+                            finally
+                            {
+                                Interlocked.Exchange(ref _isQueueVisualUpdatePending, 0);
+                            }
+                        }));
+                }
                 return;
             }
 
+            UpdateQueueVisualsDirect();
+        }
+
+        private void UpdateQueueVisualsDirect()
+        {
             int count = Math.Clamp(_queueCurrentCount, 0, QueueCapacity);
             QueueStatusText = $"{count}/{QueueCapacity}";
             IsQueueActive = count > 0 || IsRunningContinuous;
@@ -2514,7 +2536,29 @@ namespace VisionInspectionApp.UI.ViewModels
             {
                 try
                 {
-                    snapshotClone = currentFrame.Clone();
+                    if (!isOk)
+                    {
+                        // Giữ nguyên bản full-size cho sản phẩm NG phục vụ phóng to soi khuyết tật
+                        snapshotClone = currentFrame.Clone();
+                    }
+                    else
+                    {
+                        // Với sản phẩm PASS, chỉ giữ thumbnail proxy nhỏ (max 640x360) tiết kiệm 99% RAM & bus bộ nhớ
+                        int w = currentFrame.Width;
+                        int h = currentFrame.Height;
+                        if (w > 640 || h > 360)
+                        {
+                            double scale = Math.Min(640.0 / w, 360.0 / h);
+                            int tw = Math.Max(1, (int)(w * scale));
+                            int th = Math.Max(1, (int)(h * scale));
+                            snapshotClone = new Mat();
+                            Cv2.Resize(currentFrame, snapshotClone, new OpenCvSharp.Size(tw, th), 0, 0, InterpolationFlags.Nearest);
+                        }
+                        else
+                        {
+                            snapshotClone = currentFrame.Clone();
+                        }
+                    }
                 }
                 catch { }
             }
@@ -2547,14 +2591,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 }
             }
 
-            if (System.Windows.Application.Current?.Dispatcher != null && !System.Windows.Application.Current.Dispatcher.CheckAccess())
-            {
-                System.Windows.Application.Current.Dispatcher.BeginInvoke(new Action(UpdateRecentPartsVisuals));
-            }
-            else
-            {
-                UpdateRecentPartsVisuals();
-            }
+            UpdateRecentPartsVisuals();
         }
 
         public void ResetRecentPartsHistory()
@@ -2573,17 +2610,38 @@ namespace VisionInspectionApp.UI.ViewModels
             IsViewingHistoricalRecentPart = false;
             HistoricalViewingStatusText = string.Empty;
 
-            if (System.Windows.Application.Current?.Dispatcher != null && !System.Windows.Application.Current.Dispatcher.CheckAccess())
-            {
-                System.Windows.Application.Current.Dispatcher.BeginInvoke(new Action(UpdateRecentPartsVisuals));
-            }
-            else
-            {
-                UpdateRecentPartsVisuals();
-            }
+            UpdateRecentPartsVisuals();
         }
 
+        private int _isRecentPartsVisualUpdatePending = 0;
+
         public void UpdateRecentPartsVisuals()
+        {
+            if (System.Windows.Application.Current?.Dispatcher != null && !System.Windows.Application.Current.Dispatcher.CheckAccess())
+            {
+                if (Interlocked.CompareExchange(ref _isRecentPartsVisualUpdatePending, 1, 0) == 0)
+                {
+                    System.Windows.Application.Current.Dispatcher.BeginInvoke(
+                        System.Windows.Threading.DispatcherPriority.Background,
+                        new Action(() =>
+                        {
+                            try
+                            {
+                                UpdateRecentPartsVisualsDirect();
+                            }
+                            finally
+                            {
+                                Interlocked.Exchange(ref _isRecentPartsVisualUpdatePending, 0);
+                            }
+                        }));
+                }
+                return;
+            }
+
+            UpdateRecentPartsVisualsDirect();
+        }
+
+        private void UpdateRecentPartsVisualsDirect()
         {
             List<bool> snapshot;
             List<RecentPartInspectionSlotItem> itemsSnapshot;
@@ -4380,16 +4438,8 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (token.IsCancellationRequested || frame == null || frame.IsDisposed || frame.Empty())
                     return;
 
-                var frameClone = frame.Clone();
-                // Chốt siêu dữ liệu Encoder và Dấu thời gian NGAY TẠI THỜI ĐIỂM CHỤP ẢNH
-                var meta = _motionSyncService.CreateFrameMetadata(ProcessedImageCount);
-                var envelope = new ContinuousFrameEnvelope
-                {
-                    Frame = frameClone,
-                    Metadata = meta
-                };
-
-                // Nếu hàng đợi đầy, chủ động lấy frame cũ ra và gọi Dispose() trước khi ghi frame mới (Zero Memory Leak)
+                // 1. Drop-Before-Clone: Nếu hàng đợi đầy, chủ động lấy frame cũ ra và gọi Dispose() TRƯỚC
+                // để giải phóng bộ nhớ cũ trước khi clone frame mới (tránh giữ 17 ảnh full-size cùng lúc).
                 while (channel.Reader.Count >= QueueCapacity)
                 {
                     if (channel.Reader.TryRead(out var droppedEnvelope))
@@ -4402,6 +4452,16 @@ namespace VisionInspectionApp.UI.ViewModels
                         break;
                     }
                 }
+
+                // 2. Clone frame duy nhất để đưa vào Pipeline BoundedChannel
+                var frameClone = frame.Clone();
+                // Chốt siêu dữ liệu Encoder và Dấu thời gian NGAY TẠI THỜI ĐIỂM CHỤP ẢNH
+                var meta = _motionSyncService.CreateFrameMetadata(ProcessedImageCount);
+                var envelope = new ContinuousFrameEnvelope
+                {
+                    Frame = frameClone,
+                    Metadata = meta
+                };
 
                 if (!channel.Writer.TryWrite(envelope))
                 {
@@ -4581,13 +4641,15 @@ namespace VisionInspectionApp.UI.ViewModels
             _inspectionService.ResetTracking();
             var __swImg = System.Diagnostics.Stopwatch.StartNew();
 
-            SetImageSourceCache(sourceNodeName, "camera", frameMat);
+            // 1. Chỉ cập nhật cache ảnh nguồn khi KHÔNG chạy luồng liên tục (tiết kiệm 75MB memcpy/con hàng)
+            if (!IsRunningFolderFlow)
+            {
+                SetImageSourceCache(sourceNodeName, "camera", frameMat);
+            }
 
-            // ✅ TỐI ƯU: Chuyển quyền sở hữu Mat cho SharedImageContext thay vì để nó clone lại.
-            // Trước đây mỗi frame tốn thêm 1 bản clone ảnh full-size (~60MB với ảnh 20MP)
-            // => LOH/GC pressure rất lớn khi chạy Continuous.
-            var displayMat = PrepareDisplayImageForSharedContext(frameMat);
-            _sharedImage.SetImage(displayMat, transferOwnership: true);
+            // 2. Không clone frameMat đưa vào _sharedImage tại đây nữa!
+            // _sharedImage chỉ phục vụ UI Preview (RefreshPreviewsCore).
+            // Việc cập nhật _sharedImage sẽ được thực hiện có điều kiện ở khối shouldRenderUi bên dưới.
             __swImg.Stop();
             int imageSourceMs = (int)__swImg.ElapsedMilliseconds;
 
@@ -4675,18 +4737,22 @@ namespace VisionInspectionApp.UI.ViewModels
 
             // Cơ chế UI Frame Throttling & Non-blocking Preview Drop:
             // Chỉ yêu cầu UI render khi:
-            // 1. Sản phẩm lỗi NG (ưu tiên hiển thị tức thì không bị rớt) HOẶC đã cách frame render trước ít nhất ContinuousUiThrottleIntervalMs (60ms)
+            // 1. Sản phẩm lỗi NG (ưu tiên hiển thị tức thì không bị rớt) HOẶC hàng đợi vừa xả sạch HOẶC đã cách frame render trước ít nhất ContinuousUiThrottleIntervalMs (120ms)
             // 2. UI Thread KHÔNG ĐANG BẬN render frame trước (_isUiRenderingContinuous == 0)
             // Nhờ đó, Worker Task xử lý 100% tốc độ tối đa không bao giờ bị nghẽn hay đầy queue 16 nấc!
             long nowTick = Environment.TickCount64;
             bool isCurrentNg = inspectionResult != null && !inspectionResult.Pass;
-            bool shouldRenderUi = (isCurrentNg || nowTick - _lastContinuousUiRenderTick >= ContinuousUiThrottleIntervalMs) &&
+            bool isQueueDrained = _industrialCameraFrameChannel?.Reader?.Count == 0;
+            bool shouldRenderUi = (isCurrentNg || isQueueDrained || nowTick - _lastContinuousUiRenderTick >= ContinuousUiThrottleIntervalMs) &&
                                   (Interlocked.CompareExchange(ref _isUiRenderingContinuous, 1, 0) == 0);
 
             if (shouldRenderUi)
             {
                 _lastContinuousUiRenderTick = nowTick;
                 var currentRun = _lastRun;
+                var displayMat = PrepareDisplayImageForSharedContext(frameMat);
+                _sharedImage.SetImage(displayMat, transferOwnership: true);
+
                 var dispatcher = System.Windows.Application.Current?.Dispatcher;
                 if (dispatcher != null)
                 {

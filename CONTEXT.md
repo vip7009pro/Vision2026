@@ -7,37 +7,34 @@ Hỗ trợ Camera GigE/USB3/USB/RTSP/Android Pro Mode Native Server, nạp ảnh
 ## 2. Trạng thái mã nguồn gần nhất
 - **Phiên bản hiện tại**: .NET 8 WPF, x64/x86 Multi-targeting, C# 12.
 - **Biên dịch**: 0 Errors toàn solution (`VisionInspectionApp.slnx`) cả Debug lẫn Release.
-- **Kiểm thử tự động**: PASSED 100% toàn bộ test suite `TestExtractApp` (bao gồm ToolEditorContinuousRenderAndSpeed, ToolEditorColumnResize, ToolEditorAndOqcUx, PreprocessRoiMasking, MvpShapeMatch3 & Int8, Snapshot Frame Ownership, PlcHandshake, PlcContinuousQueue, v.v.).
+- **Kiểm thử tự động**: PASSED 100% toàn bộ test suite `TestExtractApp` (bao gồm ContinuousFlowRegression, ToolEditorContinuousRenderAndSpeed, ToolEditorColumnResize, ToolEditorAndOqcUx, PreprocessRoiMasking, MvpShapeMatch3 & Int8, Snapshot Frame Ownership, PlcHandshake, PlcContinuousQueue, v.v.).
 - **Cấu hình chuẩn xưởng CMS_VINA**: 
   - Database: `CMS_VINA` (192.168.1.2:6789)
   - OQC Server API: `https://192.168.1.192/vision_upload.php`
   - OTA Update Server: `http://192.168.1.192/update/version.json` & `http://192.168.1.192/ota_server.php`
   - PLC Handshake: `PLC_2` (Mitsubishi FX5U: Ready `M101`, Busy `M102`, Done `M103`, Pass `M104` RisingEdge 20ms, NG `M105` RisingEdge 20ms, Kết quả số `D100` OK=2, NG=3, Queue In `M200`).
 
-## 3. Hoàn thành Đợt Tối Ưu Hiệu Năng Tool Editor (Tasks 435, 436, 437)
-1. **Mục tiêu**:
-   - Khắc phục triệt để tình trạng giật, lag, khựng khi tương tác, pan/zoom canvas đồ thị, chuyển qua lại giữa các node và nhập liệu thuộc tính khi canvas nhiều node và làm việc với ảnh độ phân giải cao (20MP - 25MP).
-   - Bảo toàn 100% tính năng cốt lõi và kiến trúc MVVM.
-2. **Chi tiết các cải tiến**:
-   - **Task 435 (Canvas & Graph 60 FPS)**:
-     - Triệt tiêu hoàn toàn các lệnh `UpdateLayout()` cưỡng bức trong `EditorCanvas_PreviewMouseWheel` và `AutoFitAndCenterGraph` ([ToolEditorView.xaml.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/ToolEditorView.xaml.cs)), giải phóng UI thread khi zoom canvas 10.000x10.000 px.
-     - Caching `PathGeometry` và đóng băng `geom.Freeze()` trong `ToolGraphEdgeViewModel.cs` ([ToolGraphEdgeViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolGraphEdgeViewModel.cs)), tái tạo chỉ khi node di chuyển.
-     - Kích hoạt ảo hóa danh sách Tool theo nhóm (`VirtualizingPanel.IsVirtualizing="True"`, `VirtualizingPanel.ScrollUnit="Pixel"`) trên `ToolboxList` ([ToolEditorView.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/ToolEditorView.xaml)).
-     - Chuyển `RenderOptions.BitmapScalingMode="LowQuality"` (Bilinear GPU) trên `PART_Image` ([ImageViewerControl.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Controls/ImageViewerControl.xaml)), tăng tốc độ raster GPU khi pan/zoom ảnh lớn.
-   - **Task 436 (Targeted Property Invalidation & Chống Bão DataBinding/Disk I/O)**:
-     - Tái cấu trúc `RaiseToolPropertyPanelsChanged()` ([ToolEditorViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.cs)): Phân luồng có điều kiện theo loại node đang chọn, giảm tải từ 150+ xuống chỉ 5-10 properties / lần click (giảm 94% overhead binding).
-     - Cách ly Disk I/O `FileInfo` đồng bộ của template Origin/Contour, chỉ đọc đĩa khi đúng node được chọn.
-     - Dọn dẹp 17 thông báo thuộc tính dư thừa trong `OnSelectedNodeChanged` ([ToolEditorViewModel.GraphOps.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.GraphOps.cs)).
-     - Thay thế việc gọi `RaiseToolPropertyPanelsChanged()` trong setter đơn lẻ ([ToolContourCompare.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.ToolContourCompare.cs), [ToolDistance.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.ToolDistance.cs), [ToolSurface.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.ToolSurface.cs), [ToolText.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.ToolText.cs), [ToolObjectCounting.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.ToolObjectCounting.cs), [ToolPreprocess.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.ToolPreprocess.cs)) bằng `OnPropertyChanged(nameof(...))` đích danh.
-   - **Task 437 (Pipeline Ảnh 20-25MP & Debounce Nhập Liệu)**:
-     - Trong `GetNodeOutputImageForPreview(Mat raw, ToolGraphNodeViewModel node)`: Tái sử dụng snapshot `raw` hợp lệ trong RAM cho `ImageSource`, triệt tiêu hoàn toàn việc đọc và decode lại ảnh 25MP từ đĩa mỗi chu kỳ preview ([ToolEditorViewModel.Engine.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.Engine.cs)).
-     - Giải phóng an toàn ma trận trung gian khi khử méo `ChessboardCalibrationService.Undistort`.
-     - Nâng `RefreshDebounceIntervalMs` lên 50ms cho timer gộp preview, đảm bảo trải nghiệm gõ phím/kéo slider tức thì, giữ nguyên phản hồi thời gian thực cho thao tác ROI.
+## 3. Hoàn thành Task 438: Tối Ưu Hóa Pipeline Chạy Liên Tục (Zero-Copy Frame Flow & Đồng Bộ Tốc Độ >= 5 pcs/s)
+1. **Bối cảnh & Vấn đề**:
+   - Khi chạy liên tục: Tốc độ kiểm tra bị nghẽn ở ~3.5 pcs/s làm hàng đợi 16 nấc đầy dần. Khi dừng máy, việc xả hàng trong hàng đợi đạt tốc độ tối đa 5 pcs/s (200ms/con).
+   - Nguyên nhân: Tranh chấp bus bộ nhớ và L3 cache do sao chép 4 lần ảnh full-size 25MP (300MB/con hàng); bão cấp phát/hủy 75MB khi queue đầy; và bão Dispatcher UI ở mức ưu tiên Normal.
+2. **Chi tiết các giải pháp đã triển khai**:
+   - **Triệt tiêu 3 bản sao chép thừa (Memory Bandwidth Decongestion)**:
+     - Bỏ clone 75MB vào `SetImageSourceCache` khi `IsRunningFolderFlow`.
+     - Chuyển `_sharedImage.SetImage` có điều kiện vào khối `shouldRenderUi` (120ms/lần, khi NG hoặc khi queue vừa xả sạch), không cập nhật trên mọi frame.
+     - Giảm tổng lượng bộ nhớ memcpy từ 300MB xuống còn 75.7MB cho mỗi con hàng (giảm 76% áp lực bus RAM).
+   - **Thumbnail Proxy cho thanh 20 con hàng gần nhất**:
+     - Với sản phẩm PASS: Thu nhỏ về proxy $640 \times 360$ (< 700KB thay vì 75MB), giảm 99% áp lực bộ nhớ LOH cho 20 slot.
+     - Với sản phẩm NG: Giữ nguyên bản snapshot full-size 25MP để người vận hành soi khuyết tật.
+   - **Cơ chế Drop-Before-Clone cho Hàng đợi 16 nấc**:
+     - Kiểm tra và giải phóng envelope cũ trước khi clone frame mới, triệt tiêu việc giữ đồng thời 17 ảnh full-size trong RAM.
+   - **Coalesce & Throttling Dispatcher UI**:
+     - `UpdateQueueVisuals` và `UpdateRecentPartsVisuals` được bọc bởi cờ `_isQueueVisualUpdatePending` / `_isRecentPartsVisualUpdatePending` với `DispatcherPriority.Background`, loại bỏ hoàn toàn hiện tượng bão Dispatcher queue.
 
 ## 4. Các sự kiện & thay đổi gần đây
-- **Tasks 435, 436, 437**: Hoàn thành đợt rà soát và tối ưu hóa hiệu năng toàn diện Tool Editor; 100% test PASSED, 0 Errors.
+- **Task 439**: Rà soát PLC `PLC_Programs/Mitsubishi_GXWorks3/grok xml.xml` (FX5U). Lỗi chính: KHOI_4 ghi `D1000Z0`/`D2000Z1` nhưng Z0/Z1 không bao giờ được nạp từ D1101 → luôn ghi D1000/D2000; dữ liệu 32-bit cần Z = index×2; vùng D2000..D2199 chồng lên D2100/D2101; so sánh `>=` 16-bit với D600 32-bit (phải dùng `D>=`); Y1 double coil (KHOI_5 & KHOI_7); KHOI_7 pop dùng `AND M61` (ngược, phải `ANI M61`); KHOI_6 `INCP D300` không bao giờ chạy vì M103 đã RST trước đó. Chưa sửa file nguồn PLC (chỉ đưa mnemonic đề xuất).
+- **Task 438**: Tối ưu hóa pipeline chạy liên tục (Zero-Copy Frame Flow, Thumbnail Proxy, Throttled Dispatcher); 100% test PASSED, 0 Errors.
+- **Tasks 435, 436, 437**: Rà soát và tối ưu hiệu năng toàn diện Tool Editor (Canvas 60 FPS, Targeted Invalidation, Pipeline ảnh lớn 20-25MP).
 - **Task 434**: Bổ sung tùy chọn màu vùng che Đen / Trắng cho Tool Preprocess ROI Masking; kiểm thử 8/8 test PASSED 100%.
-- **Task 433**: Hiện thực hóa thành công 2 thuật toán tăng tốc `MvpShapeMatch3` (3.54ms - nhanh hơn 11.7x) và `MvpShapeMatchInt8` (2.74ms - nhanh hơn 15.0x, đánh bại mốc 7ms của MVP); kiểm thử 6/6 test PASSED 100%.
+- **Task 433**: Hiện thực hóa thành công 2 thuật toán tăng tốc `MvpShapeMatch3` (3.54ms) và `MvpShapeMatchInt8` (2.74ms); kiểm thử 6/6 test PASSED 100%.
 - **Task 432**: Tự động ẩn Cột 1 & 2, hiển thị Cột 3 & 4 (50/50) khi Chạy liên tục; khôi phục khi dừng; kiểm thử 10/10 PASSED 100%.
-- **Task 431**: Nâng cấp Preview Tool Editor khi bỏ Render Canvas & Bổ sung widget tốc độ tức thời (pcs/s); kiểm thử 8/8 PASSED 100%.
-- **Task 430**: Chuyển đổi thủ công chế độ spec BlobDetection (theo pixel hoặc theo mm); kiểm thử 9/9 PASSED 100%.
