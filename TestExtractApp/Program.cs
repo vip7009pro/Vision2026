@@ -200,6 +200,12 @@ class Program
             return;
         }
 
+        if (args.Length > 0 && (args[0].Equals("delay", StringComparison.OrdinalIgnoreCase) || args[0].Equals("handshake-delay", StringComparison.OrdinalIgnoreCase) || args[0].Equals("plc-delay", StringComparison.OrdinalIgnoreCase)))
+        {
+            PlcHandshakeDelayTests.RunAllTestsAsync().GetAwaiter().GetResult();
+            return;
+        }
+
         HikApiTest.PrintApi();
         CameraTest.TestCameraParametersJobSerialization();
         CameraTest.TestNativeMatPoolAndMetadata();
@@ -264,6 +270,8 @@ class Program
         HmiButtonShortcutTests.RunAllTests();
         PlcSignalTypeTests.RunAllTestsAsync().GetAwaiter().GetResult();
         PlcHandshakePersistenceTests.RunAllTests();
+        PlcHandshakeNumericModeTests.RunAllTestsAsync().GetAwaiter().GetResult();
+        PlcHandshakeDelayTests.RunAllTestsAsync().GetAwaiter().GetResult();
         ToolEditorColumnResizeTests.RunAllTests();
     }
 }

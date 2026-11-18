@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using VisionInspectionApp.Models;
@@ -26,11 +28,17 @@ public enum HandshakeState
 /// Máy trạng thái bắt tay công nghiệp 2 chiều chuẩn PLC <-> Vision PC (Deterministic Handshake Protocol)
 /// Đảm bảo tính toàn vẹn 100% của tín hiệu, không bao giờ mất frame hay xung đột dữ liệu trên băng truyền chạy liên tục 24/7.
 /// </summary>
-public sealed class IndustrialHandshakeStateMachine
+public sealed class IndustrialHandshakeStateMachine : IDisposable
 {
     private readonly IPlcManagerService? _plcManager;
     private readonly object _lock = new();
+    private readonly SemaphoreSlim _ioStateWriteLock = new(1, 1);
+    private readonly ConcurrentDictionary<string, long> _tagSignalGenerations = new(StringComparer.OrdinalIgnoreCase);
+    private readonly DelayedHandshakeDispatcher _delayedDispatcher;
 
+    private long _globalSignalEpoch;
+    private volatile bool _isInspecting;
+    private bool _disposed;
     private HandshakeState _currentState = HandshakeState.Idle;
     private string _plcId = "PLC1";
 
@@ -104,6 +112,16 @@ public sealed class IndustrialHandshakeStateMachine
     public int PulseDurationMs { get; set; } = 100;
 
     /// <summary>
+    /// Thời gian trễ (ms) trước khi gửi tín hiệu kết quả kiểm tra tới PLC (Mặc định: 0 ms - gửi ngay).
+    /// </summary>
+    public int DelayTimeMs { get; set; } = 0;
+
+    /// <summary>
+    /// Số lượng tín hiệu kết quả đang chờ trong hàng đợi trễ (Delay Queue) chuẩn bị gửi tới PLC.
+    /// </summary>
+    public int PendingDelayedCount => _delayedDispatcher.PendingCount;
+
+    /// <summary>
     /// Kiểu tín hiệu nhận cho lệnh Reset Queue từ PLC (Mặc định: RisingEdge)
     /// </summary>
     public PlcInputSignalType ResetQueueSignalType
@@ -166,10 +184,18 @@ public sealed class IndustrialHandshakeStateMachine
     /// </summary>
     public event EventHandler? OnResetQueueRequested;
 
+    /// <summary>
+    /// Sự kiện kích hoạt khi số lượng tín hiệu đang chờ gửi trễ (Delay Queue) thay đổi.
+    /// </summary>
+    public event EventHandler<int>? OnDelayedQueueCountChanged;
+
     public IndustrialHandshakeStateMachine(IPlcManagerService? plcManager = null, string plcId = "PLC1")
     {
         _plcManager = plcManager;
         _plcId = plcId;
+        _delayedDispatcher = new DelayedHandshakeDispatcher(
+            (isPass, token) => CompleteHandshakeCoreAsync(isPass, isDelayed: true, token),
+            pendingCount => OnDelayedQueueCountChanged?.Invoke(this, pendingCount));
 
         _resetQueueDetector.OnTriggered += (s, e) =>
         {
@@ -209,6 +235,7 @@ public sealed class IndustrialHandshakeStateMachine
         NgSignalType = config.NgSignalType;
         DoneSignalType = config.DoneSignalType;
         PulseDurationMs = config.PulseDurationMs;
+        DelayTimeMs = Math.Max(0, config.DelayTimeMs);
         ResetQueueTagName = config.ResetQueueTagName;
         ResetQueueSignalType = config.ResetQueueSignalType;
         ResetQueueDurationMs = config.ResetQueueDurationMs;
@@ -218,6 +245,14 @@ public sealed class IndustrialHandshakeStateMachine
         NgNumericValue = config.NgNumericValue;
         IdleNumericValue = config.IdleNumericValue;
         ClearResultWordOnReady = config.ClearResultWordOnReady;
+    }
+
+    /// <summary>
+    /// Xóa toàn bộ tín hiệu đang chờ trong hàng đợi Delay Time (ví dụ khi Reset Queue hoặc Stop).
+    /// </summary>
+    public void ClearDelayedQueue()
+    {
+        _delayedDispatcher.Clear();
     }
 
     private void PlcManager_OnTagChanged(object? sender, TagChangedEventArgs e)
@@ -340,6 +375,28 @@ public sealed class IndustrialHandshakeStateMachine
                GetEffectiveResultWordTag() != null;
     }
 
+    private (long epoch, long tagGen) CaptureNextTagGeneration(string tagName)
+    {
+        long epoch = Volatile.Read(ref _globalSignalEpoch);
+        long tagGen = _tagSignalGenerations.AddOrUpdate(tagName, 1L, (_, current) => current + 1L);
+        return (epoch, tagGen);
+    }
+
+    private (long epoch, long tagGen) GetCurrentTagGeneration(string tagName)
+    {
+        long epoch = Volatile.Read(ref _globalSignalEpoch);
+        long tagGen = _tagSignalGenerations.TryGetValue(tagName, out long current) ? current : 0L;
+        return (epoch, tagGen);
+    }
+
+    private bool IsTagGenerationValid(string tagName, long expectedEpoch, long expectedTagGen)
+    {
+        return !_disposed
+               && Volatile.Read(ref _globalSignalEpoch) == expectedEpoch
+               && _tagSignalGenerations.TryGetValue(tagName, out long current)
+               && current == expectedTagGen;
+    }
+
     /// <summary>
     /// Ghi tín hiệu gửi PLC theo dạng sóng đã cấu hình (Level, Rising Edge, Falling Edge)
     /// </summary>
@@ -349,6 +406,7 @@ public sealed class IndustrialHandshakeStateMachine
             return;
 
         int duration = Math.Max(20, PulseDurationMs);
+        var (epoch, gen) = CaptureNextTagGeneration(tagName);
 
         switch (signalType)
         {
@@ -367,7 +425,7 @@ public sealed class IndustrialHandshakeStateMachine
                         try
                         {
                             await Task.Delay(duration);
-                            if (_plcManager != null && _plcManager.IsPlcConnected(_plcId))
+                            if (IsTagGenerationValid(tagName, epoch, gen) && _plcManager != null && _plcManager.IsPlcConnected(_plcId))
                             {
                                 await _plcManager.WriteTagValueAsync(_plcId, tagName, false);
                             }
@@ -392,7 +450,7 @@ public sealed class IndustrialHandshakeStateMachine
                         try
                         {
                             await Task.Delay(duration);
-                            if (_plcManager != null && _plcManager.IsPlcConnected(_plcId))
+                            if (IsTagGenerationValid(tagName, epoch, gen) && _plcManager != null && _plcManager.IsPlcConnected(_plcId))
                             {
                                 await _plcManager.WriteTagValueAsync(_plcId, tagName, true);
                             }
@@ -414,6 +472,8 @@ public sealed class IndustrialHandshakeStateMachine
     /// </summary>
     public async Task SetReadyAsync(CancellationToken ct = default)
     {
+        _isInspecting = false;
+        Interlocked.Increment(ref _globalSignalEpoch);
         CurrentState = HandshakeState.Ready;
         if (!IsEnabled || _plcManager == null || !_plcManager.IsPlcConnected(_plcId) || !HasConfiguredHandshakeTags())
         {
@@ -427,40 +487,48 @@ public sealed class IndustrialHandshakeStateMachine
         var passTag = GetEffectivePassTag();
         var ngTag = GetEffectiveNgTag();
 
-        if (!string.IsNullOrEmpty(readyTag))
+        await _ioStateWriteLock.WaitAsync(ct);
+        try
         {
-            await _plcManager.WriteTagValueAsync(_plcId, readyTag, true, ct);
-        }
-        if (!string.IsNullOrEmpty(busyTag))
-        {
-            await _plcManager.WriteTagValueAsync(_plcId, busyTag, false, ct);
-        }
-        if (!string.IsNullOrEmpty(doneTag))
-        {
-            bool doneInactive = DoneSignalType == PlcSignalType.FallingEdge ? true : false;
-            await _plcManager.WriteTagValueAsync(_plcId, doneTag, doneInactive, ct);
-        }
-
-        // Đưa chân Pass / NG về trạng thái tĩnh phù hợp
-        if (!string.IsNullOrEmpty(passTag))
-        {
-            bool passInactive = PassSignalType == PlcSignalType.FallingEdge ? true : false;
-            await _plcManager.WriteTagValueAsync(_plcId, passTag, passInactive, ct);
-        }
-        if (!string.IsNullOrEmpty(ngTag))
-        {
-            bool ngInactive = NgSignalType == PlcSignalType.FallingEdge ? true : false;
-            await _plcManager.WriteTagValueAsync(_plcId, ngTag, ngInactive, ct);
-        }
-
-        // Đưa thanh ghi số nguyên kết quả về trạng thái Idle / Sẵn sàng (0) nếu cấu hình bật
-        if ((ResultOutputMode == PlcResultOutputMode.NumericInt16 || ResultOutputMode == PlcResultOutputMode.Both) && ClearResultWordOnReady)
-        {
-            var wordTag = GetEffectiveResultWordTag();
-            if (!string.IsNullOrEmpty(wordTag))
+            if (!string.IsNullOrEmpty(readyTag))
             {
-                await _plcManager.WriteTagValueAsync(_plcId, wordTag, (short)IdleNumericValue, ct);
+                await _plcManager.WriteTagValueAsync(_plcId, readyTag, true, ct);
             }
+            if (!string.IsNullOrEmpty(busyTag))
+            {
+                await _plcManager.WriteTagValueAsync(_plcId, busyTag, false, ct);
+            }
+            if (!string.IsNullOrEmpty(doneTag))
+            {
+                bool doneInactive = DoneSignalType == PlcSignalType.FallingEdge ? true : false;
+                await _plcManager.WriteTagValueAsync(_plcId, doneTag, doneInactive, ct);
+            }
+
+            // Đưa chân Pass / NG về trạng thái tĩnh phù hợp
+            if (!string.IsNullOrEmpty(passTag))
+            {
+                bool passInactive = PassSignalType == PlcSignalType.FallingEdge ? true : false;
+                await _plcManager.WriteTagValueAsync(_plcId, passTag, passInactive, ct);
+            }
+            if (!string.IsNullOrEmpty(ngTag))
+            {
+                bool ngInactive = NgSignalType == PlcSignalType.FallingEdge ? true : false;
+                await _plcManager.WriteTagValueAsync(_plcId, ngTag, ngInactive, ct);
+            }
+
+            // Đưa thanh ghi số nguyên kết quả về trạng thái Idle / Sẵn sàng (0) nếu cấu hình bật
+            if ((ResultOutputMode == PlcResultOutputMode.NumericInt16 || ResultOutputMode == PlcResultOutputMode.Both) && ClearResultWordOnReady)
+            {
+                var wordTag = GetEffectiveResultWordTag();
+                if (!string.IsNullOrEmpty(wordTag))
+                {
+                    await _plcManager.WriteTagValueAsync(_plcId, wordTag, (short)IdleNumericValue, ct);
+                }
+            }
+        }
+        finally
+        {
+            _ioStateWriteLock.Release();
         }
 
         CurrentState = HandshakeState.Armed;
@@ -477,28 +545,117 @@ public sealed class IndustrialHandshakeStateMachine
             return;
         }
 
+        _isInspecting = true;
         var busyTag = GetEffectiveBusyTag();
         var readyTag = GetEffectiveReadyTag();
 
-        if (!string.IsNullOrEmpty(busyTag))
+        var (busyEpoch, busyGen) = !string.IsNullOrEmpty(busyTag) ? CaptureNextTagGeneration(busyTag) : default;
+        var (readyEpoch, readyGen) = !string.IsNullOrEmpty(readyTag) ? CaptureNextTagGeneration(readyTag) : default;
+
+        await _ioStateWriteLock.WaitAsync(ct);
+        try
         {
-            await _plcManager.WriteTagValueAsync(_plcId, busyTag, true, ct);
+            if (!string.IsNullOrEmpty(busyTag) && IsTagGenerationValid(busyTag, busyEpoch, busyGen))
+            {
+                await _plcManager.WriteTagValueAsync(_plcId, busyTag, true, ct);
+            }
+            if (!string.IsNullOrEmpty(readyTag) && IsTagGenerationValid(readyTag, readyEpoch, readyGen))
+            {
+                await _plcManager.WriteTagValueAsync(_plcId, readyTag, false, ct);
+            }
         }
-        if (!string.IsNullOrEmpty(readyTag))
+        finally
         {
-            await _plcManager.WriteTagValueAsync(_plcId, readyTag, false, ct);
+            _ioStateWriteLock.Release();
         }
+    }
+
+    private async Task ReleaseInspectionBusyStateAsync(
+        string? busyTag, long busyEpoch, long busyGen,
+        string? readyTag, long readyEpoch, long readyGen)
+    {
+        if (_plcManager == null || !_plcManager.IsPlcConnected(_plcId))
+            return;
+
+        try
+        {
+            await _ioStateWriteLock.WaitAsync();
+            try
+            {
+                if (!string.IsNullOrEmpty(busyTag) && IsTagGenerationValid(busyTag, busyEpoch, busyGen))
+                {
+                    await _plcManager.WriteTagValueAsync(_plcId, busyTag, false);
+                }
+                if (!string.IsNullOrEmpty(readyTag) && IsTagGenerationValid(readyTag, readyEpoch, readyGen))
+                {
+                    await _plcManager.WriteTagValueAsync(_plcId, readyTag, true);
+                }
+            }
+            finally
+            {
+                _ioStateWriteLock.Release();
+            }
+        }
+        catch { }
     }
 
     /// <summary>
     /// Chốt kết quả kiểm tra (LATCH) và thực hiện bắt tay hoàn tất với PLC:
-    /// 1. Ghi bit PASS / NG theo kiểu tín hiệu cấu hình (Level / Rising Edge / Falling Edge)
-    /// 2. Ghi bit DONE theo kiểu tín hiệu cấu hình
-    /// 3. Chờ PLC phản hồi tín hiệu ACK = 1 (nếu chế độ đồng bộ)
-    /// 4. Hạ bit BUSY = 0, khôi phục READY = 1
+    /// 1. Nếu DelayTimeMs > 0: xếp lịch gửi vào hàng đợi Pipelined FIFO để phát tín hiệu đúng thứ tự sau thời gian trễ.
+    /// 2. Ghi bit PASS / NG và thanh ghi số nguyên theo cấu hình.
+    /// 3. Ghi bit DONE theo kiểu tín hiệu cấu hình.
+    /// 4. Chờ PLC phản hồi tín hiệu ACK = 1 (nếu chế độ đồng bộ) hoặc giải phóng ngay (Non-blocking).
     /// </summary>
     public async Task<bool> CompleteHandshakeAsync(bool isPass, CancellationToken ct = default)
     {
+        if (ct.IsCancellationRequested || _disposed)
+        {
+            return false;
+        }
+
+        if (!IsEnabled || _plcManager == null || !_plcManager.IsPlcConnected(_plcId) || !HasConfiguredHandshakeTags())
+        {
+            _isInspecting = false;
+            CurrentState = HandshakeState.ResultLatched;
+            CurrentState = HandshakeState.Complete;
+            return true;
+        }
+
+        int delayMs = Math.Max(0, DelayTimeMs);
+        if (delayMs > 0)
+        {
+            var ackTag = GetEffectivePlcAckTag();
+            bool isNonBlocking = NonBlockingMode || string.IsNullOrEmpty(ackTag);
+
+            if (isNonBlocking)
+            {
+                if (_isInspecting)
+                {
+                    _isInspecting = false;
+                    var busyTag = GetEffectiveBusyTag();
+                    var readyTag = GetEffectiveReadyTag();
+                    var (busyEpoch, busyGen) = !string.IsNullOrEmpty(busyTag) ? CaptureNextTagGeneration(busyTag) : default;
+                    var (readyEpoch, readyGen) = !string.IsNullOrEmpty(readyTag) ? CaptureNextTagGeneration(readyTag) : default;
+                    _ = ReleaseInspectionBusyStateAsync(busyTag, busyEpoch, busyGen, readyTag, readyEpoch, readyGen);
+                }
+
+                CurrentState = HandshakeState.Armed;
+            }
+
+            return await _delayedDispatcher.EnqueueAsync(isPass, delayMs, ct);
+        }
+
+        _isInspecting = false;
+        return await CompleteHandshakeCoreAsync(isPass, isDelayed: false, ct);
+    }
+
+    private async Task<bool> CompleteHandshakeCoreAsync(bool isPass, bool isDelayed, CancellationToken ct = default)
+    {
+        if (ct.IsCancellationRequested || _disposed)
+        {
+            return false;
+        }
+
         CurrentState = HandshakeState.ResultLatched;
 
         if (!IsEnabled || _plcManager == null || !_plcManager.IsPlcConnected(_plcId) || !HasConfiguredHandshakeTags())
@@ -552,21 +709,40 @@ public sealed class IndustrialHandshakeStateMachine
             // Vision trả kết quả trực tiếp vào hàng đợi PLC và giải phóng ngay để không làm chậm chuyền.
             if (NonBlockingMode || string.IsNullOrEmpty(ackTag))
             {
-                // Tự động hạ Busy (và hạ Done nếu là Level) sau một khoảng trễ ngắn 15ms trong background
-                _ = Task.Run(async () =>
-                {
-                    try
-                    {
-                        await Task.Delay(15);
-                        if (DoneSignalType == PlcSignalType.Level && !string.IsNullOrEmpty(doneTag) && _plcManager != null)
-                            await _plcManager.WriteTagValueAsync(_plcId, doneTag, false);
-                        if (!string.IsNullOrEmpty(busyTag) && _plcManager != null)
-                            await _plcManager.WriteTagValueAsync(_plcId, busyTag, false);
-                    }
-                    catch { }
-                });
+                (long epoch, long tagGen)? doneResetGen = (DoneSignalType == PlcSignalType.Level && !string.IsNullOrEmpty(doneTag))
+                    ? GetCurrentTagGeneration(doneTag)
+                    : null;
+                (long epoch, long tagGen)? busyResetGen = (!isDelayed && !string.IsNullOrEmpty(busyTag))
+                    ? CaptureNextTagGeneration(busyTag)
+                    : null;
 
-                CurrentState = HandshakeState.Armed;
+                // Tự động hạ Busy (và hạ Done nếu là Level) sau một khoảng trễ ngắn 15ms trong background
+                if (doneResetGen.HasValue || busyResetGen.HasValue)
+                {
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            await Task.Delay(15);
+                            if (_plcManager == null || !_plcManager.IsPlcConnected(_plcId)) return;
+
+                            if (doneResetGen.HasValue && !string.IsNullOrEmpty(doneTag) &&
+                                IsTagGenerationValid(doneTag, doneResetGen.Value.epoch, doneResetGen.Value.tagGen))
+                            {
+                                await _plcManager.WriteTagValueAsync(_plcId, doneTag, false);
+                            }
+
+                            if (busyResetGen.HasValue && !string.IsNullOrEmpty(busyTag) &&
+                                IsTagGenerationValid(busyTag, busyResetGen.Value.epoch, busyResetGen.Value.tagGen))
+                            {
+                                await _plcManager.WriteTagValueAsync(_plcId, busyTag, false);
+                            }
+                        }
+                        catch { }
+                    });
+                }
+
+                CurrentState = _isInspecting ? HandshakeState.Inspecting : HandshakeState.Armed;
                 return true;
             }
 
@@ -639,7 +815,7 @@ public sealed class IndustrialHandshakeStateMachine
             }
 
             // 3. Hạ bit DONE (nếu Level) và BUSY xuống 0, đồng thời khôi phục READY = 1 cho chu trình tiếp theo
-            if (DoneSignalType == PlcSignalType.Level && !string.IsNullOrEmpty(doneTag))
+            if (DoneSignalType == PlcSignalType.Level && !string.IsNullOrEmpty(doneTag) && _plcManager != null)
             {
                 await _plcManager.WriteTagValueAsync(_plcId, doneTag, false, ct);
             }
@@ -649,11 +825,11 @@ public sealed class IndustrialHandshakeStateMachine
                 await Task.Delay(10, ct);
                 await _plcManager.WriteTagValueAsync(_plcId, ackTag, false, ct);
             }
-            if (!string.IsNullOrEmpty(busyTag))
+            if (!string.IsNullOrEmpty(busyTag) && _plcManager != null)
             {
                 await _plcManager.WriteTagValueAsync(_plcId, busyTag, false, ct);
             }
-            if (!string.IsNullOrEmpty(readyTag))
+            if (!string.IsNullOrEmpty(readyTag) && _plcManager != null)
             {
                 await _plcManager.WriteTagValueAsync(_plcId, readyTag, true, ct);
             }
@@ -661,6 +837,10 @@ public sealed class IndustrialHandshakeStateMachine
             // 4. Hoàn tất chu trình
             CurrentState = HandshakeState.Complete;
             return true;
+        }
+        catch (OperationCanceledException)
+        {
+            return false;
         }
         catch (Exception ex)
         {
@@ -675,6 +855,9 @@ public sealed class IndustrialHandshakeStateMachine
     /// </summary>
     public async Task SetIdleAsync(CancellationToken ct = default)
     {
+        _isInspecting = false;
+        Interlocked.Increment(ref _globalSignalEpoch);
+        _delayedDispatcher.Clear();
         CurrentState = HandshakeState.Idle;
         if (!IsEnabled || _plcManager == null || !_plcManager.IsPlcConnected(_plcId))
         {
@@ -690,28 +873,49 @@ public sealed class IndustrialHandshakeStateMachine
 
         try
         {
-            if (!string.IsNullOrEmpty(readyTag)) await _plcManager.WriteTagValueAsync(_plcId, readyTag, false, ct);
-            if (!string.IsNullOrEmpty(busyTag)) await _plcManager.WriteTagValueAsync(_plcId, busyTag, false, ct);
-            if (!string.IsNullOrEmpty(doneTag))
+            await _ioStateWriteLock.WaitAsync(ct);
+            try
             {
-                bool doneInactive = DoneSignalType == PlcSignalType.FallingEdge ? true : false;
-                await _plcManager.WriteTagValueAsync(_plcId, doneTag, doneInactive, ct);
+                if (!string.IsNullOrEmpty(readyTag)) await _plcManager.WriteTagValueAsync(_plcId, readyTag, false, ct);
+                if (!string.IsNullOrEmpty(busyTag)) await _plcManager.WriteTagValueAsync(_plcId, busyTag, false, ct);
+                if (!string.IsNullOrEmpty(doneTag))
+                {
+                    bool doneInactive = DoneSignalType == PlcSignalType.FallingEdge ? true : false;
+                    await _plcManager.WriteTagValueAsync(_plcId, doneTag, doneInactive, ct);
+                }
+                if (!string.IsNullOrEmpty(passTag))
+                {
+                    bool passInactive = PassSignalType == PlcSignalType.FallingEdge ? true : false;
+                    await _plcManager.WriteTagValueAsync(_plcId, passTag, passInactive, ct);
+                }
+                if (!string.IsNullOrEmpty(ngTag))
+                {
+                    bool ngInactive = NgSignalType == PlcSignalType.FallingEdge ? true : false;
+                    await _plcManager.WriteTagValueAsync(_plcId, ngTag, ngInactive, ct);
+                }
+                if ((ResultOutputMode == PlcResultOutputMode.NumericInt16 || ResultOutputMode == PlcResultOutputMode.Both) && ClearResultWordOnReady && !string.IsNullOrEmpty(wordTag))
+                {
+                    await _plcManager.WriteTagValueAsync(_plcId, wordTag, (short)IdleNumericValue, ct);
+                }
             }
-            if (!string.IsNullOrEmpty(passTag))
+            finally
             {
-                bool passInactive = PassSignalType == PlcSignalType.FallingEdge ? true : false;
-                await _plcManager.WriteTagValueAsync(_plcId, passTag, passInactive, ct);
-            }
-            if (!string.IsNullOrEmpty(ngTag))
-            {
-                bool ngInactive = NgSignalType == PlcSignalType.FallingEdge ? true : false;
-                await _plcManager.WriteTagValueAsync(_plcId, ngTag, ngInactive, ct);
-            }
-            if ((ResultOutputMode == PlcResultOutputMode.NumericInt16 || ResultOutputMode == PlcResultOutputMode.Both) && ClearResultWordOnReady && !string.IsNullOrEmpty(wordTag))
-            {
-                await _plcManager.WriteTagValueAsync(_plcId, wordTag, (short)IdleNumericValue, ct);
+                _ioStateWriteLock.Release();
             }
         }
         catch { }
+    }
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        Interlocked.Increment(ref _globalSignalEpoch);
+        _delayedDispatcher.Dispose();
+        if (_plcManager != null)
+        {
+            _plcManager.OnTagChanged -= PlcManager_OnTagChanged;
+        }
+        try { _ioStateWriteLock.Dispose(); } catch { }
     }
 }

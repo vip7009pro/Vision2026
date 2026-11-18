@@ -107,6 +107,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         {
             _handshakeStateMachine.OnStateChanged += (_, _) => RequestHandshakeUiUpdate();
             _handshakeStateMachine.OnHandshakeTimeout += (_, _) => RequestHandshakeUiUpdate();
+            _handshakeStateMachine.OnDelayedQueueCountChanged += (_, _) => RequestHandshakeUiUpdate();
         }
 
         if (_plcManagerService != null)
@@ -329,10 +330,15 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 break;
         }
 
+        int delayTimeMs = Math.Max(0, _handshakeStateMachine?.DelayTimeMs ?? 0);
+        int pendingDelayedCount = _handshakeStateMachine?.PendingDelayedCount ?? 0;
         string modeSuffix = isNonBlocking ? " [Non-blocking Queue]" : "";
+        string delaySummary = delayTimeMs > 0 || pendingDelayedCount > 0
+            ? $" | ⏳Delay:{delayTimeMs}ms({pendingDelayedCount})"
+            : "";
         string summaryAck = hasAckTag ? $"ACK:{(bitAck ? 1 : 0)}" : "ACK:--";
         string summaryWord = isWordMode ? $" RES:{wordVal}" : "";
-        HandshakeStatusBarSummary = $"🤝 PLC: {plcId} ({stateDesc}{modeSuffix}) | RDY:{(bitRdy ? 1 : 0)} BSY:{(bitBsy ? 1 : 0)} DON:{(bitDon ? 1 : 0)} {summaryAck}{summaryWord}";
+        HandshakeStatusBarSummary = $"🤝 PLC: {plcId} ({stateDesc}{modeSuffix}) | RDY:{(bitRdy ? 1 : 0)} BSY:{(bitBsy ? 1 : 0)} DON:{(bitDon ? 1 : 0)} {summaryAck}{summaryWord}{delaySummary}";
 
         string ackToolTipText = hasAckTag
             ? $"• [X] PLC Ack      ({ackTag}) : {(bitAck ? "ON (1) — PLC đã chốt" : "OFF (0)")}\n"
@@ -368,6 +374,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             $"• Phương Thức Xuất : {modeStr}\n" +
             $"• Trạng Thái   : {stateDesc}\n" +
             $"• Điểm Ra Chỉ Định: Nấc {_handshakeStateMachine?.TargetStopStationIndex ?? 10} / 20 (M200..M219)\n" +
+            $"• Delay Gửi PLC : {(delayTimeMs > 0 ? $"{delayTimeMs} ms (Đang chờ gửi: {pendingDelayedCount})" : "0 ms (Gửi tức thì)")}\n" +
             $"• Timeout Chờ  : {_handshakeStateMachine?.HandshakeTimeoutMs ?? 500} ms\n" +
             $"──────────────────────────────────────────────────\n" +
             $"Tín Hiệu I/O Hiện Tại (MC Protocol / Internal Bit & Word):\n" +

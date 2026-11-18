@@ -269,6 +269,18 @@ public sealed class IndustrialHandshakeConfig : INotifyPropertyChanged
     }
 
     /// <summary>
+    /// Thời gian trễ (ms) trước khi gửi tín hiệu kết quả kiểm tra tới PLC (Mặc định: 0 ms - gửi ngay lập tức).
+    /// Khi DelayTimeMs > 0, sản phẩm vẫn được kiểm tra thời gian thực và lưu kết quả ngay;
+    /// các tín hiệu gửi về PLC được giữ trễ độc lập và phát liên tục theo đúng thứ tự FIFO.
+    /// </summary>
+    private int _delayTimeMs = 0;
+    public int DelayTimeMs
+    {
+        get => _delayTimeMs;
+        set { if (_delayTimeMs != value) { _delayTimeMs = value; OnPropertyChanged(); } }
+    }
+
+    /// <summary>
     /// Chế độ bắt tay bất đồng bộ không chờ Ack (Non-blocking Pipelined Queue):
     /// Băng tải chạy liên tục tốc độ cao, Vision ghi kết quả vào hàng đợi rồi giải phóng ngay, không dừng luồng chờ Ack.
     /// </summary>
@@ -373,6 +385,7 @@ public sealed class IndustrialHandshakeConfig : INotifyPropertyChanged
         NgSignalType = PlcSignalType.RisingEdge;
         DoneSignalType = PlcSignalType.Level;
         PulseDurationMs = 20;
+        DelayTimeMs = 0;
         NonBlockingMode = true;
         TargetStopStationIndex = 10;
         QueueRegisterStart = "M200";
@@ -406,6 +419,7 @@ public sealed class IndustrialHandshakeConfig : INotifyPropertyChanged
         NgSignalType = PlcSignalType.Level;
         DoneSignalType = PlcSignalType.Level;
         PulseDurationMs = 100;
+        DelayTimeMs = 0;
         NonBlockingMode = false;
         TargetStopStationIndex = 10;
         QueueRegisterStart = "M200";
@@ -440,6 +454,7 @@ public sealed class IndustrialHandshakeConfig : INotifyPropertyChanged
         NgSignalType = other.NgSignalType;
         DoneSignalType = other.DoneSignalType;
         PulseDurationMs = other.PulseDurationMs;
+        DelayTimeMs = other.DelayTimeMs;
         NonBlockingMode = other.NonBlockingMode;
         TargetStopStationIndex = other.TargetStopStationIndex;
         QueueRegisterStart = other.QueueRegisterStart;

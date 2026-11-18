@@ -4292,6 +4292,7 @@ namespace VisionInspectionApp.UI.ViewModels
             }
 
             Interlocked.Exchange(ref _droppedContinuousFramesCount, 0);
+            _handshakeStateMachine?.ClearDelayedQueue();
             ProcessedImageCount = 0;
             QueueCurrentCount = 0;
             UpdateQueueVisuals();
@@ -4721,21 +4722,28 @@ namespace VisionInspectionApp.UI.ViewModels
 
                     // 2. Gửi tín hiệu bắt tay PLC (PASS/NG/DONE/M200) bất đồng bộ ngầm ngoài background (Non-blocking):
                     // Tuyệt đối KHÔNG await đồng bộ làm nghẽn Worker Task của hàng đợi 16 nấc.
-                    // Nhờ đó, Worker Task giải phóng ngay frame tiếp theo trong queue ở tốc độ 25ms!
+                    // Khi DelayTimeMs > 0: xếp lịch trực tiếp trên Worker thread (0 I/O, <1µs) để bảo toàn tuyệt đối thứ tự FIFO.
                     if (_handshakeStateMachine != null && _handshakeStateMachine.IsEnabled)
                     {
                         var isPass = inspectionResult.Pass;
-                        _ = Task.Run(async () =>
+                        if (_handshakeStateMachine.DelayTimeMs > 0)
                         {
-                            try
+                            _ = _handshakeStateMachine.CompleteHandshakeAsync(isPass, token);
+                        }
+                        else
+                        {
+                            _ = Task.Run(async () =>
                             {
-                                await _handshakeStateMachine.CompleteHandshakeAsync(isPass);
-                            }
-                            catch (Exception ex)
-                            {
-                                System.Diagnostics.Debug.WriteLine($"[Continuous Handshake Worker] Error: {ex.Message}");
-                            }
-                        });
+                                try
+                                {
+                                    await _handshakeStateMachine.CompleteHandshakeAsync(isPass);
+                                }
+                                catch (Exception ex)
+                                {
+                                    System.Diagnostics.Debug.WriteLine($"[Continuous Handshake Worker] Error: {ex.Message}");
+                                }
+                            });
+                        }
                     }
 
                     // ImageSource runtime chỉ đo thời gian chuẩn bị ảnh (< 1ms), không bị gộp thời gian Inspect và PLC handshake

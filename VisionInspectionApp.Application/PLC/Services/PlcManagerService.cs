@@ -30,8 +30,14 @@ public sealed class PlcManagerService : IPlcManagerService, IDisposable
         set
         {
             _industrialConfig = value ?? new();
-            OnIndustrialConfigChanged?.Invoke(this, _industrialConfig);
-            if (!_isLoading) SaveGlobalConfig();
+            if (_isLoading)
+            {
+                OnIndustrialConfigChanged?.Invoke(this, _industrialConfig ??= new());
+            }
+            else
+            {
+                SaveGlobalConfig();
+            }
         }
     }
 
@@ -339,6 +345,8 @@ public sealed class PlcManagerService : IPlcManagerService, IDisposable
                 Logger.LogWriteError("SYSTEM", "SaveGlobalConfig", ex.Message);
             }
         }
+
+        OnIndustrialConfigChanged?.Invoke(this, _industrialConfig ??= new());
     }
 
     public void LoadGlobalConfig()
@@ -405,7 +413,7 @@ public sealed class PlcManagerService : IPlcManagerService, IDisposable
                         }
                     }
 
-                    OnIndustrialConfigChanged?.Invoke(this, _industrialConfig);
+                    OnIndustrialConfigChanged?.Invoke(this, _industrialConfig ??= new());
 
                     if (container.Plcs != null && container.Plcs.Count > 0)
                     {

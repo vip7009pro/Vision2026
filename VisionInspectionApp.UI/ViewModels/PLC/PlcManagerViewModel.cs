@@ -475,7 +475,7 @@ public partial class PlcManagerViewModel : ObservableObject
             System.Windows.MessageBox.Show(
                 "Đã khôi phục cấu hình Bắt tay 24/7 theo chuẩn Mitsubishi FX5U:\n" +
                 "• PLC Đích: " + plcId + "\n" +
-                "• Ready: M101\n• Busy: M102\n• Done: M103\n• Pass (OK): M104 (Rising Edge 20ms)\n• NG (Lỗi): M105 (Rising Edge 20ms)\n• Kết Quả Số: D100 (OK=2, NG=3)\n• Hàng đợi: M200 (Non-Blocking, Trạm dừng 10)",
+                "• Ready: M101\n• Busy: M102\n• Done: M103\n• Pass (OK): M104 (Rising Edge 20ms)\n• NG (Lỗi): M105 (Rising Edge 20ms)\n• Kết Quả Số: D100 (OK=2, NG=3)\n• Delay Time: 0 ms\n• Hàng đợi: M200 (Non-Blocking, Trạm dừng 10)",
                 "Khôi Phục Chuẩn FX5U",
                 System.Windows.MessageBoxButton.OK,
                 System.Windows.MessageBoxImage.Information);
@@ -499,7 +499,7 @@ public partial class PlcManagerViewModel : ObservableObject
             System.Windows.MessageBox.Show(
                 "Đã khôi phục cấu hình Bắt tay 24/7 theo chuẩn I/O Công Nghiệp:\n" +
                 "• PLC Đích: " + plcId + "\n" +
-                "• Ready: Y1_VisionReady\n• Busy: Y2_VisionBusy\n• Done: Y3_VisionDone\n• Pass (OK): Y4_VisionPass\n• NG (Lỗi): Y5_VisionNG\n• Kết Quả Số: MW100 (OK=2, NG=3)\n• Ack: X1_PlcAck",
+                "• Ready: Y1_VisionReady\n• Busy: Y2_VisionBusy\n• Done: Y3_VisionDone\n• Pass (OK): Y4_VisionPass\n• NG (Lỗi): Y5_VisionNG\n• Kết Quả Số: MW100 (OK=2, NG=3)\n• Delay Time: 0 ms\n• Ack: X1_PlcAck",
                 "Khôi Phục Chuẩn I/O",
                 System.Windows.MessageBoxButton.OK,
                 System.Windows.MessageBoxImage.Information);
