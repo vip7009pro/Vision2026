@@ -19,11 +19,24 @@ public partial class MainWindow : Window
         DataContext = viewModel;
         Closing += MainWindow_Closing;
         StateChanged += MainWindow_StateChanged;
+        Deactivated += (_, _) => (DataContext as MainWindowViewModel)?.ToolEditor.ReleaseActiveHmiShortcutButtons();
     }
 
     protected override void OnPreviewKeyDown(KeyEventArgs e)
     {
         base.OnPreviewKeyDown(e);
+
+        // Phím tắt HMI Button trên màn hình Tool Editor (nhận cả khi ẩn/hiện HMI)
+        if (!e.Handled && DataContext is MainWindowViewModel mainVm && mainVm.SelectedTabIndex == 0)
+        {
+            var actualKey = HMI.HmiShortcutHelper.ResolveActualKey(e);
+            var mods = HMI.HmiShortcutHelper.NormalizeModifiers(Keyboard.Modifiers);
+            if (mainVm.ToolEditor.TryHandleHmiShortcutKeyDown(actualKey, mods, e.IsRepeat, Keyboard.FocusedElement as DependencyObject))
+            {
+                e.Handled = true;
+                return;
+            }
+        }
 
         // Phím tắt Ctrl + F4: Đóng Job đang mở
         if (e.KeyboardDevice.Modifiers == ModifierKeys.Control && e.Key == Key.F4)
@@ -45,6 +58,21 @@ public partial class MainWindow : Window
                 (vm.ToolEditor.IsCaliperNode || vm.ToolEditor.IsEdgePairDetectNode))
             {
                 vm.ToolEditor.ToggleToolOrientation();
+                e.Handled = true;
+                return;
+            }
+        }
+    }
+
+    protected override void OnPreviewKeyUp(KeyEventArgs e)
+    {
+        base.OnPreviewKeyUp(e);
+
+        if (!e.Handled && DataContext is MainWindowViewModel mainVm && mainVm.SelectedTabIndex == 0)
+        {
+            var actualKey = HMI.HmiShortcutHelper.ResolveActualKey(e);
+            if (mainVm.ToolEditor.TryHandleHmiShortcutKeyUp(actualKey))
+            {
                 e.Handled = true;
                 return;
             }

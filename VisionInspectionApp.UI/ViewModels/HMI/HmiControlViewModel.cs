@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -17,6 +18,8 @@ public partial class HmiControlViewModel : ObservableObject
 {
     private readonly IPlcManagerService? _plcService;
     private long _lastMomentaryPressTimestamp;
+    private long _momentaryPressGeneration;
+    private volatile bool _isMomentaryInFlight;
 
     [ObservableProperty]
     private HmiControlModel _model;
@@ -199,6 +202,42 @@ public partial class HmiControlViewModel : ObservableObject
         set { if (Model.WriteValueOff != value) { Model.WriteValueOff = value; NotifyModelChanged(); } }
     }
 
+    public HmiControlType Type
+    {
+        get => Model.Type;
+        set
+        {
+            if (Model.Type != value)
+            {
+                Model.Type = value;
+                UpdateVisualState();
+                NotifyModelChanged();
+            }
+        }
+    }
+
+    public bool IsButtonControl => Model.Type == HmiControlType.Button;
+
+    public string ShortcutKey
+    {
+        get => Model.ShortcutKey ?? "";
+        set
+        {
+            string normalized = HmiShortcutHelper.NormalizeShortcutString(value);
+            if (!string.Equals(Model.ShortcutKey ?? "", normalized, StringComparison.Ordinal))
+            {
+                Model.ShortcutKey = normalized;
+                NotifyModelChanged();
+            }
+        }
+    }
+
+    public bool HasShortcutBadge => IsButtonControl && !string.IsNullOrWhiteSpace(ShortcutKey);
+
+    public string ShortcutToolTip => HasShortcutBadge
+        ? $"{DisplayLabel} (Phím tắt: {ShortcutKey})"
+        : DisplayLabel;
+
     public HmiControlViewModel(HmiControlModel model, IPlcManagerService? plcService = null, HmiScreenConfig? parentScreenConfig = null)
     {
         _model = model;
@@ -277,79 +316,81 @@ public partial class HmiControlViewModel : ObservableObject
 
         if (tagMatch)
         {
-            DispatchOnUiThread(() =>
-            {
-                bool targetIsOn = false;
-                string targetDisplay = "";
-
-                switch (Model.ValueDataType)
-                {
-                    case PlcDataType.Bool:
-                        if (newValue is bool b) targetIsOn = b;
-                        else if (newValue is IConvertible conv)
-                        {
-                            try { targetIsOn = conv.ToDouble(null) != 0; } catch { }
-                        }
-                        else
-                        {
-                            string s = newValue?.ToString() ?? "";
-                            targetIsOn = s.Equals("true", StringComparison.OrdinalIgnoreCase) || s == "1";
-                        }
-                        targetDisplay = targetIsOn ? "TRUE" : "FALSE";
-                        break;
-
-                    case PlcDataType.Float:
-                    case PlcDataType.Double:
-                        try
-                        {
-                            double dVal = Convert.ToDouble(newValue);
-                            // Triệt tiêu số mũ subnormal cực nhỏ (như 4.4E-323 khi đọc nhầm 32-bit DWord integer)
-                            if (double.IsNaN(dVal) || double.IsInfinity(dVal) || Math.Abs(dVal) < 1e-9)
-                            {
-                                dVal = 0;
-                            }
-                            targetIsOn = Math.Abs(dVal) > 0.0001;
-                            string fmt = !string.IsNullOrWhiteSpace(Model.ValueFormat) ? Model.ValueFormat : "0.##";
-                            targetDisplay = dVal.ToString(fmt, System.Globalization.CultureInfo.InvariantCulture);
-                        }
-                        catch
-                        {
-                            targetDisplay = newValue?.ToString() ?? "0";
-                        }
-                        break;
-
-                    case PlcDataType.Int16:
-                    case PlcDataType.UInt16:
-                    case PlcDataType.Int32:
-                    case PlcDataType.UInt32:
-                        try
-                        {
-                            long iVal = Convert.ToInt64(newValue);
-                            targetIsOn = iVal != 0;
-                            string fmt = !string.IsNullOrWhiteSpace(Model.ValueFormat) && !Model.ValueFormat.Contains('.') ? Model.ValueFormat : "0";
-                            targetDisplay = iVal.ToString(fmt);
-                        }
-                        catch
-                        {
-                            targetDisplay = newValue?.ToString() ?? "0";
-                        }
-                        break;
-
-                    case PlcDataType.String:
-                        targetDisplay = newValue?.ToString() ?? "";
-                        targetIsOn = !string.IsNullOrWhiteSpace(targetDisplay);
-                        break;
-
-                    default:
-                        targetDisplay = newValue?.ToString() ?? "";
-                        targetIsOn = !string.IsNullOrWhiteSpace(targetDisplay) && targetDisplay != "0";
-                        break;
-                }
-
-                if (IsOn != targetIsOn) IsOn = targetIsOn;
-                if (CurrentDisplayValue != targetDisplay) CurrentDisplayValue = targetDisplay;
-            });
+            DispatchOnUiThread(() => ApplyTagValueToState(newValue));
         }
+    }
+
+    private void ApplyTagValueToState(object? newValue)
+    {
+        bool targetIsOn = false;
+        string targetDisplay = "";
+
+        switch (Model.ValueDataType)
+        {
+            case PlcDataType.Bool:
+                if (newValue is bool b) targetIsOn = b;
+                else if (newValue is IConvertible conv)
+                {
+                    try { targetIsOn = conv.ToDouble(null) != 0; } catch { }
+                }
+                else
+                {
+                    string s = newValue?.ToString() ?? "";
+                    targetIsOn = s.Equals("true", StringComparison.OrdinalIgnoreCase) || s == "1";
+                }
+                targetDisplay = targetIsOn ? "TRUE" : "FALSE";
+                break;
+
+            case PlcDataType.Float:
+            case PlcDataType.Double:
+                try
+                {
+                    double dVal = Convert.ToDouble(newValue);
+                    // Triệt tiêu số mũ subnormal cực nhỏ (như 4.4E-323 khi đọc nhầm 32-bit DWord integer)
+                    if (double.IsNaN(dVal) || double.IsInfinity(dVal) || Math.Abs(dVal) < 1e-9)
+                    {
+                        dVal = 0;
+                    }
+                    targetIsOn = Math.Abs(dVal) > 0.0001;
+                    string fmt = !string.IsNullOrWhiteSpace(Model.ValueFormat) ? Model.ValueFormat : "0.##";
+                    targetDisplay = dVal.ToString(fmt, System.Globalization.CultureInfo.InvariantCulture);
+                }
+                catch
+                {
+                    targetDisplay = newValue?.ToString() ?? "0";
+                }
+                break;
+
+            case PlcDataType.Int16:
+            case PlcDataType.UInt16:
+            case PlcDataType.Int32:
+            case PlcDataType.UInt32:
+                try
+                {
+                    long iVal = Convert.ToInt64(newValue);
+                    targetIsOn = iVal != 0;
+                    string fmt = !string.IsNullOrWhiteSpace(Model.ValueFormat) && !Model.ValueFormat.Contains('.') ? Model.ValueFormat : "0";
+                    targetDisplay = iVal.ToString(fmt);
+                }
+                catch
+                {
+                    targetDisplay = newValue?.ToString() ?? "0";
+                }
+                break;
+
+            case PlcDataType.String:
+                targetDisplay = newValue?.ToString() ?? "";
+                targetIsOn = !string.IsNullOrWhiteSpace(targetDisplay);
+                break;
+
+            default:
+                targetDisplay = newValue?.ToString() ?? "";
+                targetIsOn = !string.IsNullOrWhiteSpace(targetDisplay) && targetDisplay != "0";
+                break;
+        }
+
+        if (IsOn != targetIsOn) IsOn = targetIsOn;
+        if (CurrentDisplayValue != targetDisplay) CurrentDisplayValue = targetDisplay;
     }
 
     private void DispatchOnUiThread(Action action)
@@ -414,6 +455,7 @@ public partial class HmiControlViewModel : ObservableObject
     /// </summary>
     public void RefreshCurrentValueFromPlc()
     {
+        if (_isMomentaryInFlight) return;
         string readAddr = EffectiveReadAddress;
         if (string.IsNullOrWhiteSpace(readAddr) || _plcService == null) return;
 
@@ -433,7 +475,7 @@ public partial class HmiControlViewModel : ObservableObject
                 try
                 {
                     var val = await _plcService.ReadTagValueAsync(EffectiveReadPlcId, readAddr);
-                    if (val != null)
+                    if (val != null && IsRunMode && !_isMomentaryInFlight)
                     {
                         OnPlcTagUpdated(EffectiveReadPlcId, readAddr, val);
                     }
@@ -466,28 +508,84 @@ public partial class HmiControlViewModel : ObservableObject
 
     public async Task HandleMouseUpAsync()
     {
-        if (!IsRunMode || _plcService == null) return;
+        await ReleaseMomentaryAsync(bypassRunModeCheck: false);
+    }
+
+    /// <summary>
+    /// Kích hoạt nút nhấn HMI bằng phím tắt vật lý (hỗ trợ cả khi màn hình HMI trong Tool Editor đang ẩn).
+    /// </summary>
+    public async Task HandleShortcutKeyDownAsync(bool bypassRunModeCheck = false)
+    {
+        if ((!IsRunMode && !bypassRunModeCheck) || _plcService == null) return;
+        if (Model.Type != HmiControlType.Button) return;
+
+        // Khi HMI đang ẩn (IsRunMode = false), đồng bộ trước trạng thái hiện có từ PLC Cache để Toggle đảo đúng bit
+        if (!IsRunMode && Model.ButtonBehavior == HmiButtonBehavior.Toggle)
+        {
+            string readAddr = EffectiveReadAddress;
+            if (!string.IsNullOrWhiteSpace(readAddr))
+            {
+                var cachedVal = _plcService.GetTagValue(EffectiveReadPlcId, readAddr);
+                if (cachedVal?.CurrentValue != null)
+                {
+                    ApplyTagValueToState(cachedVal.CurrentValue);
+                }
+            }
+        }
+
+        await ExecuteButtonOrSwitchActionAsync();
+    }
+
+    /// <summary>
+    /// Nhả nút nhấn HMI Momentary khi người dùng nhả phím tắt vật lý trên bàn phím.
+    /// </summary>
+    public async Task HandleShortcutKeyUpAsync(bool bypassRunModeCheck = false)
+    {
+        if (Model.Type != HmiControlType.Button) return;
+        await ReleaseMomentaryAsync(bypassRunModeCheck);
+    }
+
+    private async Task ReleaseMomentaryAsync(bool bypassRunModeCheck)
+    {
+        if ((!IsRunMode && !bypassRunModeCheck) || _plcService == null) return;
 
         // If Momentary button: release turns it OFF
         if ((Model.Type == HmiControlType.Button || Model.Type == HmiControlType.Switch) &&
             Model.ButtonBehavior == HmiButtonBehavior.Momentary)
         {
-            // Đảm bảo xung ON tồn tại tối thiểu 100ms trên PLC để lệnh bắt cạnh (LDP, PLS) không bị lỡ
-            // khi người dùng click chuột quá nhanh (<20ms).
-            long elapsed = Environment.TickCount64 - _lastMomentaryPressTimestamp;
-            const int minHoldMs = 100;
-            if (elapsed < minHoldMs)
+            long pressGeneration = Interlocked.Read(ref _momentaryPressGeneration);
+            try
             {
-                await Task.Delay((int)(minHoldMs - elapsed));
-            }
+                // Đảm bảo xung ON tồn tại tối thiểu 100ms trên PLC để lệnh bắt cạnh (LDP, PLS) không bị lỡ
+                // khi người dùng click chuột hoặc gõ phím quá nhanh (<20ms).
+                long elapsed = Environment.TickCount64 - _lastMomentaryPressTimestamp;
+                const int minHoldMs = 100;
+                if (elapsed < minHoldMs)
+                {
+                    await Task.Delay((int)(minHoldMs - elapsed));
+                }
 
-            IsOn = false;
-            object writeVal = ParseWriteValue(!string.IsNullOrWhiteSpace(Model.WriteValueOff) ? Model.WriteValueOff : "False");
-            string writeAddr = EffectiveWriteAddress;
-            if (!string.IsNullOrWhiteSpace(writeAddr))
+                // Bỏ qua lệnh nhả cũ nếu người dùng đã bấm giữ lượt mới trong lúc chờ minHoldMs
+                if (Interlocked.Read(ref _momentaryPressGeneration) != pressGeneration)
+                {
+                    return;
+                }
+
+                IsOn = false;
+                object writeVal = ParseWriteValue(!string.IsNullOrWhiteSpace(Model.WriteValueOff) ? Model.WriteValueOff : "False");
+                string writeAddr = EffectiveWriteAddress;
+                if (!string.IsNullOrWhiteSpace(writeAddr))
+                {
+                    EnsureDirectAddressRegistered(writeAddr);
+                    await _plcService.WriteTagValueAsync(EffectiveWritePlcId, writeAddr, writeVal);
+                }
+            }
+            finally
             {
-                EnsureDirectAddressRegistered(writeAddr);
-                await _plcService.WriteTagValueAsync(EffectiveWritePlcId, writeAddr, writeVal);
+                if (Interlocked.Read(ref _momentaryPressGeneration) == pressGeneration)
+                {
+                    _isMomentaryInFlight = false;
+                }
             }
         }
     }
@@ -515,6 +613,8 @@ public partial class HmiControlViewModel : ObservableObject
         {
             case HmiButtonBehavior.Momentary:
                 _lastMomentaryPressTimestamp = Environment.TickCount64;
+                Interlocked.Increment(ref _momentaryPressGeneration);
+                _isMomentaryInFlight = true;
                 IsOn = true;
                 object valOn = ParseWriteValue(!string.IsNullOrWhiteSpace(Model.WriteValueOn) ? Model.WriteValueOn : "True");
                 await _plcService.WriteTagValueAsync(EffectiveWritePlcId, writeAddr, valOn);
@@ -559,6 +659,11 @@ public partial class HmiControlViewModel : ObservableObject
     public void NotifyModelChanged()
     {
         OnPropertyChanged(nameof(Model));
+        OnPropertyChanged(nameof(Type));
+        OnPropertyChanged(nameof(IsButtonControl));
+        OnPropertyChanged(nameof(ShortcutKey));
+        OnPropertyChanged(nameof(HasShortcutBadge));
+        OnPropertyChanged(nameof(ShortcutToolTip));
         OnPropertyChanged(nameof(DisplayLabel));
         OnPropertyChanged(nameof(EffectiveReadPlcId));
         OnPropertyChanged(nameof(EffectiveWritePlcId));

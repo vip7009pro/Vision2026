@@ -391,6 +391,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     partial void OnSelectedTabIndexChanged(int value)
     {
+        if (value != 0)
+        {
+            ToolEditor.ReleaseActiveHmiShortcutButtons();
+        }
+
         if (value == 3)
         {
             CameraSettings.OnViewActivated();

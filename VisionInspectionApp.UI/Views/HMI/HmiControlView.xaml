@@ -14,6 +14,15 @@
           Background="Transparent"
           PreviewMouseDown="RootContainer_PreviewMouseDown"
           PreviewMouseUp="RootContainer_PreviewMouseUp">
+        <Grid.Style>
+            <Style TargetType="Grid">
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding HasShortcutBadge}" Value="True">
+                        <Setter Property="ToolTip" Value="{Binding ShortcutToolTip}" />
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+        </Grid.Style>
 
         <!-- Control Graphic / Vector or Custom Image -->
         <DockPanel LastChildFill="True" Margin="4">
@@ -50,6 +59,25 @@
                                FontSize="{Binding Model.FontSize}"
                                FontWeight="Bold"
                                Foreground="#00FF66"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center" />
+                </Border>
+
+                <!-- Shortcut Key Badge (Only for Button with assigned ShortcutKey) -->
+                <Border VerticalAlignment="Top"
+                        HorizontalAlignment="Right"
+                        Margin="2"
+                        Padding="4,1"
+                        Background="#D9111827"
+                        BorderBrush="#FFD54F"
+                        BorderThickness="1"
+                        CornerRadius="3"
+                        IsHitTestVisible="False"
+                        Visibility="{Binding HasShortcutBadge, Converter={StaticResource BoolToVis}}">
+                    <TextBlock Text="{Binding ShortcutKey}"
+                               FontSize="9.5"
+                               FontWeight="Bold"
+                               Foreground="#FFD54F"
                                HorizontalAlignment="Center"
                                VerticalAlignment="Center" />
                 </Border>

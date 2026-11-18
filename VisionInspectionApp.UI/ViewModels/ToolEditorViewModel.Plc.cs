@@ -578,6 +578,18 @@ public sealed partial class ToolEditorViewModel : ObservableObject
 
         var mainWin = System.Windows.Application.Current?.MainWindow;
         var vm = new HMI.HmiManagerViewModel(_plcManagerService);
+        vm.ConfigSaved += (_, savedPath) =>
+        {
+            var dispatcher = System.Windows.Application.Current?.Dispatcher;
+            if (dispatcher != null && !dispatcher.CheckAccess())
+            {
+                dispatcher.BeginInvoke(new Action(() => SyncHmiFromSavedDesign(savedPath)));
+            }
+            else
+            {
+                SyncHmiFromSavedDesign(savedPath);
+            }
+        };
         _hmiManagerWindowInstance = new Views.HMI.HmiManagerWindow(vm)
         {
             Owner = mainWin
@@ -586,6 +598,10 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         {
             _hmiManagerWindowInstance = null;
             vm.StopRunMode();
+            if (!string.IsNullOrWhiteSpace(vm.CurrentFilePath))
+            {
+                SyncHmiFromSavedDesign(vm.CurrentFilePath);
+            }
         };
         _hmiManagerWindowInstance.Show();
     }

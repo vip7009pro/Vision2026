@@ -171,8 +171,18 @@ namespace VisionInspectionApp.UI.ViewModels
             }
         }
     
-        [ObservableProperty]
         private List<OverlayItem> _selectedNodeOverlayItems = new();
+
+        /// <summary>Overlay của preview chính; bị chặn ghi đè khi đang xem lại nấc lịch sử (xem SelectedNodePreviewImage).</summary>
+        public List<OverlayItem> SelectedNodeOverlayItems
+        {
+            get => _selectedNodeOverlayItems;
+            set
+            {
+                if (IsViewingHistoricalRecentPart && !_allowHistoricalPreviewWrite) return;
+                SetProperty(ref _selectedNodeOverlayItems, value);
+            }
+        }
         public ICommand DeleteSelectedNodeCommand { get; }
         public ICommand DeleteSelectedEdgeCommand { get; }
         public ICommand DeleteSelectionCommand { get; }

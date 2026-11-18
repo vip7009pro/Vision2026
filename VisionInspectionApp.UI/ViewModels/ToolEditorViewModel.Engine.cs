@@ -2229,8 +2229,39 @@ namespace VisionInspectionApp.UI.ViewModels
     
         [ObservableProperty]
         private bool _isLivePreviewMode = true;
-        [ObservableProperty]
         private ImageSource? _selectedNodePreviewImage;
+        /// <summary>Cho phép ghi ảnh/overlay khi đang ở chế độ xem lại nấc lịch sử (chỉ dùng nội bộ).</summary>
+        private bool _allowHistoricalPreviewWrite;
+
+        /// <summary>
+        /// Ảnh preview chính. Khi đang xem lại ảnh của một nấc trong thanh 20 con hàng gần nhất,
+        /// MỌI luồng refresh live (debounce timer, chạy liên tục, preprocess async...) đều bị chặn ghi đè,
+        /// tránh lỗi bấm lần 1 hiện ảnh live, phải bấm lần 2 mới thấy ảnh lỗi đã lưu.
+        /// </summary>
+        public ImageSource? SelectedNodePreviewImage
+        {
+            get => _selectedNodePreviewImage;
+            set
+            {
+                if (IsViewingHistoricalRecentPart && !_allowHistoricalPreviewWrite) return;
+                SetProperty(ref _selectedNodePreviewImage, value);
+            }
+        }
+
+        private void SetHistoricalPreview(ImageSource? image, List<OverlayItem>? overlays)
+        {
+            _allowHistoricalPreviewWrite = true;
+            try
+            {
+                SelectedNodeOverlayItems = overlays ?? new List<OverlayItem>();
+                if (image != null) SelectedNodePreviewImage = image;
+            }
+            finally
+            {
+                _allowHistoricalPreviewWrite = false;
+            }
+        }
+
         [ObservableProperty]
         private ImageSource? _finalPreviewImage;
         [ObservableProperty]
@@ -2794,7 +2825,9 @@ namespace VisionInspectionApp.UI.ViewModels
             IsViewingHistoricalRecentPart = true;
             ShowResultOverlay = false;
             ShowRoisInSelectedPreview = false;
-            SelectedNodeOverlayItems = new List<OverlayItem>();
+            // Hủy lượt refresh live đang chờ (do đổi ShowResultOverlay/ShowRois kích hoạt) để không ghi đè ảnh lịch sử.
+            CancelPendingRefresh();
+            SetHistoricalPreview(null, new List<OverlayItem>());
 
             // Kiểm tra cấu hình Node Image Output
             var imageOutputDefs = _config?.ImageOutputs ?? new List<ImageOutputDefinition>();
@@ -2812,7 +2845,7 @@ namespace VisionInspectionApp.UI.ViewModels
                         var bmp = fileMat.ToBitmapSourceForDisplay();
                         if (bmp != null)
                         {
-                            SelectedNodePreviewImage = bmp;
+                            SetHistoricalPreview(bmp, new List<OverlayItem>());
                             loadedFromFile = true;
                         }
                     }
@@ -2835,7 +2868,7 @@ namespace VisionInspectionApp.UI.ViewModels
                     var bmp = item.MemorySnapshot.ToBitmapSourceForDisplay();
                     if (bmp != null)
                     {
-                        SelectedNodePreviewImage = bmp;
+                        SetHistoricalPreview(bmp, new List<OverlayItem>());
                     }
 
                     string conditionNotice = "";
@@ -2883,10 +2916,11 @@ namespace VisionInspectionApp.UI.ViewModels
                 _hasSavedHistoricalOverlayVisibility = false;
             }
 
+            // Báo View auto-fit TRƯỚC khi dựng lại ảnh live, để View bắt được lần gán ảnh live đầu tiên (kể cả khi dựng bất đồng bộ).
+            RequestAutoFitImagePreview?.Invoke();
             RefreshPreviewsNow();
             UpdateRecentPartsVisuals();
             StatusBarText = "▶ Đã quay lại màn hình kiểm tra hiện tại.";
-            RequestAutoFitImagePreview?.Invoke();
         }
 
         [RelayCommand]

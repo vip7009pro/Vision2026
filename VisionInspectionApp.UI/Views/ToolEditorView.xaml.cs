@@ -6,6 +6,7 @@ using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
+using VisionInspectionApp.UI.HMI;
 using VisionInspectionApp.UI.Services;
 using VisionInspectionApp.UI.ViewModels;
 
@@ -47,6 +48,7 @@ public partial class ToolEditorView : UserControl
 
         PreviewMouseDown += ToolEditorView_PreviewMouseDown;
         PreviewKeyDown += ToolEditorView_PreviewKeyDown;
+        PreviewKeyUp += ToolEditorView_PreviewKeyUp;
 
         CanvasScrollViewer.PreviewMouseDown += CanvasScrollViewer_PreviewMouseDown;
         CanvasScrollViewer.PreviewMouseMove += CanvasScrollViewer_PreviewMouseMove;
@@ -72,6 +74,17 @@ public partial class ToolEditorView : UserControl
 
     private void ToolEditorView_PreviewKeyDown(object sender, KeyEventArgs e)
     {
+        if (!e.Handled && DataContext is ToolEditorViewModel hmiVm)
+        {
+            Key actualKey = HmiShortcutHelper.ResolveActualKey(e);
+            ModifierKeys mods = HmiShortcutHelper.NormalizeModifiers(Keyboard.Modifiers);
+            if (hmiVm.TryHandleHmiShortcutKeyDown(actualKey, mods, e.IsRepeat, Keyboard.FocusedElement as DependencyObject))
+            {
+                e.Handled = true;
+                return;
+            }
+        }
+
         if (e.KeyboardDevice.Modifiers == ModifierKeys.Control &&
             e.Key == Key.A &&
             Keyboard.FocusedElement is not TextBoxBase &&
@@ -137,6 +150,18 @@ public partial class ToolEditorView : UserControl
             be?.UpdateSource();
             Keyboard.ClearFocus();
             e.Handled = true;
+        }
+    }
+
+    private void ToolEditorView_PreviewKeyUp(object sender, KeyEventArgs e)
+    {
+        if (!e.Handled && DataContext is ToolEditorViewModel hmiVm)
+        {
+            Key actualKey = HmiShortcutHelper.ResolveActualKey(e);
+            if (hmiVm.TryHandleHmiShortcutKeyUp(actualKey))
+            {
+                e.Handled = true;
+            }
         }
     }
 
@@ -227,8 +252,13 @@ public partial class ToolEditorView : UserControl
         }
     }
 
+    // Sau khi "Quay lại Live": ảnh live có thể được dựng bất đồng bộ (đến trễ vài chục ms),
+    // nên ngoài lần fit ngay lập tức, còn fit thêm MỘT lần khi ảnh preview mới thực sự được gán.
+    private DateTime _fitOnNextPreviewImageUntil = DateTime.MinValue;
+
     private void OnRequestAutoFitImagePreview()
     {
+        _fitOnNextPreviewImageUntil = DateTime.UtcNow.AddSeconds(2);
         Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () =>
         {
             PreviewImageViewer?.ResetView();
@@ -237,6 +267,16 @@ public partial class ToolEditorView : UserControl
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
+        if (e.PropertyName == nameof(ToolEditorViewModel.SelectedNodePreviewImage)
+            && _fitOnNextPreviewImageUntil != DateTime.MinValue)
+        {
+            bool inWindow = DateTime.UtcNow <= _fitOnNextPreviewImageUntil;
+            _fitOnNextPreviewImageUntil = DateTime.MinValue;
+            if (inWindow)
+            {
+                Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () => PreviewImageViewer?.ResetView());
+            }
+        }
         if (e.PropertyName is nameof(ToolEditorViewModel.IsToolboxColumnVisible)
             or nameof(ToolEditorViewModel.IsCanvasColumnVisible)
             or nameof(ToolEditorViewModel.IsDebugColumnVisible)

@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<title>Vision2026 FX5U – Ladder trực quan (v3)</title>
+<style>
+  body { margin:0; font-family: Segoe UI, Arial, sans-serif; font-size:14px;
+         background: var(--background, #f7f7f9); color: var(--foreground, #1f2328); }
+  header { position: sticky; top:0; z-index:5; padding:10px 16px;
+           background: var(--card, #fff); border-bottom:1px solid var(--border, #d0d7de); }
+  h1 { font-size:16px; margin:0 0 8px 0; }
+  nav { display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+  nav a, nav button, nav label { font-size:12px; padding:4px 8px; border-radius:6px; cursor:pointer;
+           border:1px solid var(--border, #d0d7de); background: var(--content, #f6f8fa);
+           color: var(--foreground, #1f2328); text-decoration:none; }
+  section { margin:16px; padding:12px; background: var(--card, #fff);
+            border:1px solid var(--border, #d0d7de); border-radius:8px; }
+  section h2 { font-size:15px; margin:0 0 8px 0; color: var(--primary, #0969da); }
+  .rung { overflow-x:auto; }
+  .rung svg { display:block; }
+  pre.mn { margin:0 0 8px 46px; padding:6px 10px; font-size:12px; border-radius:6px;
+           background: var(--content, #f6f8fa); color: var(--code-foreground, #1f2328); }
+  .hide-mn pre.mn { display:none; }
+  svg text { font-size:12px; }
+  .w { stroke: var(--foreground, #1f2328); stroke-width:1.6; fill:none; }
+  .rail { stroke: var(--foreground, #1f2328); stroke-width:3; }
+  .dev { fill: var(--primary, #0969da); font-weight:600; }
+  .note { fill: var(--muted-foreground, #6e7781); }
+  .rc { fill: var(--success, #1a7f37); font-style:italic; }
+  .num { fill: var(--muted-foreground, #6e7781); }
+  .box { fill: var(--content, #f6f8fa); stroke: var(--foreground, #1f2328); stroke-width:1.4; }
+  .boxt { fill: var(--foreground, #1f2328); font-family: Consolas, monospace; }
+  .end { fill: var(--muted-foreground, #6e7781); font-family: Consolas, monospace; }
+  @media print { header { position:static; } nav { display:none; } section { break-inside:auto; } }
+</style>
+</head>
+<body class="hide-mn">
+<header>
+  <h1>Vision2026 FX5U – Ladder trực quan (bản sửa v3)</h1>
+  <nav id="nav">
+    <span id="links" style="display:contents"></span>
+    <label><input type="checkbox" id="chkMn"> Hiện mnemonic</label>
+    <button onclick="window.print()">In / PDF</button>
+  </nav>
+</header>
+<main id="main"></main>
+<script>
+const BLOCKS = /*__BLOCKS__*/[];
+const DEV = {
+  X0:'Start', X1:'Stop', X4:'Reset', X5:'Sensor nạp', M2:'Sensor giả lập', M4:'Reset HMI',
+  M5:'Dùng encoder thật', M6:'Xóa queue HMI', Y0:'Băng tải', Y1:'Trigger camera',
+  Y11:'Còi NG', Y12:'Đèn NG', M10:'Đang chạy', M11:'Còi NG 1s', M20:'Dừng NG',
+  M21:'Queue đầy', M22:'Thiếu kết quả', M23:'Kết quả thừa', M30:'Kích camera',
+  M31:'Chu kỳ kích', M40:'Xung reset', M41:'Xung xóa queue', M50:'Hàng mới',
+  M60:'Hết hàng chờ chụp', M61:'Queue rỗng', M62:'Queue đầy', M63:'HEAD tới điểm dừng',
+  M70:'KQ OK', M71:'KQ NG', M72:'Có KQ mới', M73:'Có hàng chờ KQ',
+  M103:'PC Done', M104:'PC Pass', M105:'PC NG', SM400:'Luôn ON', SM402:'Scan đầu',
+  T0:'Xung 100ms', T1:'Còi 1s', T2:'Xung Y1 20ms', T3:'Chu kỳ 50ms'
+};
+const RH = 64, X0 = 46, CW = { NO:110, NC:110, P:110, F:110, CMP:160 };
+const BIT = { LD:['LD','NO'], LDI:['LD','NC'], LDP:['LD','P'], LDF:['LD','F'],
+  AND:['AND','NO'], ANI:['AND','NC'], ANDP:['AND','P'], ANDF:['AND','F'],
+  OR:['OR','NO'], ORI:['OR','NC'], ORP:['OR','P'], ORF:['OR','F'] };
+const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+function classify(op) {
+  if (BIT[op]) return { kind: BIT[op][0], t: BIT[op][1] };
+  const m = op.match(/^(LD|AND|OR)(D?)(<>|>=|<=|=|>|<)$/);
+  return m ? { kind: m[1], t: 'CMP', cmp: (m[2] ? 'D' : '') + m[3] } : null;
+}
+
+function parse(code) {
+  const rungs = []; let cur = null;
+  for (const raw of code.split('\n')) {
+    const i = raw.indexOf('//');
+    const ins = (i >= 0 ? raw.slice(0, i) : raw).trim();
+    const cmt = i >= 0 ? raw.slice(i + 2).trim() : '';
+    if (!ins) continue;
+    const p = ins.split(/\s+/), op = p[0], a = p.slice(1), c = classify(op);
+    if (c && c.kind === 'LD') {
+      cur = { notes: [], ins: [], outs: [], mn: [] }; rungs.push(cur);
+    }
+    if (!cur) continue;
+    cur.mn.push(ins);
+    if (c) {
+      const el = { t: c.t, cmp: c.cmp, a };
+      if (cmt) cur.notes.push(cmt);
+      if (c.kind === 'OR') {
+        if (cur.ins.length === 1 && cur.ins[0].par) cur.ins[0].par.push([el]);
+        else cur.ins = [{ par: [cur.ins, [el]] }];
+      } else cur.ins.push(el);
+    } else if (/^OUT(H|HS)?$/.test(op)) {
+      cur.outs.push({ coil: true, op, a, cmt });
+    } else cur.outs.push({ box: true, text: ins, cmt });
+  }
+  return rungs;
+}
+
+const width = el => el.par ? Math.max(...el.par.map(b => b.reduce((s, e) => s + width(e), 0))) : CW[el.t];
+const rows = list => Math.max(1, ...list.map(e => e.par ? e.par.length : 1));
+
+function contact(el, x, y) {
+  const w = CW[el.t]; let s = '';
+  if (el.t === 'CMP') {
+    s += `<line class="w" x1="${x}" y1="${y}" x2="${x + 8}" y2="${y}"/>`;
+    s += `<rect class="box" x="${x + 8}" y="${y - 13}" width="${w - 16}" height="26" rx="3"/>`;
+    s += `<text class="boxt" x="${x + w / 2}" y="${y + 4}" text-anchor="middle">${esc(el.cmp + ' ' + el.a.join(' '))}</text>`;
+    s += `<line class="w" x1="${x + w - 8}" y1="${y}" x2="${x + w}" y2="${y}"/>`;
+    return s;
+  }
+  const c = x + w / 2, d = el.a[0];
+  s += `<line class="w" x1="${x}" y1="${y}" x2="${c - 10}" y2="${y}"/>`;
+  s += `<line class="w" x1="${c - 10}" y1="${y - 12}" x2="${c - 10}" y2="${y + 12}"/>`;
+  s += `<line class="w" x1="${c + 10}" y1="${y - 12}" x2="${c + 10}" y2="${y + 12}"/>`;
+  s += `<line class="w" x1="${c + 10}" y1="${y}" x2="${x + w}" y2="${y}"/>`;
+  if (el.t === 'NC') s += `<line class="w" x1="${c - 14}" y1="${y + 12}" x2="${c + 14}" y2="${y - 12}"/>`;
+  if (el.t === 'P') s += `<path class="w" d="M${c} ${y + 8} V${y - 8} M${c - 4} ${y - 4} L${c} ${y - 8} L${c + 4} ${y - 4}"/>`;
+  if (el.t === 'F') s += `<path class="w" d="M${c} ${y - 8} V${y + 8} M${c - 4} ${y + 4} L${c} ${y + 8} L${c + 4} ${y + 4}"/>`;
+  s += `<text class="dev" x="${c}" y="${y - 18}" text-anchor="middle">${esc(d)}</text>`;
+  if (DEV[d]) s += `<text class="note" x="${c}" y="${y + 28}" text-anchor="middle">${esc(DEV[d])}</text>`;
+  return s;
+}
+
+function series(list, x, y) {
+  let s = '';
+  for (const el of list) {
+    const w = width(el);
+    if (el.par) {
+      el.par.forEach((br, i) => {
+        const yy = y + i * RH; let xx = x;
+        for (const e of br) { s += contact(e, xx, yy); xx += width(e); }
+        if (xx < x + w) s += `<line class="w" x1="${xx}" y1="${yy}" x2="${x + w}" y2="${yy}"/>`;
+      });
+      const yb = y + (el.par.length - 1) * RH;
+      s += `<line class="w" x1="${x}" y1="${y}" x2="${x}" y2="${yb}"/>`;
+      s += `<line class="w" x1="${x + w}" y1="${y}" x2="${x + w}" y2="${yb}"/>`;
+    } else s += contact(el, x, y);
+    x += w;
+  }
+  return { s, x };
+}
+
+function output(o, xo, xr, y) {
+  let s = '';
+  if (o.coil) {
+    const c = xr - 50;
+    s += `<line class="w" x1="${xo}" y1="${y}" x2="${c - 14}" y2="${y}"/>`;
+    s += `<path class="w" d="M${c - 8} ${y - 12} Q${c - 16} ${y} ${c - 8} ${y + 12} M${c + 8} ${y - 12} Q${c + 16} ${y} ${c + 8} ${y + 12}"/>`;
+    s += `<line class="w" x1="${c + 14}" y1="${y}" x2="${xr}" y2="${y}"/>`;
+    const lab = (o.op !== 'OUT' ? o.op + ' ' : '') + o.a.join(' ');
+    s += `<text class="dev" x="${c}" y="${y - 18}" text-anchor="middle">${esc(lab)}</text>`;
+    const n = o.cmt || DEV[o.a[0]] || '';
+    if (n) s += `<text class="note" x="${c - 26}" y="${y + 26}" text-anchor="end">${esc(n)}</text>`;
+  } else {
+    const bx = xo + 20, bw = xr - xo - 40;
+    s += `<line class="w" x1="${xo}" y1="${y}" x2="${bx}" y2="${y}"/>`;
+    s += `<rect class="box" x="${bx}" y="${y - 13}" width="${bw}" height="26" rx="2"/>`;
+    s += `<text class="boxt" x="${bx + 10}" y="${y + 4}">${esc(o.text)}</text>`;
+    s += `<line class="w" x1="${bx + bw}" y1="${y}" x2="${xr}" y2="${y}"/>`;
+    if (o.cmt) s += `<text class="note" x="${bx + 4}" y="${y + 28}">${esc(o.cmt)}</text>`;
+  }
+  return s;
+}
+
+function renderBlock(b, sec) {
+  const rungs = parse(b.code);
+  const maxIn = Math.max(...rungs.map(r => r.ins.reduce((s, e) => s + width(e), 0)));
+  const xo = X0 + maxIn + 30, xr = xo + 330;
+  let n = 0;
+  for (const r of rungs) {
+    const nr = Math.max(rows(r.ins), r.outs.length);
+    const y0 = r.notes.length ? 54 : 36, h = y0 + (nr - 1) * RH + 40;
+    let s = `<line class="rail" x1="${X0}" y1="0" x2="${X0}" y2="${h}"/>`;
+    s += `<line class="rail" x1="${xr}" y1="0" x2="${xr}" y2="${h}"/>`;
+    s += `<text class="num" x="${X0 - 8}" y="${y0 + 4}" text-anchor="end">${++n}</text>`;
+    if (r.notes.length) s += `<text class="rc" x="${X0 + 8}" y="16">(* ${esc(r.notes.join(' · '))} *)</text>`;
+    const si = series(r.ins, X0, y0); s += si.s;
+    s += `<line class="w" x1="${si.x}" y1="${y0}" x2="${xo}" y2="${y0}"/>`;
+    if (r.outs.length > 1) s += `<line class="w" x1="${xo}" y1="${y0}" x2="${xo}" y2="${y0 + (r.outs.length - 1) * RH}"/>`;
+    r.outs.forEach((o, i) => s += output(o, xo, xr, y0 + i * RH));
+    const div = document.createElement('div'); div.className = 'rung';
+    div.innerHTML = `<svg width="${xr + 12}" height="${h}">${s}</svg><pre class="mn">${esc(r.mn.join('\n'))}</pre>`;
+    sec.appendChild(div);
+  }
+  const end = document.createElement('div'); end.className = 'rung';
+  end.innerHTML = `<svg width="${xr + 12}" height="34"><line class="rail" x1="${X0}" y1="0" x2="${X0}" y2="18"/><line class="rail" x1="${xr}" y1="0" x2="${xr}" y2="18"/><line class="w" x1="${X0}" y1="18" x2="${xr - 70}" y2="18"/><rect class="box" x="${xr - 70}" y="6" width="60" height="24"/><text class="end" x="${xr - 40}" y="22" text-anchor="middle">END</text><line class="w" x1="${xr - 10}" y1="18" x2="${xr}" y2="18"/></svg>`;
+  sec.appendChild(end);
+}
+
+const main = document.getElementById('main'), links = document.getElementById('links');
+if (!BLOCKS.length) main.innerHTML = '<section><h2>Đây là file khuôn (template)</h2>' +
+  '<p>Hãy mở <b>Ladder_FIFO_Fixed_v3.html</b> trong thư mục Mitsubishi_GXWorks3, hoặc chạy ' +
+  '<code>node build_ladder_html.js</code> để tạo lại.</p></section>';
+BLOCKS.forEach((b, i) => {
+  const sec = document.createElement('section'); sec.id = 'b' + i;
+  sec.innerHTML = `<h2>${i + 1}. ${esc(b.name)}</h2>`;
+  main.appendChild(sec); renderBlock(b, sec);
+  const a = document.createElement('a'); a.href = '#b' + i; a.textContent = b.name.replace(/^KHOI_/, '');
+  links.appendChild(a);
+});
+document.getElementById('chkMn').onchange = e => document.body.classList.toggle('hide-mn', !e.target.checked);
+</script>
+</body>
+</html>

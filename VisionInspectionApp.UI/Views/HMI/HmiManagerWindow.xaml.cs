@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Shapes;
+using VisionInspectionApp.UI.HMI;
 using VisionInspectionApp.UI.ViewModels.HMI;
 
 namespace VisionInspectionApp.UI.Views.HMI;
@@ -22,6 +23,38 @@ public partial class HmiManagerWindow : Window
     {
         InitializeComponent();
         DataContext = viewModel;
+        PreviewKeyDown += HmiManagerWindow_PreviewKeyDown;
+        PreviewKeyUp += HmiManagerWindow_PreviewKeyUp;
+        Deactivated += (_, _) => (DataContext as HmiManagerViewModel)?.ReleaseAllPressedShortcutButtons();
+    }
+
+    private void HmiManagerWindow_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (DataContext is not HmiManagerViewModel vm || !vm.IsRunMode)
+            return;
+
+        Key actualKey = HmiShortcutHelper.ResolveActualKey(e);
+        ModifierKeys modifiers = HmiShortcutHelper.NormalizeModifiers(Keyboard.Modifiers);
+
+        if (!HmiShortcutHelper.ShouldAllowShortcutForFocus(Keyboard.FocusedElement as DependencyObject, actualKey, modifiers))
+            return;
+
+        if (vm.TryHandleShortcutKeyDown(actualKey, modifiers, e.IsRepeat, allowWhenNotRunMode: false, out _))
+        {
+            e.Handled = true;
+        }
+    }
+
+    private void HmiManagerWindow_PreviewKeyUp(object sender, KeyEventArgs e)
+    {
+        if (DataContext is not HmiManagerViewModel vm || !vm.IsRunMode)
+            return;
+
+        Key actualKey = HmiShortcutHelper.ResolveActualKey(e);
+        if (vm.TryHandleShortcutKeyUp(actualKey, allowWhenNotRunMode: false))
+        {
+            e.Handled = true;
+        }
     }
 
     private void Canvas_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)

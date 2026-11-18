@@ -173,6 +173,7 @@
                                 <TextBlock Text="• Giữ Shift / Ctrl + Click chuột để chọn nhiều phần tử" FontSize="10" Foreground="{DynamicResource TextMutedBrush}" Margin="0,0,0,2" />
                                 <TextBlock Text="• Kéo thả chuột trên vùng trống để quét chọn nhóm phần tử" FontSize="10" Foreground="{DynamicResource TextMutedBrush}" Margin="0,0,0,2" />
                                 <TextBlock Text="• Phím Ctrl+C, Ctrl+V, Delete, Undo/Redo thao tác nhanh" FontSize="10" Foreground="{DynamicResource TextMutedBrush}" Margin="0,0,0,2" />
+                                <TextBlock Text="• Chọn Button -> Tab Thuộc Tính để gán phím tắt bàn phím" FontSize="10" Foreground="{DynamicResource TextMutedBrush}" Margin="0,0,0,2" TextWrapping="Wrap" />
                             </StackPanel>
                         </ScrollViewer>
                     </TabItem>

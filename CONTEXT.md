@@ -1,4 +1,4 @@
-# Vision Inspection App — Context & State
+﻿# Vision Inspection App — Context & State
 
 ## 1. Giới thiệu dự án
 Ứng dụng kiểm tra thị giác công nghiệp (.NET 8 WPF, MVVM, OpenCvSharp4, Docnet.Core PDFium, Hikrobot MVS SDK, Industrial PLC Mitsubishi FX5U/Siemens/Modbus & Database MES/ERP).
@@ -6,8 +6,8 @@ Hỗ trợ Camera GigE/USB3/USB/RTSP/Android Pro Mode Native Server, nạp ảnh
 
 ## 2. Trạng thái mã nguồn gần nhất
 - **Phiên bản hiện tại**: .NET 8 WPF, x64/x86 Multi-targeting, C# 12.
-- **Biên dịch**: 0 Errors toàn solution (`VisionInspectionApp.slnx`) cả Debug lẫn Release.
-- **Kiểm thử tự động**: PASSED 100% toàn bộ test suite `TestExtractApp` (bao gồm ContinuousFlowRegression, ToolEditorContinuousRenderAndSpeed, ToolEditorColumnResize, ToolEditorAndOqcUx, PreprocessRoiMasking, MvpShapeMatch3 & Int8, Snapshot Frame Ownership, PlcHandshake, PlcContinuousQueue, v.v.).
+- **Biên dịch**: 0 Errors toàn solution (`VisionInspectionApp.slnx`) cả Debug lẫn Release (sau Task 443).
+- **Kiểm thử tự động**: PASSED 100% các suite HMI/ToolEditor sau Task 443 (`HmiDesignerPersistenceTests` 4/4, `HmiStateAndLifecycleTests` 5/5, `HmiButtonShortcutTests` 5/5, `PlcConflictAndHmiIsolationTests` 4/4, `PlcResetQueueAndHmiTests` 5/5, `ToolEditorColumnResizeTests` 10/10).
 - **Cấu hình chuẩn xưởng CMS_VINA**: 
   - Database: `CMS_VINA` (192.168.1.2:6789)
   - OQC Server API: `https://192.168.1.192/vision_upload.php`
@@ -32,6 +32,13 @@ Hỗ trợ Camera GigE/USB3/USB/RTSP/Android Pro Mode Native Server, nạp ảnh
      - `UpdateQueueVisuals` và `UpdateRecentPartsVisuals` được bọc bởi cờ `_isQueueVisualUpdatePending` / `_isRecentPartsVisualUpdatePending` với `DispatcherPriority.Background`, loại bỏ hoàn toàn hiện tượng bão Dispatcher queue.
 
 ## 4. Các sự kiện & thay đổi gần đây
+- **Task 443**: Thêm chức năng gán phím tắt bàn phím cho HMI `Button` trong HMI Designer & Tool Editor (nhận cả khi ẩn/hiện HMI):
+  - Mô hình & Helper: Thêm `ShortcutKey` vào `HmiControlModel`; tạo [`HmiShortcutHelper.cs`](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/HMI/HmiShortcutHelper.cs) chuẩn hóa phím (`System`/`ImeProcessed`, `Ctrl/Alt/Shift`, lọc focus ô nhập liệu văn bản / dropdown đang mở).
+  - HMI Designer: Cho phép bấm trực tiếp phím gán trên Tab Thuộc Tính ([`HmiPropertyInspectorView.xaml`](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/HMI/HmiPropertyInspectorView.xaml)), Undo/Redo, cảnh báo trùng phím, hiển thị badge phím tắt trên Button ([`HmiControlView.xaml`](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/HMI/HmiControlView.xaml)), thực thi khi Run Mode trong [`HmiManagerWindow.xaml.cs`](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/HMI/HmiManagerWindow.xaml.cs) (chống lặp auto-repeat, hỗ trợ Momentary giữ/nhả & tự nhả khi mất focus/thoát RunMode).
+  - Tool Editor: Bắt phím từ [`MainWindow.xaml.cs`](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/MainWindow.xaml.cs) (Tab 0) & [`ToolEditorView.xaml.cs`](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/ToolEditorView.xaml.cs) -> [`ToolEditorViewModel.HmiPanel.cs`](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.HmiPanel.cs), kích hoạt phím tắt Button ngay cả khi `IsHmiPanelVisible = false` mà vẫn giữ cô lập Polling Lock PLC, đồng bộ tự động khi lưu `.hmi` từ HMI Designer, và chặn stale async `RefreshCurrentValueFromPlc` / timer 200ms ghi đè khi đã thoát RunMode hoặc đang giữ Momentary.
+- **Task 442**: Tool Editor - thanh 20 nấc: sửa lỗi phải bấm 2 lần mới thấy ảnh lỗi (lần 1 bị lượt refresh live debounce do đổi ShowResultOverlay/ShowRois ghi đè). `SelectedNodePreviewImage`/`SelectedNodeOverlayItems` thành property thủ công, chặn ghi khi `IsViewingHistoricalRecentPart` (chỉ ghi qua `SetHistoricalPreview`), thêm `CancelPendingRefresh()`. "Quay lại Live": báo auto-fit trước `RefreshPreviewsNow`, View fit thêm 1 lần khi ảnh live đầu tiên được gán (cửa sổ 2s).
+- **Task 441**: Thêm ladder trực quan `PLC_Programs/Mitsubishi_GXWorks3/Ladder_FIFO_Fixed_v3.html` (SVG, mở bằng trình duyệt, có nút hiện mnemonic / In PDF). Sinh tự động từ `.md` bằng `ladder_viewer/build_ladder_html.js` + `ladder_template.html` (`node build_ladder_html.js` sau khi sửa .md).
+- **Task 440**: Viết lại toàn bộ ladder FX5U 9 khối tại `PLC_Programs/Mitsubishi_GXWorks3/Ladder_FIFO_Fixed_v3.md`: FIFO vòng 100 với 4 con trỏ HEAD D1100 / TAIL D1101 / TRIG D1102 / RES D1103, Z = idx×2 cho D2000 32-bit, so sánh `D>=`, xung Y1 20ms (OUTH T2/T3), Y11 còi NG, M22 dừng khi thiếu kết quả, M21 queue đầy, M6 xóa queue, KHOI_INIT chạy đầu.
 - **Task 439**: Rà soát PLC `PLC_Programs/Mitsubishi_GXWorks3/grok xml.xml` (FX5U). Lỗi chính: KHOI_4 ghi `D1000Z0`/`D2000Z1` nhưng Z0/Z1 không bao giờ được nạp từ D1101 → luôn ghi D1000/D2000; dữ liệu 32-bit cần Z = index×2; vùng D2000..D2199 chồng lên D2100/D2101; so sánh `>=` 16-bit với D600 32-bit (phải dùng `D>=`); Y1 double coil (KHOI_5 & KHOI_7); KHOI_7 pop dùng `AND M61` (ngược, phải `ANI M61`); KHOI_6 `INCP D300` không bao giờ chạy vì M103 đã RST trước đó. Chưa sửa file nguồn PLC (chỉ đưa mnemonic đề xuất).
 - **Task 438**: Tối ưu hóa pipeline chạy liên tục (Zero-Copy Frame Flow, Thumbnail Proxy, Throttled Dispatcher); 100% test PASSED, 0 Errors.
 - **Tasks 435, 436, 437**: Rà soát và tối ưu hiệu năng toàn diện Tool Editor (Canvas 60 FPS, Targeted Invalidation, Pipeline ảnh lớn 20-25MP).

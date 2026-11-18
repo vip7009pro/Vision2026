@@ -174,10 +174,11 @@ class Program
             return;
         }
 
-        if (args.Length > 0 && (args[0].Equals("hmi", StringComparison.OrdinalIgnoreCase) || args[0].Equals("hmi-test", StringComparison.OrdinalIgnoreCase)))
+        if (args.Length > 0 && (args[0].Equals("hmi", StringComparison.OrdinalIgnoreCase) || args[0].Equals("hmi-test", StringComparison.OrdinalIgnoreCase) || args[0].Equals("hmi-shortcut", StringComparison.OrdinalIgnoreCase)))
         {
             HmiDesignerPersistenceTests.RunAllTests();
             HmiStateAndLifecycleTests.RunAllTests();
+            HmiButtonShortcutTests.RunAllTests();
             return;
         }
 
@@ -260,6 +261,7 @@ class Program
         ContourCompareTests.RunAllTests();
         HmiDesignerPersistenceTests.RunAllTests();
         HmiStateAndLifecycleTests.RunAllTests();
+        HmiButtonShortcutTests.RunAllTests();
         PlcSignalTypeTests.RunAllTestsAsync().GetAwaiter().GetResult();
         PlcHandshakePersistenceTests.RunAllTests();
         ToolEditorColumnResizeTests.RunAllTests();

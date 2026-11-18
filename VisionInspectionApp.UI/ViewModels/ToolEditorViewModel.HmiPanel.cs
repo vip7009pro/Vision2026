@@ -3,11 +3,14 @@ using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Windows;
+using System.Windows.Input;
 using System.Windows.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Win32;
 using VisionInspectionApp.Application.HMI;
+using VisionInspectionApp.Application.PLC.Services;
+using VisionInspectionApp.UI.HMI;
 using VisionInspectionApp.UI.Services;
 using VisionInspectionApp.UI.ViewModels.HMI;
 
@@ -35,7 +38,10 @@ public sealed partial class ToolEditorViewModel
 {
     private GlobalAppSettingsService? _globalSettingsService;
     private HmiManagerViewModel? _hmiMonitorViewModel;
+    private IPlcManagerService? _hmiPlcServiceOverride;
     private bool _isSelectingHmiInternal = false;
+
+    private IPlcManagerService? EffectiveHmiPlcService => _hmiPlcServiceOverride ?? _plcManagerService;
 
     [ObservableProperty]
     private bool _isHmiPanelVisible = false;
@@ -169,6 +175,10 @@ public sealed partial class ToolEditorViewModel
 
     partial void OnIsHmiPanelVisibleChanged(bool value)
     {
+        if (!value)
+        {
+            _hmiMonitorViewModel?.ReleaseAllPressedShortcutButtons(allowWhenNotRunMode: true);
+        }
         UpdateHmiLayoutVisuals();
         OnPropertyChanged(nameof(HmiPanelToggleButtonText));
         OnPropertyChanged(nameof(HmiPanelToggleButtonBackground));
@@ -213,13 +223,13 @@ public sealed partial class ToolEditorViewModel
                 if (IsHmiRunning)
                 {
                     _hmiMonitorViewModel.IsRunMode = true;
-                    _plcManagerService?.AcquirePollingLock("HmiToolEditor");
+                    EffectiveHmiPlcService?.AcquirePollingLock("HmiToolEditor");
                     _hmiMonitorViewModel.RefreshAllControlsFromPlc();
                 }
                 else
                 {
                     _hmiMonitorViewModel.StopRunMode();
-                    _plcManagerService?.ReleasePollingLock("HmiToolEditor");
+                    EffectiveHmiPlcService?.ReleasePollingLock("HmiToolEditor");
                 }
             }
         }
@@ -233,7 +243,7 @@ public sealed partial class ToolEditorViewModel
             {
                 _hmiMonitorViewModel.StopRunMode();
             }
-            _plcManagerService?.ReleasePollingLock("HmiToolEditor");
+            EffectiveHmiPlcService?.ReleasePollingLock("HmiToolEditor");
         }
 
         NotifyHmiRunStateChanged();
@@ -317,9 +327,10 @@ public sealed partial class ToolEditorViewModel
         IsHmiRunning = false;
         if (_hmiMonitorViewModel != null)
         {
+            _hmiMonitorViewModel.ReleaseAllPressedShortcutButtons(allowWhenNotRunMode: true);
             _hmiMonitorViewModel.StopRunMode();
         }
-        _plcManagerService?.ReleasePollingLock("HmiToolEditor");
+        EffectiveHmiPlcService?.ReleasePollingLock("HmiToolEditor");
         NotifyHmiRunStateChanged();
         StatusBarText = "⏹️ [HMI Monitor] Đã dừng HMI giám sát (Khóa tương tác & ngắt polling).";
     }
@@ -338,7 +349,7 @@ public sealed partial class ToolEditorViewModel
                 }
             }
             _hmiMonitorViewModel.IsRunMode = true;
-            _plcManagerService?.AcquirePollingLock("HmiToolEditor");
+            EffectiveHmiPlcService?.AcquirePollingLock("HmiToolEditor");
             _hmiMonitorViewModel.RefreshAllControlsFromPlc();
         }
         NotifyHmiRunStateChanged();
@@ -422,15 +433,12 @@ public sealed partial class ToolEditorViewModel
             _isSelectingHmiInternal = false;
         }
 
-        if (IsHmiPanelVisible)
+        _hmiMonitorViewModel?.LoadFromFile(SelectedHmiFilePath);
+        if (IsHmiPanelVisible && _hmiMonitorViewModel != null && IsHmiRunning)
         {
-            _hmiMonitorViewModel?.LoadFromFile(SelectedHmiFilePath);
-            if (_hmiMonitorViewModel != null && IsHmiRunning)
-            {
-                _hmiMonitorViewModel.IsRunMode = true;
-                _plcManagerService?.AcquirePollingLock("HmiToolEditor");
-                _hmiMonitorViewModel.RefreshAllControlsFromPlc();
-            }
+            _hmiMonitorViewModel.IsRunMode = true;
+            EffectiveHmiPlcService?.AcquirePollingLock("HmiToolEditor");
+            _hmiMonitorViewModel.RefreshAllControlsFromPlc();
         }
 
         // Lưu và nhớ khi tắt bật app trở lại
@@ -461,11 +469,91 @@ public sealed partial class ToolEditorViewModel
         if (_hmiMonitorViewModel != null && IsHmiPanelVisible && IsHmiRunning)
         {
             _hmiMonitorViewModel.IsRunMode = true;
-            _plcManagerService?.AcquirePollingLock("HmiToolEditor");
+            EffectiveHmiPlcService?.AcquirePollingLock("HmiToolEditor");
             _hmiMonitorViewModel.RefreshAllControlsFromPlc();
         }
         OnPropertyChanged(nameof(SelectedHmiDisplayName));
         OnPropertyChanged(nameof(HmiMonitorScreenBackgroundBrush));
         StatusBarText = $"🔄 [HMI Monitor] Đã tải lại giao diện HMI: '{SelectedHmiFileName}'";
+    }
+
+    public bool TryHandleHmiShortcutKeyDown(Key key, ModifierKeys modifiers, bool isRepeat, DependencyObject? focusedElement)
+    {
+        if (_hmiMonitorViewModel == null || !IsHmiRunning)
+            return false;
+
+        if (!HmiShortcutHelper.ShouldAllowShortcutForFocus(focusedElement, key, modifiers))
+            return false;
+
+        bool allowWhenHidden = !IsHmiPanelVisible;
+        if (!_hmiMonitorViewModel.TryHandleShortcutKeyDown(key, modifiers, isRepeat, allowWhenHidden, out var triggered))
+            return false;
+
+        if (!isRepeat && triggered.Count > 0)
+        {
+            string names = string.Join(", ", triggered.Select(c => c.DisplayLabel));
+            StatusBarText = $"⌨️ [HMI Phím tắt: {triggered[0].ShortcutKey}] Đã kích hoạt '{names}'";
+        }
+
+        return true;
+    }
+
+    public bool TryHandleHmiShortcutKeyUp(Key key)
+    {
+        if (_hmiMonitorViewModel == null)
+            return false;
+
+        return _hmiMonitorViewModel.TryHandleShortcutKeyUp(key, allowWhenNotRunMode: !IsHmiPanelVisible);
+    }
+
+    public void ReleaseActiveHmiShortcutButtons()
+    {
+        _hmiMonitorViewModel?.ReleaseAllPressedShortcutButtons(allowWhenNotRunMode: true);
+    }
+
+    internal void SyncHmiFromSavedDesign(string savedFilePath)
+    {
+        if (string.IsNullOrWhiteSpace(savedFilePath) || !File.Exists(savedFilePath))
+            return;
+
+        string fullSavedPath = Path.GetFullPath(savedFilePath);
+        RefreshAvailableHmiFiles(fullSavedPath);
+
+        if (string.IsNullOrWhiteSpace(SelectedHmiFilePath))
+        {
+            SelectHmiFile(fullSavedPath);
+            return;
+        }
+
+        if (string.Equals(Path.GetFullPath(SelectedHmiFilePath), fullSavedPath, StringComparison.OrdinalIgnoreCase))
+        {
+            _hmiMonitorViewModel?.LoadFromFile(fullSavedPath);
+            if (_hmiMonitorViewModel != null && IsHmiPanelVisible && IsHmiRunning)
+            {
+                _hmiMonitorViewModel.IsRunMode = true;
+                EffectiveHmiPlcService?.AcquirePollingLock("HmiToolEditor");
+                _hmiMonitorViewModel.RefreshAllControlsFromPlc();
+            }
+            OnPropertyChanged(nameof(SelectedHmiDisplayName));
+            OnPropertyChanged(nameof(HmiMonitorScreenBackgroundBrush));
+        }
+    }
+
+    internal void ConfigureHmiPanelForTesting(IPlcManagerService? plcService, GlobalAppSettingsService settingsService)
+    {
+        _hmiPlcServiceOverride = plcService;
+        _globalSettingsService = settingsService;
+        _hmiMonitorViewModel = new HmiManagerViewModel(plcService)
+        {
+            IsRunMode = false
+        };
+        _isHmiPanelVisible = settingsService.Settings.ToolEditorIsHmiVisible;
+        _isHmiRunning = true;
+        SelectedHmiFilePath = settingsService.Settings.ToolEditorSelectedHmiPath ?? string.Empty;
+        if (!string.IsNullOrWhiteSpace(SelectedHmiFilePath) && File.Exists(SelectedHmiFilePath))
+        {
+            _hmiMonitorViewModel.LoadFromFile(SelectedHmiFilePath);
+        }
+        UpdateHmiLayoutVisuals();
     }
 }

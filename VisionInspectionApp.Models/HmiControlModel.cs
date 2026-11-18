@@ -27,6 +27,7 @@ public class HmiControlModel
     public HmiButtonBehavior ButtonBehavior { get; set; } = HmiButtonBehavior.Toggle;
     public string WriteValueOn { get; set; } = "True";
     public string WriteValueOff { get; set; } = "False";
+    public string ShortcutKey { get; set; } = "";
 
     // Numeric & Text Input Limits
     public double MinValue { get; set; } = 0;

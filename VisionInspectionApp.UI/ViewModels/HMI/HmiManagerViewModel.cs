@@ -86,6 +86,10 @@ public partial class HmiManagerViewModel : ObservableObject
 
     public string CurrentFileName => string.IsNullOrWhiteSpace(CurrentFilePath) ? "Untitled.hmi" : Path.GetFileName(CurrentFilePath);
 
+    public event EventHandler<string>? ConfigSaved;
+
+    public bool IsEditMode => !IsRunMode;
+
     public string WindowTitle
     {
         get
@@ -299,6 +303,7 @@ public partial class HmiManagerViewModel : ObservableObject
         {
             OnPropertyChanged(nameof(CanUndo));
             OnPropertyChanged(nameof(CanRedo));
+            UpdateShortcutWarning();
         };
     }
 
@@ -389,6 +394,12 @@ public partial class HmiManagerViewModel : ObservableObject
     partial void OnIsRunModeChanged(bool value)
     {
         OnPropertyChanged(nameof(WindowTitle));
+        OnPropertyChanged(nameof(IsEditMode));
+
+        if (!value)
+        {
+            ReleaseAllPressedShortcutButtons(allowWhenNotRunMode: true);
+        }
 
         if (_plcService != null)
         {
@@ -429,7 +440,13 @@ public partial class HmiManagerViewModel : ObservableObject
             _ = Task.Run(async () =>
             {
                 await Task.Delay(200);
-                DispatchOnUiThread(RefreshAllControlsFromPlc);
+                DispatchOnUiThread(() =>
+                {
+                    if (IsRunMode)
+                    {
+                        RefreshAllControlsFromPlc();
+                    }
+                });
             });
         }
         else
@@ -474,6 +491,8 @@ public partial class HmiManagerViewModel : ObservableObject
                 EnsureTagRegistered(value.WriteTagName);
             }
         }
+
+        UpdateShortcutWarning();
     }
 
     partial void OnSelectedGlobalLibraryImageChanged(string value)
@@ -759,6 +778,7 @@ public partial class HmiManagerViewModel : ObservableObject
         IsDirty = false;
         StatusMessage = $"💾 Đã lưu tệp HMI: '{CurrentFileName}'";
         StatusBrush = Brushes.DodgerBlue;
+        ConfigSaved?.Invoke(this, path);
     }
 
     public bool LoadFromFile(string filePath)
@@ -768,6 +788,7 @@ public partial class HmiManagerViewModel : ObservableObject
 
         try
         {
+            ReleaseAllPressedShortcutButtons(allowWhenNotRunMode: true);
             CurrentFilePath = filePath;
             var loadedConfig = HmiService.LoadHmiConfig(filePath);
 
@@ -792,11 +813,18 @@ public partial class HmiManagerViewModel : ObservableObject
                 _ = Task.Run(async () =>
                 {
                     await Task.Delay(200);
-                    DispatchOnUiThread(RefreshAllControlsFromPlc);
+                    DispatchOnUiThread(() =>
+                    {
+                        if (IsRunMode)
+                        {
+                            RefreshAllControlsFromPlc();
+                        }
+                    });
                 });
             }
 
             SelectControl(Controls.FirstOrDefault());
+            UpdateShortcutWarning();
             IsDirty = false;
             _undoManager.Clear();
             OnPropertyChanged(nameof(ScreenConfig));

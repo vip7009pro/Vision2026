@@ -1,5 +1,9 @@
-# ROADMAP.md — Lộ trình phát triển & Trạng thái nhiệm vụ
+﻿# ROADMAP.md — Lộ trình phát triển & Trạng thái nhiệm vụ
 
+- [x] Task 443: Gán phím tắt bàn phím cho HMI `Button` trong Vision Automation HMI Designer & kích hoạt trong Tool Editor cả khi ẩn/hiện HMI ([`HmiShortcutHelper.cs`](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/HMI/HmiShortcutHelper.cs), [`HmiManagerViewModel.Shortcuts.cs`](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/HMI/HmiManagerViewModel.Shortcuts.cs), [`ToolEditorViewModel.HmiPanel.cs`](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.HmiPanel.cs), [`HmiButtonShortcutTests.cs`](file:///g:/NODEJS/Vision2026/TestExtractApp/HmiButtonShortcutTests.cs) 5/5 PASSED).
+- [x] Task 442: Sửa lỗi bấm 2 lần mới thấy ảnh lỗi ở thanh 20 nấc & auto-fit khi Quay lại Live (Tool Editor).
+- [x] Task 441: Ladder trực quan HTML/SVG cho 9 khối FX5U (`Ladder_FIFO_Fixed_v3.html`, build từ .md).
+- [x] Task 440: Viết lại full ladder FX5U (9 khối) FIFO 4 con trỏ — `Ladder_FIFO_Fixed_v3.md`.
 - [x] Task 439: Rà soát chương trình PLC FX5U `grok xml.xml` — tìm lỗi FIFO không tăng địa chỉ (Z0/Z1 chưa nạp, chỉ số 32-bit chưa ×2, chồng lấn D2100), so sánh 16-bit với encoder 32-bit, double coil Y1, điều kiện pop ngược (M61).
 - [x] Task 438: Tối Ưu Hóa Pipeline Chạy Liên Tục (Zero-Copy Frame Flow & Đồng Bộ Tốc Độ >= 5 pcs/s):
   - [x] **Triệt tiêu bản sao chép thừa (Memory Bandwidth Decongestion)**: Bỏ clone $75\text{MB}$ trong `SetImageSourceCache` và trì hoãn cập nhật `_sharedImage` chỉ khi UI render (120ms / NG / queue drained); giảm từ 4 bản clone xuống 1 bản duy nhất cho cả pipeline.
