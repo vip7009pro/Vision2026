@@ -2446,6 +2446,9 @@ namespace VisionInspectionApp.UI.ViewModels
             public string StatusText => IsOk ? "OK" : "NG";
             public string NgReason { get; set; } = "";
             public string? SavedImagePath { get; set; }
+            public string? SavedOutputNodeName { get; set; }
+            public int OriginalImageWidth { get; set; }
+            public int OriginalImageHeight { get; set; }
             public Mat? MemorySnapshot { get; set; }
             public InspectionResult? Result { get; set; }
 
@@ -2555,18 +2558,28 @@ namespace VisionInspectionApp.UI.ViewModels
 
         public void PushRecentPartInspectionResult(InspectionResult result, Mat? currentFrame = null)
         {
-            string? savedPath = result.ImageOutputs?.FirstOrDefault(x => x.Saved && !string.IsNullOrEmpty(x.SavedFilePath))?.SavedFilePath;
+            var savedOutput = result.ImageOutputs?.FirstOrDefault(x => x.Saved && !string.IsNullOrEmpty(x.SavedFilePath));
+            string? savedPath = savedOutput?.SavedFilePath;
             string ngReason = !result.Pass ? (string.IsNullOrWhiteSpace(NgReasonsText) ? "Phát hiện lỗi ngoại quan/kích thước" : NgReasonsText.Replace("\n", "; ")) : "";
-            PushRecentPartInspectionResult(result.Pass, savedPath, currentFrame, result, ngReason);
+            PushRecentPartInspectionResult(result.Pass, savedPath, currentFrame, result, ngReason, savedOutput?.Name);
         }
 
         public void PushRecentPartInspectionResult(bool isOk, string? savedImagePath, Mat? currentFrame, InspectionResult? result = null, string ngReason = "")
         {
+            PushRecentPartInspectionResult(isOk, savedImagePath, currentFrame, result, ngReason, null);
+        }
+
+        private void PushRecentPartInspectionResult(bool isOk, string? savedImagePath, Mat? currentFrame, InspectionResult? result, string ngReason, string? savedOutputNodeName)
+        {
             Mat? snapshotClone = null;
+            int origW = 0;
+            int origH = 0;
             if (currentFrame != null && !currentFrame.IsDisposed && !currentFrame.Empty())
             {
                 try
                 {
+                    origW = currentFrame.Width;
+                    origH = currentFrame.Height;
                     if (!isOk)
                     {
                         // Giữ nguyên bản full-size cho sản phẩm NG phục vụ phóng to soi khuyết tật
@@ -2599,6 +2612,9 @@ namespace VisionInspectionApp.UI.ViewModels
                 IsOk = isOk,
                 Timestamp = DateTime.Now,
                 SavedImagePath = savedImagePath,
+                SavedOutputNodeName = savedOutputNodeName,
+                OriginalImageWidth = origW,
+                OriginalImageHeight = origH,
                 MemorySnapshot = snapshotClone,
                 Result = result,
                 NgReason = ngReason
@@ -2623,6 +2639,7 @@ namespace VisionInspectionApp.UI.ViewModels
             }
 
             UpdateRecentPartsVisuals();
+            HandleRecentPartHistoryUpdatedAfterPush();
         }
 
         public void ResetRecentPartsHistory()
@@ -2640,6 +2657,7 @@ namespace VisionInspectionApp.UI.ViewModels
             SelectedRecentSlotIndex = -1;
             IsViewingHistoricalRecentPart = false;
             HistoricalViewingStatusText = string.Empty;
+            ClearRecentSlotPreviewState();
 
             UpdateRecentPartsVisuals();
         }
@@ -2713,21 +2731,24 @@ namespace VisionInspectionApp.UI.ViewModels
             for (int i = 0; i < 20; i++)
             {
                 Brush bg = EmptySlotBrush;
-                Brush border = EmptySlotBorder;
-                string tip = $"⚪ Nấc #{i}: Trống (Chưa có sản phẩm)";
+                bool isSelected = SelectedRecentSlotIndex == i;
+                bool isPinnedSlot = IsPinnedRecentSlot && PinnedRecentSlotIndex == i;
+                Brush border = isSelected || isPinnedSlot ? HighlightSlotBorder : EmptySlotBorder;
+                string pinLabel = isPinnedSlot ? " 📌 [Đang ghim]" : "";
+                string tip = $"⚪ Nấc #{i}{pinLabel}: Trống (Chưa có sản phẩm)";
 
                 if (i < snapshot.Count)
                 {
                     bool isOk = snapshot[i];
                     bg = isOk ? OkSlotBrush : NgSlotBrush;
-                    border = (SelectedRecentSlotIndex == i) ? HighlightSlotBorder : (isOk ? OkSlotBorder : NgSlotBorder);
+                    border = (isSelected || isPinnedSlot) ? HighlightSlotBorder : (isOk ? OkSlotBorder : NgSlotBorder);
 
                     if (i < itemsSnapshot.Count)
                     {
                         var it = itemsSnapshot[i];
                         string fileInfo = !string.IsNullOrEmpty(it.SavedImagePath) ? $"Có file: {System.IO.Path.GetFileName(it.SavedImagePath)}" : (it.MemorySnapshot != null ? "Lưu trong RAM" : "Không có file");
                         string reasonInfo = !isOk && !string.IsNullOrEmpty(it.NgReason) ? $"\n• Lỗi: {it.NgReason}" : "";
-                        tip = $"🎯 Nấc #{i}: {(isOk ? "OK (Đạt)" : "NG (Lỗi)")}\n" +
+                        tip = $"🎯 Nấc #{i}{pinLabel}: {(isOk ? "OK (Đạt)" : "NG (Lỗi)")}\n" +
                               $"• Giờ kiểm tra: {it.FormattedTimestamp}{reasonInfo}\n" +
                               $"• Tệp ảnh: {fileInfo}\n" +
                               $"👉 Click để xem lại ảnh con hàng này!";
@@ -2798,14 +2819,23 @@ namespace VisionInspectionApp.UI.ViewModels
         {
             if (param == null) return;
             int slotIndex = Convert.ToInt32(param);
+            if (slotIndex < 0 || slotIndex >= 20) return;
 
             RecentPartInspectionSlotItem? item = null;
             lock (_recentPartsLock)
             {
-                if (slotIndex >= 0 && slotIndex < _recentPartItems.Count)
+                if (slotIndex < _recentPartItems.Count)
                 {
                     item = _recentPartItems[slotIndex];
                 }
+            }
+
+            // Khi Chạy liên tục: cột Preview chính giữ nguyên Live View,
+            // preview của nấc được chọn hiển thị trực tiếp ở hàng dưới cột Kết quả kiểm tra.
+            if (IsRunningContinuous)
+            {
+                HandleSelectRecentPartSlotContinuous(slotIndex, item);
+                return;
             }
 
             if (item == null)
@@ -2828,6 +2858,9 @@ namespace VisionInspectionApp.UI.ViewModels
             // Hủy lượt refresh live đang chờ (do đổi ShowResultOverlay/ShowRois kích hoạt) để không ghi đè ảnh lịch sử.
             CancelPendingRefresh();
             SetHistoricalPreview(null, new List<OverlayItem>());
+
+            // Đồng bộ luôn preview nấc để sẵn sàng khi người dùng bấm Chạy liên tục
+            SyncRecentSlotPreviewFromCurrentSelection(autoFit: false);
 
             // Kiểm tra cấu hình Node Image Output
             var imageOutputDefs = _config?.ImageOutputs ?? new List<ImageOutputDefinition>();
@@ -2906,7 +2939,10 @@ namespace VisionInspectionApp.UI.ViewModels
         public void ExitRecentPartView()
         {
             IsViewingHistoricalRecentPart = false;
-            SelectedRecentSlotIndex = -1;
+            if (!IsPinnedRecentSlot)
+            {
+                SelectedRecentSlotIndex = -1;
+            }
             HistoricalViewingStatusText = string.Empty;
 
             if (_hasSavedHistoricalOverlayVisibility)
@@ -2926,18 +2962,30 @@ namespace VisionInspectionApp.UI.ViewModels
         [RelayCommand]
         public void OpenRecentPartImageFolder()
         {
-            if (SelectedRecentSlotIndex >= 0 && SelectedRecentSlotIndex < _recentPartItems.Count)
+            string? targetSavedPath = null;
+            if (!string.IsNullOrEmpty(_displayedRecentSlotSavedPath) && System.IO.File.Exists(_displayedRecentSlotSavedPath))
             {
-                var item = _recentPartItems[SelectedRecentSlotIndex];
-                if (!string.IsNullOrEmpty(item.SavedImagePath) && System.IO.File.Exists(item.SavedImagePath))
+                targetSavedPath = _displayedRecentSlotSavedPath;
+            }
+            else if (SelectedRecentSlotIndex >= 0)
+            {
+                lock (_recentPartsLock)
                 {
-                    try
+                    if (SelectedRecentSlotIndex < _recentPartItems.Count)
                     {
-                        System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{item.SavedImagePath}\"");
-                        return;
+                        targetSavedPath = _recentPartItems[SelectedRecentSlotIndex].SavedImagePath;
                     }
-                    catch { }
                 }
+            }
+
+            if (!string.IsNullOrEmpty(targetSavedPath) && System.IO.File.Exists(targetSavedPath))
+            {
+                try
+                {
+                    System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{targetSavedPath}\"");
+                    return;
+                }
+                catch { }
             }
 
             var folder = _config?.ImageOutputs?.FirstOrDefault(x => !string.IsNullOrEmpty(x.SaveFolderPath))?.SaveFolderPath;
@@ -3848,6 +3896,15 @@ namespace VisionInspectionApp.UI.ViewModels
 
                     if (value)
                     {
+                        if (IsViewingHistoricalRecentPart)
+                        {
+                            ExitHistoricalViewPreservingSelection();
+                        }
+                        if (SelectedRecentSlotIndex >= 0)
+                        {
+                            SyncRecentSlotPreviewFromCurrentSelection(autoFit: true);
+                        }
+
                         _plcManagerService?.AcquirePollingLock("RunContinuousMode");
                         ProcessedImageCount = 0;
                         _continuousStopwatch.Restart();
@@ -3880,6 +3937,8 @@ namespace VisionInspectionApp.UI.ViewModels
                 dispatcher.BeginInvoke(new Action(() => SetContinuousColumnVisibility(isContinuous)));
                 return;
             }
+
+            UpdateDebugColumnRowLayout(isContinuous);
 
             if (isContinuous)
             {

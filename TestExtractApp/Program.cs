@@ -58,6 +58,12 @@ class Program
             return;
         }
 
+        if (args.Length > 0 && (args[0].Equals("slot-preview", StringComparison.OrdinalIgnoreCase) || args[0].Equals("pin-slot", StringComparison.OrdinalIgnoreCase) || args[0].Equals("continuous-slot", StringComparison.OrdinalIgnoreCase)))
+        {
+            ToolEditorContinuousSlotPreviewTests.RunAllTests();
+            return;
+        }
+
         if (args.Length > 0 && (args[0].Equals("column", StringComparison.OrdinalIgnoreCase) || args[0].Equals("column-resize", StringComparison.OrdinalIgnoreCase) || args[0].Equals("editor-column", StringComparison.OrdinalIgnoreCase)))
         {
             ToolEditorColumnResizeTests.RunAllTests();
@@ -273,5 +279,6 @@ class Program
         PlcHandshakeNumericModeTests.RunAllTestsAsync().GetAwaiter().GetResult();
         PlcHandshakeDelayTests.RunAllTestsAsync().GetAwaiter().GetResult();
         ToolEditorColumnResizeTests.RunAllTests();
+        ToolEditorContinuousSlotPreviewTests.RunAllTests();
     }
 }

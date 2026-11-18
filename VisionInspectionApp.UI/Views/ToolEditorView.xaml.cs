@@ -238,6 +238,7 @@ public partial class ToolEditorView : UserControl
         {
             _subscribedVm.RequestAutoFitGraph -= OnRequestAutoFitGraph;
             _subscribedVm.RequestAutoFitImagePreview -= OnRequestAutoFitImagePreview;
+            _subscribedVm.RequestAutoFitRecentSlotPreview -= OnRequestAutoFitRecentSlotPreview;
             _subscribedVm.PropertyChanged -= OnViewModelPropertyChanged;
         }
 
@@ -246,6 +247,7 @@ public partial class ToolEditorView : UserControl
             _subscribedVm = vm;
             _subscribedVm.RequestAutoFitGraph += OnRequestAutoFitGraph;
             _subscribedVm.RequestAutoFitImagePreview += OnRequestAutoFitImagePreview;
+            _subscribedVm.RequestAutoFitRecentSlotPreview += OnRequestAutoFitRecentSlotPreview;
             _subscribedVm.PropertyChanged += OnViewModelPropertyChanged;
             Dispatcher.BeginInvoke(DispatcherPriority.ContextIdle, AutoFitAndCenterGraph);
             Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () => ApplyColumnLayout(vm));
@@ -255,6 +257,7 @@ public partial class ToolEditorView : UserControl
     // Sau khi "Quay lại Live": ảnh live có thể được dựng bất đồng bộ (đến trễ vài chục ms),
     // nên ngoài lần fit ngay lập tức, còn fit thêm MỘT lần khi ảnh preview mới thực sự được gán.
     private DateTime _fitOnNextPreviewImageUntil = DateTime.MinValue;
+    private DateTime _fitOnNextRecentSlotPreviewUntil = DateTime.MinValue;
 
     private void OnRequestAutoFitImagePreview()
     {
@@ -262,6 +265,15 @@ public partial class ToolEditorView : UserControl
         Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () =>
         {
             PreviewImageViewer?.ResetView();
+        });
+    }
+
+    private void OnRequestAutoFitRecentSlotPreview()
+    {
+        _fitOnNextRecentSlotPreviewUntil = DateTime.UtcNow.AddSeconds(2);
+        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () =>
+        {
+            RecentSlotPreviewViewer?.ResetView();
         });
     }
 
@@ -277,6 +289,16 @@ public partial class ToolEditorView : UserControl
                 Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () => PreviewImageViewer?.ResetView());
             }
         }
+        if (e.PropertyName == nameof(ToolEditorViewModel.RecentSlotPreviewImage)
+            && _fitOnNextRecentSlotPreviewUntil != DateTime.MinValue)
+        {
+            bool inWindow = DateTime.UtcNow <= _fitOnNextRecentSlotPreviewUntil;
+            _fitOnNextRecentSlotPreviewUntil = DateTime.MinValue;
+            if (inWindow)
+            {
+                Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () => RecentSlotPreviewViewer?.ResetView());
+            }
+        }
         if (e.PropertyName is nameof(ToolEditorViewModel.IsToolboxColumnVisible)
             or nameof(ToolEditorViewModel.IsCanvasColumnVisible)
             or nameof(ToolEditorViewModel.IsDebugColumnVisible)
@@ -285,6 +307,10 @@ public partial class ToolEditorView : UserControl
             if (DataContext is ToolEditorViewModel vm)
             {
                 ApplyColumnLayout(vm);
+                if (e.PropertyName == nameof(ToolEditorViewModel.IsRunningContinuous))
+                {
+                    ApplyDebugRowLayout(vm);
+                }
             }
         }
     }
@@ -298,6 +324,33 @@ public partial class ToolEditorView : UserControl
     private void MainSplitter_DragCompleted(object sender, DragCompletedEventArgs e)
     {
         NormalizeColumnWidthsToStar();
+    }
+
+    private void DebugRowSplitter_DragCompleted(object sender, DragCompletedEventArgs e)
+    {
+        if (DataContext is not ToolEditorViewModel vm || !vm.IsRunningContinuous) return;
+        if (RowDebugResults != null && RowDebugSlotPreview != null)
+        {
+            double topH = Math.Max(120, RowDebugResults.ActualHeight);
+            double bottomH = Math.Max(120, RowDebugSlotPreview.ActualHeight);
+            vm.DebugResultsRowHeight = new GridLength(topH, GridUnitType.Star);
+            vm.DebugSlotPreviewRowHeight = new GridLength(bottomH, GridUnitType.Star);
+        }
+    }
+
+    private void ApplyDebugRowLayout(ToolEditorViewModel vm)
+    {
+        if (RowDebugResults == null || RowDebugSlotPreview == null) return;
+        if (vm.IsRunningContinuous)
+        {
+            vm.DebugResultsRowHeight = new GridLength(1.0, GridUnitType.Star);
+            vm.DebugSlotPreviewRowHeight = new GridLength(1.0, GridUnitType.Star);
+        }
+        else
+        {
+            vm.DebugResultsRowHeight = new GridLength(1.0, GridUnitType.Star);
+            vm.DebugSlotPreviewRowHeight = new GridLength(0);
+        }
     }
 
     private void NormalizeColumnWidthsToStar()
@@ -1307,6 +1360,11 @@ public partial class ToolEditorView : UserControl
     private void BtnFitImagePreview_Click(object sender, RoutedEventArgs e)
     {
         PreviewImageViewer?.ResetView();
+    }
+
+    private void BtnFitRecentSlotPreview_Click(object sender, RoutedEventArgs e)
+    {
+        RecentSlotPreviewViewer?.ResetView();
     }
 
     private void BtnGlobalPreprocess_Click(object sender, RoutedEventArgs e)

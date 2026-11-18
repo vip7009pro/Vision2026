@@ -151,6 +151,7 @@ namespace VisionInspectionApp.UI.ViewModels
             DebugCurrent = null;
             DebugBinary = null;
             DebugDiff = null;
+            ClearRecentSlotPreviewState();
 
             RefreshPreviews();
             IsDirty = false;

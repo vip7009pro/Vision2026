@@ -5803,14 +5803,25 @@
                           Visibility="{Binding IsDebugColumnVisible, Converter={StaticResource BoolToVis}}"
                           DragCompleted="MainSplitter_DragCompleted" />
 
-            <!-- Column 6: Integrated Live Inspection Dashboard & Details -->
-            <Border Grid.Column="6" BorderBrush="{DynamicResource DarkBorderBrush}" BorderThickness="1" Padding="6"
-                    Visibility="{Binding IsDebugColumnVisible, Converter={StaticResource BoolToVis}}">
-                <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="*" />
-                    </Grid.RowDefinitions>
+            <!-- Column 6: Integrated Live Inspection Dashboard & Selected Slot Preview (Split 2 rows when Continuous) -->
+            <Grid Grid.Column="6"
+                  Visibility="{Binding IsDebugColumnVisible, Converter={StaticResource BoolToVis}}">
+                <Grid.RowDefinitions>
+                    <!-- Hàng trên: Kết quả kiểm tra như thường -->
+                    <RowDefinition x:Name="RowDebugResults" Height="{Binding DebugResultsRowHeight, Mode=TwoWay}" MinHeight="120" />
+                    <!-- GridSplitter ngăn cách 2 hàng khi Chạy liên tục -->
+                    <RowDefinition Height="Auto" />
+                    <!-- Hàng dưới: Preview của nấc được chọn trên thanh 20 nấc -->
+                    <RowDefinition x:Name="RowDebugSlotPreview" Height="{Binding DebugSlotPreviewRowHeight, Mode=TwoWay}" MinHeight="{Binding DebugSlotPreviewMinHeight}" />
+                </Grid.RowDefinitions>
+
+                <!-- HÀNG TRÊN: KẾT QUẢ KIỂM TRA NHƯ THƯỜNG -->
+                <Border Grid.Row="0" BorderBrush="{DynamicResource DarkBorderBrush}" BorderThickness="1" Padding="6">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
 
                     <!-- ═══ Thẻ tổng kết kết quả (OK/NG + Count + Tổng thời gian) — theme-adaptive ═══ -->
                     <Border Grid.Row="0" CornerRadius="6" Margin="0,0,0,8"
@@ -6169,8 +6180,132 @@
                             </Border>
                         </StackPanel>
                     </ScrollViewer>
-                </Grid>
-            </Border>
+                    </Grid>
+                </Border>
+
+                <!-- GRIDSPLITTER NGĂN CÁCH HÀNG KẾT QUẢ VÀ HÀNG PREVIEW NẤC -->
+                <GridSplitter x:Name="SplitterDebugRows" Grid.Row="1" Height="5" HorizontalAlignment="Stretch" VerticalAlignment="Center"
+                              Background="{DynamicResource DarkBorderBrush}"
+                              Visibility="{Binding IsRunningContinuous, Converter={StaticResource BoolToVis}}"
+                              DragCompleted="DebugRowSplitter_DragCompleted" />
+
+                <!-- HÀNG DƯỚI: PREVIEW CỦA NẤC ĐƯỢC CHỌN TRÊN THANH 20 NẤC -->
+                <Border Grid.Row="2" BorderBrush="{DynamicResource DarkBorderBrush}" BorderThickness="1" Padding="6"
+                        Visibility="{Binding IsRunningContinuous, Converter={StaticResource BoolToVis}}">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <!-- Toolbar của preview mới thêm -->
+                        <Grid Grid.Row="0" Margin="0,0,0,6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <Grid Grid.Column="0" Margin="0,0,6,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0"
+                                           Text="{Binding RecentSlotPreviewTitleText}"
+                                           FontWeight="Bold" FontSize="12"
+                                           Foreground="{DynamicResource TextBrush}"
+                                           TextTrimming="CharacterEllipsis"
+                                           VerticalAlignment="Center" />
+                                <Border Grid.Column="1" Margin="6,0,0,0" CornerRadius="4" Padding="6,2" VerticalAlignment="Center"
+                                        Background="{Binding RecentSlotPreviewBadgeBg}"
+                                        BorderBrush="{Binding RecentSlotPreviewBadgeBorder}"
+                                        BorderThickness="1"
+                                        Visibility="{Binding HasRecentSlotPreviewBadge, Converter={StaticResource BoolToVis}}">
+                                    <TextBlock Text="{Binding RecentSlotPreviewBadgeText}"
+                                               FontWeight="Bold" FontSize="10"
+                                               Foreground="{Binding RecentSlotPreviewBadgeFg}" />
+                                </Border>
+                            </Grid>
+
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                <CheckBox Content="Ưu tiên NG sau nấc"
+                                          IsChecked="{Binding AutoFindNearestNgAfterSelectedSlot, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                          Margin="0,0,8,0" FontSize="11" FontWeight="SemiBold"
+                                          Foreground="{DynamicResource TextBrush}"
+                                          VerticalAlignment="Center"
+                                          ToolTip="Khi bật (mặc định): hiển thị preview của con hàng tại nấc được chọn hoặc tại nấc gần nhất sau nấc được chọn có hàng NG. Khi 20 nấc đều OK sẽ hiển thị preview của nấc được chọn." />
+
+                                <ToggleButton IsChecked="{Binding IsPinnedRecentSlot, Mode=OneWay}"
+                                              Command="{Binding TogglePinRecentSlotCommand}"
+                                              Margin="0,0,6,0" Padding="8,2" Height="24" FontSize="11" FontWeight="SemiBold"
+                                              VerticalAlignment="Center" Cursor="Hand"
+                                              ToolTip="Ghim nấc đã chọn: dù cho đang Live View, nếu có ảnh NG tại nấc được chọn, sẽ hiển thị ảnh Output lên preview này">
+                                    <ToggleButton.Style>
+                                        <Style TargetType="ToggleButton">
+                                            <Setter Property="Background" Value="{DynamicResource ButtonBackgroundBrush}" />
+                                            <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+                                            <Setter Property="BorderBrush" Value="{DynamicResource DarkBorderBrush}" />
+                                            <Setter Property="Content" Value="📌 Ghim nấc đã chọn" />
+                                            <Style.Triggers>
+                                                <Trigger Property="IsChecked" Value="True">
+                                                    <Setter Property="Background" Value="#D97706" />
+                                                    <Setter Property="Foreground" Value="White" />
+                                                    <Setter Property="BorderBrush" Value="#B45309" />
+                                                    <Setter Property="Content" Value="📌 Đang ghim nấc" />
+                                                </Trigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </ToggleButton.Style>
+                                </ToggleButton>
+
+                                <Button Content="📁 Mở ảnh"
+                                        Command="{Binding OpenRecentPartImageFolderCommand}"
+                                        Margin="0,0,6,0" Padding="8,0" Height="24" FontSize="11" FontWeight="SemiBold"
+                                        Background="{DynamicResource ButtonBackgroundBrush}"
+                                        Foreground="{DynamicResource TextBrush}"
+                                        BorderBrush="{DynamicResource DarkBorderBrush}"
+                                        ToolTip="Mở thư mục chứa ảnh của nấc đang chọn"
+                                        VerticalAlignment="Center" />
+
+                                <Button Content="🎯 Fit View"
+                                        Height="24" Padding="8,0" FontSize="11" FontWeight="SemiBold"
+                                        Click="BtnFitRecentSlotPreview_Click"
+                                        Background="{DynamicResource ButtonBackgroundBrush}"
+                                        Foreground="{DynamicResource TextBrush}"
+                                        BorderBrush="{DynamicResource DarkBorderBrush}"
+                                        ToolTip="Tự động cân chỉnh (Auto Fit) ảnh vừa vặn khung preview nấc"
+                                        VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Grid>
+
+                        <Border Grid.Row="1" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Background="Transparent">
+                            <Grid>
+                                <controls:ImageViewerControl x:Name="RecentSlotPreviewViewer"
+                                                           ImageSource="{Binding RecentSlotPreviewImage}"
+                                                           OverlayItems="{Binding RecentSlotOverlayItems}" />
+
+                                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False">
+                                    <StackPanel.Style>
+                                        <Style TargetType="StackPanel">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding RecentSlotPreviewImage}" Value="{x:Null}">
+                                                    <Setter Property="Visibility" Value="Visible" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </StackPanel.Style>
+                                    <TextBlock Text="🖼️" FontSize="26" HorizontalAlignment="Center" Margin="0,0,0,6" />
+                                    <TextBlock Text="{Binding RecentSlotEmptyHintText}"
+                                               FontSize="12" FontWeight="SemiBold"
+                                               Foreground="{DynamicResource TextMutedBrush}"
+                                               TextWrapping="Wrap" TextAlignment="Center" MaxWidth="360" />
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                    </Grid>
+                </Border>
+            </Grid>
         </Grid>
 
         <StatusBar Grid.Row="3" Background="{DynamicResource DarkBackgroundBrush}" Foreground="{DynamicResource TextBrush}" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource DarkBorderBrush}">
