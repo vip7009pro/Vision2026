@@ -358,6 +358,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 }
 
                 SelectedNode = Nodes.Count > 0 ? Nodes[0] : null;
+                SyncAllAvailableReferenceNamesAndNotify();
                 RaiseToolPropertyPanelsChanged();
                 RefreshOriginTemplatePreview();
                 OnPropertyChanged(nameof(PixelsPerMm));
@@ -823,6 +824,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 }
             }
             SelectedNode = Nodes.Count > 0 ? Nodes[0] : null;
+            SyncAllAvailableReferenceNamesAndNotify();
             RaiseToolPropertyPanelsChanged();
         }
 

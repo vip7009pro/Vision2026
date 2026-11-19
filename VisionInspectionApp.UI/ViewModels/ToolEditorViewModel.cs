@@ -144,6 +144,12 @@ namespace VisionInspectionApp.UI.ViewModels
                     if (res is not null)
                         val = $"Pass: {res.Pass}\r\nDistance: {res.Value:F3}\r\nClosestA: ({res.ClosestA.X:F3}, {res.ClosestA.Y:F3})\r\nClosestB: ({res.ClosestB.X:F3}, {res.ClosestB.Y:F3})";
                 }
+                else if (string.Equals(node.Type, "SegmentLineDistance", StringComparison.OrdinalIgnoreCase))
+                {
+                    var res = _lastRun.SegmentLineDistances?.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                    if (res is not null)
+                        val = $"Pass: {res.Pass}\r\nDistance: {res.Value:F3}\r\nSegmentPt: ({res.ClosestA.X:F3}, {res.ClosestA.Y:F3})\r\nLinePt: ({res.ClosestB.X:F3}, {res.ClosestB.Y:F3})";
+                }
                 else if (string.Equals(node.Type, "Angle", StringComparison.OrdinalIgnoreCase))
                 {
                     var res = _lastRun.Angles?.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
@@ -279,8 +285,8 @@ namespace VisionInspectionApp.UI.ViewModels
             _configService = null!;
             _storeOptions = null!;
             _sharedImage = new SharedImageContext();
-            _preprocessor = null!;
-            _lineDetector = null!;
+            _preprocessor = new ImagePreprocessor();
+            _lineDetector = new LineDetector();
             _inspectionService = null!;
             _cameraService = null!;
             _jobService = null!;
@@ -955,33 +961,8 @@ namespace VisionInspectionApp.UI.ViewModels
             RaiseToolPropertyPanelsChanged();
         }
     
-        private void SyncInputEdgeForEdgePairPort(string port, string? lineName)
-        {
-            if (_syncingInputs)
-                return;
-            if (_config is null || SelectedNode is null)
-                return;
-            if (!string.Equals(SelectedNode.Type, "EdgePair", StringComparison.OrdinalIgnoreCase))
-                return;
-            _syncingInputs = true;
-            try
-            {
-                RemoveEdgesToSelectedNodePort(port);
-                if (!string.IsNullOrWhiteSpace(lineName))
-                {
-                    var from = Nodes.FirstOrDefault(n => (string.Equals(n.Type, "Line", StringComparison.OrdinalIgnoreCase) || string.Equals(n.Type, "Caliper", StringComparison.OrdinalIgnoreCase)) && string.Equals(n.RefName, lineName, StringComparison.OrdinalIgnoreCase));
-                    if (from is not null)
-                    {
-                        from.EnsurePortsInitialized();
-                        CreateEdge(from, SelectedNode, from.OutPorts.FirstOrDefault()?.Name ?? "Out", port);
-                    }
-                }
-            }
-            finally
-            {
-                _syncingInputs = false;
-            }
-        }
+        private void SyncInputEdgeForEdgePairPort(string port, string? lineName) =>
+            SyncInputEdgeForPort("EdgePair", port, lineName, n => IsLineSourceNodeType(n.Type));
     
         public string? ResolveTemplatePath(string? currentPath, string? fallbackName = null, string? fallbackPattern = null)
         {
@@ -1458,11 +1439,13 @@ namespace VisionInspectionApp.UI.ViewModels
                 OnPropertyChanged(nameof(Point_Edge_MinEdgeStrength));
                 OnPropertyChanged(nameof(PointEdgePreviewEnabled));
                 OnPropertyChanged(nameof(PointEdgePreviewImage));
+                SyncAvailablePointNames();
                 OnPropertyChanged(nameof(AvailablePointNames));
             }
 
             if (IsLineNode)
             {
+                SyncAvailableLineNames();
                 OnPropertyChanged(nameof(AvailableLineNames));
                 OnPropertyChanged(nameof(Line_Canny1));
                 OnPropertyChanged(nameof(Line_Canny2));
@@ -1473,6 +1456,8 @@ namespace VisionInspectionApp.UI.ViewModels
 
             if (IsCaliperNode)
             {
+                if (SyncAvailableLineNames())
+                    OnPropertyChanged(nameof(AvailableLineNames));
                 OnPropertyChanged(nameof(AvailableCaliperOrientations));
                 OnPropertyChanged(nameof(AvailableEdgePolarities));
                 OnPropertyChanged(nameof(Caliper_Orientation));
@@ -1487,6 +1472,8 @@ namespace VisionInspectionApp.UI.ViewModels
 
             if (IsLinePairDetectionNode)
             {
+                if (SyncAvailableLineNames())
+                    OnPropertyChanged(nameof(AvailableLineNames));
                 OnPropertyChanged(nameof(Lpd_Canny1));
                 OnPropertyChanged(nameof(Lpd_Canny2));
                 OnPropertyChanged(nameof(Lpd_HoughThreshold));
@@ -1496,6 +1483,8 @@ namespace VisionInspectionApp.UI.ViewModels
 
             if (IsEdgePairNode || IsEdgePairDetectNode)
             {
+                SyncAvailableLineNames();
+                OnPropertyChanged(nameof(AvailableLineNames));
                 OnPropertyChanged(nameof(EdgePair_RefA));
                 OnPropertyChanged(nameof(EdgePair_RefB));
                 OnPropertyChanged(nameof(Epd_Orientation));
@@ -1534,7 +1523,12 @@ namespace VisionInspectionApp.UI.ViewModels
 
             if (IsAnyDistanceNode)
             {
+                SyncAvailableDistanceRefNames();
+                SyncAvailableLineNames();
+                SyncAvailablePointNames();
                 OnPropertyChanged(nameof(AvailableDistanceRefNames));
+                OnPropertyChanged(nameof(AvailableLineNames));
+                OnPropertyChanged(nameof(AvailablePointNames));
                 OnPropertyChanged(nameof(Distance_PointA));
                 OnPropertyChanged(nameof(Distance_PointB));
                 OnPropertyChanged(nameof(LineLineDistance_LineA));
@@ -1731,6 +1725,7 @@ namespace VisionInspectionApp.UI.ViewModels
 
             if (IsImgArithmeticNode)
             {
+                OnPropertyChanged(nameof(AvailableImageNodes));
                 OnPropertyChanged(nameof(SelectedImgArithmetic));
                 OnPropertyChanged(nameof(ImgArithmetic_Op));
                 OnPropertyChanged(nameof(ImgArithmetic_WeightA));
@@ -1740,6 +1735,8 @@ namespace VisionInspectionApp.UI.ViewModels
 
             if (IsCreatePointNode)
             {
+                SyncAvailablePointNames();
+                OnPropertyChanged(nameof(AvailablePointNames));
                 OnPropertyChanged(nameof(SelectedCreatePoint));
                 OnPropertyChanged(nameof(CreatePoint_X));
                 OnPropertyChanged(nameof(CreatePoint_Y));
@@ -1748,6 +1745,10 @@ namespace VisionInspectionApp.UI.ViewModels
 
             if (IsCreateLineNode)
             {
+                SyncAvailablePointNames();
+                SyncAvailableLineNames();
+                OnPropertyChanged(nameof(AvailablePointNames));
+                OnPropertyChanged(nameof(AvailableLineNames));
                 OnPropertyChanged(nameof(SelectedCreateLine));
                 OnPropertyChanged(nameof(CreateLine_Mode));
                 OnPropertyChanged(nameof(CreateLine_IsTwoPointsMode));
@@ -1767,6 +1768,8 @@ namespace VisionInspectionApp.UI.ViewModels
 
             if (IsCreateRectNode)
             {
+                SyncAvailablePointNames();
+                OnPropertyChanged(nameof(AvailablePointNames));
                 OnPropertyChanged(nameof(SelectedCreateRect));
                 OnPropertyChanged(nameof(CreateRect_PointRef));
                 OnPropertyChanged(nameof(CreateRect_X));
@@ -1779,6 +1782,8 @@ namespace VisionInspectionApp.UI.ViewModels
 
             if (IsCreateCircleNode)
             {
+                SyncAvailablePointNames();
+                OnPropertyChanged(nameof(AvailablePointNames));
                 OnPropertyChanged(nameof(SelectedCreateCircle));
                 OnPropertyChanged(nameof(CreateCircle_Mode));
                 OnPropertyChanged(nameof(CreateCircle_IsCenterAndRadiusMode));
@@ -2465,33 +2470,8 @@ namespace VisionInspectionApp.UI.ViewModels
             return null;
         }
     
-        private void SyncInputEdgeForAnglePort(string port, string? lineName)
-        {
-            if (_syncingInputs)
-                return;
-            if (_config is null || SelectedNode is null)
-                return;
-            if (!string.Equals(SelectedNode.Type, "Angle", StringComparison.OrdinalIgnoreCase))
-                return;
-            _syncingInputs = true;
-            try
-            {
-                RemoveEdgesToSelectedNodePort(port);
-                if (!string.IsNullOrWhiteSpace(lineName))
-                {
-                    var from = Nodes.FirstOrDefault(n => (string.Equals(n.Type, "Line", StringComparison.OrdinalIgnoreCase) || string.Equals(n.Type, "Caliper", StringComparison.OrdinalIgnoreCase)) && string.Equals(n.RefName, lineName, StringComparison.OrdinalIgnoreCase));
-                    if (from is not null)
-                    {
-                        from.EnsurePortsInitialized();
-                        CreateEdge(from, SelectedNode, from.OutPorts.FirstOrDefault()?.Name ?? "Out", port);
-                    }
-                }
-            }
-            finally
-            {
-                _syncingInputs = false;
-            }
-        }
+        private void SyncInputEdgeForAnglePort(string port, string? lineName) =>
+            SyncInputEdgeForPort("Angle", port, lineName, n => IsLineSourceNodeType(n.Type));
     
         public int Lpd_Canny1
         {
@@ -3365,246 +3345,244 @@ namespace VisionInspectionApp.UI.ViewModels
             return _config.Conditions.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
         }
     
+        private readonly ObservableCollection<string> _availablePointNames = new();
+        private readonly ObservableCollection<string> _availableDistanceRefNames = new();
+        private readonly ObservableCollection<string> _availableLineNames = new();
+
         public ObservableCollection<string> AvailablePointNames
         {
             get
             {
-                var list = new ObservableCollection<string>();
-                if (_config is null)
-                    return list;
-
-                if (_config.Origin is not null)
-                {
-                    list.Add("Origin");
-                }
-
-                if (_config.Points != null)
-                {
-                    foreach (var p in _config.Points.Select(x => x.Name).Where(x => !string.IsNullOrWhiteSpace(x)))
-                    {
-                        if (!list.Contains(p)) list.Add(p);
-                    }
-                }
-
-                if (_config.CreatePoints != null)
-                {
-                    foreach (var cp in _config.CreatePoints.Select(x => x.Name).Where(x => !string.IsNullOrWhiteSpace(x)))
-                    {
-                        if (!list.Contains(cp)) list.Add(cp);
-                    }
-                }
-
-                if (_config.CircleFinders != null)
-                {
-                    foreach (var cf in _config.CircleFinders.Select(x => x.Name).Where(x => !string.IsNullOrWhiteSpace(x)))
-                    {
-                        if (!list.Contains(cf)) list.Add(cf);
-                    }
-                }
-
-                if (_config.BlobDetections != null)
-                {
-                    foreach (var bd in _config.BlobDetections.Select(x => x.Name).Where(x => !string.IsNullOrWhiteSpace(x)))
-                    {
-                        if (!list.Contains(bd)) list.Add(bd);
-                    }
-                }
-
-                return list;
+                SyncAvailablePointNames();
+                return _availablePointNames;
             }
         }
-    
+
         public ObservableCollection<string> AvailableDistanceRefNames
         {
             get
             {
-                var list = new ObservableCollection<string>();
-                if (_config is null)
-                    return list;
-                foreach (var p in _config.Points.Select(x => x.Name).Where(x => !string.IsNullOrWhiteSpace(x)))
-                {
-                    list.Add(p);
-                }
-    
-                foreach (var c in _config.CircleFinders.Select(x => x.Name).Where(x => !string.IsNullOrWhiteSpace(x)))
-                {
-                    if (!list.Contains(c))
-                        list.Add(c);
-                }
-    
-                foreach (var d in _config.Diameters.Select(x => x.Name).Where(x => !string.IsNullOrWhiteSpace(x)))
-                {
-                    if (!list.Contains(d))
-                        list.Add(d);
-                }
-    
-                return list;
+                SyncAvailableDistanceRefNames();
+                return _availableDistanceRefNames;
             }
         }
-    
+
         public ObservableCollection<string> AvailableLineNames
         {
             get
             {
-                var list = new ObservableCollection<string>();
-                if (_config is null)
-                    return list;
-                foreach (var l in _config.Lines.Select(x => x.Name).Where(x => !string.IsNullOrWhiteSpace(x)))
-                {
-                    list.Add(l);
-                }
-
-                foreach (var c in _config.Calipers.Select(x => x.Name).Where(x => !string.IsNullOrWhiteSpace(x)))
-                {
-                    if (!list.Contains(c))
-                    {
-                        list.Add(c);
-                    }
-                }
-
-                if (_config.CreateLines != null)
-                {
-                    foreach (var cl in _config.CreateLines.Select(x => x.Name).Where(x => !string.IsNullOrWhiteSpace(x)))
-                    {
-                        if (!list.Contains(cl))
-                        {
-                            list.Add(cl);
-                        }
-                    }
-                }
-
-                if (_config.LinePairDetections != null)
-                {
-                    foreach (var lpd in _config.LinePairDetections.Select(x => x.Name).Where(x => !string.IsNullOrWhiteSpace(x)))
-                    {
-                        if (!list.Contains(lpd))
-                        {
-                            list.Add(lpd);
-                        }
-                    }
-                }
-
-                if (_config.EdgePairDetections != null)
-                {
-                    foreach (var epd in _config.EdgePairDetections.Select(x => x.Name).Where(x => !string.IsNullOrWhiteSpace(x)))
-                    {
-                        if (!list.Contains(epd))
-                        {
-                            list.Add(epd);
-                        }
-                    }
-                }
-
-                return list;
+                SyncAvailableLineNames();
+                return _availableLineNames;
             }
         }
-    
-        private void SyncInputEdgeForDistancePort(string port, string? pointName)
+
+        internal static bool IsLineSourceNodeType(string? type) =>
+            string.Equals(type, "Line", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(type, "Caliper", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(type, "CreateLine", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(type, "LinePairDetection", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(type, "LinePairDetect", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(type, "EdgePairDetect", StringComparison.OrdinalIgnoreCase);
+
+        internal string? ResolveCanonicalLineName(string? name) =>
+            ResolveCanonicalOptionName(_availableLineNames, SyncAvailableLineNames, name);
+
+        private static string? ResolveCanonicalOptionName(ObservableCollection<string> options, Func<bool> syncAction, string? name)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+                return name;
+
+            syncAction();
+            foreach (var item in options)
+            {
+                if (string.Equals(item, name, StringComparison.OrdinalIgnoreCase))
+                    return item;
+            }
+            return name;
+        }
+
+        private static bool SyncStringCollection(ObservableCollection<string> target, IReadOnlyList<string> desired)
+        {
+            if (target.Count == desired.Count)
+            {
+                var identical = true;
+                for (var i = 0; i < desired.Count; i++)
+                {
+                    if (!string.Equals(target[i], desired[i], StringComparison.Ordinal))
+                    {
+                        identical = false;
+                        break;
+                    }
+                }
+                if (identical)
+                    return false;
+            }
+
+            var desiredSet = new HashSet<string>(desired, StringComparer.Ordinal);
+            for (var i = target.Count - 1; i >= 0; i--)
+            {
+                if (!desiredSet.Contains(target[i]))
+                    target.RemoveAt(i);
+            }
+
+            for (var i = 0; i < desired.Count; i++)
+            {
+                var item = desired[i];
+                if (i < target.Count)
+                {
+                    if (!string.Equals(target[i], item, StringComparison.Ordinal))
+                    {
+                        var existingIdx = target.IndexOf(item);
+                        if (existingIdx >= 0)
+                            target.Move(existingIdx, i);
+                        else
+                            target.Insert(i, item);
+                    }
+                }
+                else
+                {
+                    target.Add(item);
+                }
+            }
+
+            return true;
+        }
+
+        private bool SyncAvailablePointNames()
+        {
+            var items = new List<string>();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            void AddName(string? name)
+            {
+                if (!string.IsNullOrWhiteSpace(name) && seen.Add(name))
+                    items.Add(name);
+            }
+
+            if (_config is not null)
+            {
+                if (_config.Origin is not null)
+                    AddName("Origin");
+                if (_config.Points is not null)
+                    foreach (var p in _config.Points) AddName(p.Name);
+                if (_config.CreatePoints is not null)
+                    foreach (var cp in _config.CreatePoints) AddName(cp.Name);
+                if (_config.CircleFinders is not null)
+                    foreach (var cf in _config.CircleFinders) AddName(cf.Name);
+                if (_config.BlobDetections is not null)
+                    foreach (var bd in _config.BlobDetections) AddName(bd.Name);
+            }
+
+            foreach (var n in Nodes)
+            {
+                if (string.Equals(n.Type, "Point", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(n.Type, "CreatePoint", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(n.Type, "CircleFinder", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(n.Type, "BlobDetection", StringComparison.OrdinalIgnoreCase))
+                {
+                    AddName(n.RefName);
+                }
+            }
+
+            return SyncStringCollection(_availablePointNames, items);
+        }
+
+        private bool SyncAvailableDistanceRefNames()
+        {
+            var items = new List<string>();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            void AddName(string? name)
+            {
+                if (!string.IsNullOrWhiteSpace(name) && seen.Add(name))
+                    items.Add(name);
+            }
+
+            if (_config is not null)
+            {
+                if (_config.Points is not null)
+                    foreach (var p in _config.Points) AddName(p.Name);
+                if (_config.CircleFinders is not null)
+                    foreach (var c in _config.CircleFinders) AddName(c.Name);
+                if (_config.Diameters is not null)
+                    foreach (var d in _config.Diameters) AddName(d.Name);
+            }
+
+            foreach (var n in Nodes)
+            {
+                if (string.Equals(n.Type, "Point", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(n.Type, "CircleFinder", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(n.Type, "Diameter", StringComparison.OrdinalIgnoreCase))
+                {
+                    AddName(n.RefName);
+                }
+            }
+
+            return SyncStringCollection(_availableDistanceRefNames, items);
+        }
+
+        private bool SyncAvailableLineNames()
+        {
+            var items = new List<string>();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            void AddName(string? name)
+            {
+                if (!string.IsNullOrWhiteSpace(name) && seen.Add(name))
+                    items.Add(name);
+            }
+
+            if (_config is not null)
+            {
+                if (_config.Lines is not null)
+                    foreach (var l in _config.Lines) AddName(l.Name);
+                if (_config.Calipers is not null)
+                    foreach (var c in _config.Calipers) AddName(c.Name);
+                if (_config.CreateLines is not null)
+                    foreach (var cl in _config.CreateLines) AddName(cl.Name);
+                if (_config.LinePairDetections is not null)
+                    foreach (var lpd in _config.LinePairDetections) AddName(lpd.Name);
+                if (_config.EdgePairDetections is not null)
+                    foreach (var epd in _config.EdgePairDetections) AddName(epd.Name);
+            }
+
+            foreach (var n in Nodes)
+            {
+                if (IsLineSourceNodeType(n.Type))
+                    AddName(n.RefName);
+            }
+
+            return SyncStringCollection(_availableLineNames, items);
+        }
+
+        private void SyncAllAvailableReferenceNamesAndNotify()
+        {
+            if (SyncAvailablePointNames())
+                OnPropertyChanged(nameof(AvailablePointNames));
+            if (SyncAvailableDistanceRefNames())
+                OnPropertyChanged(nameof(AvailableDistanceRefNames));
+            if (SyncAvailableLineNames())
+                OnPropertyChanged(nameof(AvailableLineNames));
+        }
+
+        private void SyncInputEdgeForPort(
+            string expectedNodeType,
+            string port,
+            string? refName,
+            Func<ToolGraphNodeViewModel, bool> sourcePredicate)
         {
             if (_syncingInputs)
                 return;
             if (_config is null || SelectedNode is null)
                 return;
-            if (!string.Equals(SelectedNode.Type, "Distance", StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(SelectedNode.Type, expectedNodeType, StringComparison.OrdinalIgnoreCase))
                 return;
-            _syncingInputs = true;
-            try
-            {
-                RemoveEdgesToSelectedNodePort(port);
-                if (!string.IsNullOrWhiteSpace(pointName))
-                {
-                    var from = Nodes.FirstOrDefault(n => string.Equals(n.RefName, pointName, StringComparison.OrdinalIgnoreCase) && (string.Equals(n.Type, "Point", StringComparison.OrdinalIgnoreCase) || string.Equals(n.Type, "CircleFinder", StringComparison.OrdinalIgnoreCase) || string.Equals(n.Type, "Diameter", StringComparison.OrdinalIgnoreCase)));
-                    if (from is not null)
-                    {
-                        from.EnsurePortsInitialized();
-                        CreateEdge(from, SelectedNode, from.OutPorts.FirstOrDefault()?.Name ?? "Out", port);
-                    }
-                }
-            }
-            finally
-            {
-                _syncingInputs = false;
-            }
-        }
-    
-        private void SyncInputEdgeForLineLineDistancePort(string port, string? lineName)
-        {
-            if (_syncingInputs)
-                return;
-            if (_config is null || SelectedNode is null)
-                return;
-            if (!string.Equals(SelectedNode.Type, "LineLineDistance", StringComparison.OrdinalIgnoreCase))
-                return;
-            _syncingInputs = true;
-            try
-            {
-                RemoveEdgesToSelectedNodePort(port);
-                if (!string.IsNullOrWhiteSpace(lineName))
-                {
-                    var from = Nodes.FirstOrDefault(n => (string.Equals(n.Type, "Line", StringComparison.OrdinalIgnoreCase) || string.Equals(n.Type, "Caliper", StringComparison.OrdinalIgnoreCase)) && string.Equals(n.RefName, lineName, StringComparison.OrdinalIgnoreCase));
-                    if (from is not null)
-                    {
-                        from.EnsurePortsInitialized();
-                        CreateEdge(from, SelectedNode, from.OutPorts.FirstOrDefault()?.Name ?? "Out", port);
-                    }
-                }
-            }
-            finally
-            {
-                _syncingInputs = false;
-            }
-        }
-    
-        private void SyncInputEdgeForPointLineDistancePort(string port, string? refName)
-        {
-            if (_syncingInputs)
-                return;
-            if (_config is null || SelectedNode is null)
-                return;
-            if (!string.Equals(SelectedNode.Type, "PointLineDistance", StringComparison.OrdinalIgnoreCase))
-                return;
+
             _syncingInputs = true;
             try
             {
                 RemoveEdgesToSelectedNodePort(port);
                 if (!string.IsNullOrWhiteSpace(refName))
                 {
-                    var from = Nodes.FirstOrDefault(n => string.Equals(n.RefName, refName, StringComparison.OrdinalIgnoreCase) && ((string.Equals(port, "P1", StringComparison.OrdinalIgnoreCase) && string.Equals(n.Type, "Point", StringComparison.OrdinalIgnoreCase)) || (string.Equals(port, "L1", StringComparison.OrdinalIgnoreCase) && (string.Equals(n.Type, "Line", StringComparison.OrdinalIgnoreCase) || string.Equals(n.Type, "Caliper", StringComparison.OrdinalIgnoreCase)))));
-                    if (from is not null)
-                    {
-                        from.EnsurePortsInitialized();
-                        CreateEdge(from, SelectedNode, from.OutPorts.FirstOrDefault()?.Name ?? "Out", port);
-                    }
-                }
-            }
-            finally
-            {
-                _syncingInputs = false;
-            }
-        }
-    
-        private void SyncInputEdgeForSegmentLineDistancePort(string port, string? lineName)
-        {
-            if (_syncingInputs)
-                return;
-            if (_config is null || SelectedNode is null)
-                return;
-            if (!string.Equals(SelectedNode.Type, "SegmentLineDistance", StringComparison.OrdinalIgnoreCase))
-                return;
-            _syncingInputs = true;
-            try
-            {
-                RemoveEdgesToSelectedNodePort(port);
-                if (!string.IsNullOrWhiteSpace(lineName))
-                {
-                    var from = Nodes.FirstOrDefault(n => (string.Equals(n.Type, "Line", StringComparison.OrdinalIgnoreCase)
-                        || string.Equals(n.Type, "Caliper", StringComparison.OrdinalIgnoreCase)
-                        || string.Equals(n.Type, "LinePairDetect", StringComparison.OrdinalIgnoreCase)
-                        || string.Equals(n.Type, "LinePairDetection", StringComparison.OrdinalIgnoreCase)
-                        || string.Equals(n.Type, "EdgePairDetect", StringComparison.OrdinalIgnoreCase)
-                        || string.Equals(n.Type, "EdgePair", StringComparison.OrdinalIgnoreCase)
-                        || string.Equals(n.Type, "CreateLine", StringComparison.OrdinalIgnoreCase))
-                        && string.Equals(n.RefName, lineName, StringComparison.OrdinalIgnoreCase));
+                    var from = Nodes.FirstOrDefault(n =>
+                        string.Equals(n.RefName, refName, StringComparison.OrdinalIgnoreCase) && sourcePredicate(n));
                     if (from is not null)
                     {
                         from.EnsurePortsInitialized();
@@ -3618,6 +3596,29 @@ namespace VisionInspectionApp.UI.ViewModels
                 _syncingInputs = false;
             }
         }
+
+        private void SyncInputEdgeForDistancePort(string port, string? pointName) =>
+            SyncInputEdgeForPort("Distance", port, pointName, n =>
+                string.Equals(n.Type, "Point", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(n.Type, "CircleFinder", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(n.Type, "Diameter", StringComparison.OrdinalIgnoreCase));
+
+        private void SyncInputEdgeForLineLineDistancePort(string port, string? lineName) =>
+            SyncInputEdgeForPort("LineLineDistance", port, lineName, n => IsLineSourceNodeType(n.Type));
+
+        private void SyncInputEdgeForPointLineDistancePort(string port, string? refName) =>
+            SyncInputEdgeForPort("PointLineDistance", port, refName, n =>
+                (string.Equals(port, "P1", StringComparison.OrdinalIgnoreCase)
+                    && (string.Equals(n.Type, "Point", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(n.Type, "CreatePoint", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(n.Type, "CircleFinder", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(n.Type, "BlobDetection", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(n.Type, "Origin", StringComparison.OrdinalIgnoreCase)))
+                || (string.Equals(port, "L1", StringComparison.OrdinalIgnoreCase) && IsLineSourceNodeType(n.Type)));
+
+        private void SyncInputEdgeForSegmentLineDistancePort(string port, string? lineName) =>
+            SyncInputEdgeForPort("SegmentLineDistance", port, lineName, n =>
+                IsLineSourceNodeType(n.Type) || string.Equals(n.Type, "EdgePair", StringComparison.OrdinalIgnoreCase));
 
         public ObservableCollection<SegmentLineDistanceMode> AvailableSegmentLineDistanceModes { get; } = new ObservableCollection<SegmentLineDistanceMode>((SegmentLineDistanceMode[])Enum.GetValues(typeof(SegmentLineDistanceMode)));
         public ObservableCollection<SegmentLineExtensionMode> AvailableSegmentLineExtensionModes { get; } = new ObservableCollection<SegmentLineExtensionMode>((SegmentLineExtensionMode[])Enum.GetValues(typeof(SegmentLineExtensionMode)));
@@ -3643,33 +3644,9 @@ namespace VisionInspectionApp.UI.ViewModels
             }
         }
     
-        private void SyncInputEdgeForDiameterPort(string port, string? circleName)
-        {
-            if (_syncingInputs)
-                return;
-            if (_config is null || SelectedNode is null)
-                return;
-            if (!string.Equals(SelectedNode.Type, "Diameter", StringComparison.OrdinalIgnoreCase))
-                return;
-            _syncingInputs = true;
-            try
-            {
-                RemoveEdgesToSelectedNodePort(port);
-                if (!string.IsNullOrWhiteSpace(circleName))
-                {
-                    var from = Nodes.FirstOrDefault(n => string.Equals(n.Type, "CircleFinder", StringComparison.OrdinalIgnoreCase) && string.Equals(n.RefName, circleName, StringComparison.OrdinalIgnoreCase));
-                    if (from is not null)
-                    {
-                        from.EnsurePortsInitialized();
-                        CreateEdge(from, SelectedNode, from.OutPorts.FirstOrDefault()?.Name ?? "Out", port);
-                    }
-                }
-            }
-            finally
-            {
-                _syncingInputs = false;
-            }
-        }
+        private void SyncInputEdgeForDiameterPort(string port, string? circleName) =>
+            SyncInputEdgeForPort("Diameter", port, circleName, n =>
+                string.Equals(n.Type, "CircleFinder", StringComparison.OrdinalIgnoreCase));
     
         private static bool TryClipInfiniteLineToImage(System.Windows.Point p, System.Windows.Point dir, int width, int height, out System.Windows.Point p1, out System.Windows.Point p2)
         {
@@ -3920,6 +3897,12 @@ namespace VisionInspectionApp.UI.ViewModels
                     var d = _lastRun.PointToLineDistances.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
                     return d?.Value;
                 }
+
+                if (string.Equals(SelectedNode.Type, "SegmentLineDistance", StringComparison.OrdinalIgnoreCase))
+                {
+                    var d = _lastRun.SegmentLineDistances.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
+                    return d?.Value;
+                }
     
                 if (string.Equals(SelectedNode.Type, "Angle", StringComparison.OrdinalIgnoreCase))
                 {
@@ -4010,6 +3993,12 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (string.Equals(SelectedNode.Type, "PointLineDistance", StringComparison.OrdinalIgnoreCase))
                 {
                     var d = _lastRun.PointToLineDistances.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
+                    return d?.Pass;
+                }
+
+                if (string.Equals(SelectedNode.Type, "SegmentLineDistance", StringComparison.OrdinalIgnoreCase))
+                {
+                    var d = _lastRun.SegmentLineDistances.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
                     return d?.Pass;
                 }
     
@@ -4452,10 +4441,11 @@ namespace VisionInspectionApp.UI.ViewModels
     
             // 4. Đồng bộ ToolGraph để ToolGraph.Nodes mang RefName mới (tránh bị RemoveAll xóa mất)
             SyncToolGraphToConfig();
-    
-            // 5. Cập nhật biến previous
+
+            // 5. Cập nhật biến previous và danh sách tham chiếu
             _selectedNodePrevRefName = newName;
-    
+            SyncAllAvailableReferenceNamesAndNotify();
+
             // 6. Yêu cầu tự động lưu và cập nhật UI
             RequestAutoSave();
         }
@@ -4484,6 +4474,7 @@ namespace VisionInspectionApp.UI.ViewModels
             SelectedNodeOverlayItems.Clear();
             FinalOverlayItems.Clear();
             TextNode_ConditionRows.Clear();
+            SyncAllAvailableReferenceNamesAndNotify();
             RaiseToolPropertyPanelsChanged();
         }
     
@@ -4625,6 +4616,7 @@ namespace VisionInspectionApp.UI.ViewModels
             CreateEdge(originNode, outputNode, originNode.OutPorts.FirstOrDefault()?.Name ?? "Out", "Image");
 
             SyncToolGraphToConfig();
+            SyncAllAvailableReferenceNamesAndNotify();
             SelectedNode = originNode;
             RaiseToolPropertyPanelsChanged();
             RefreshPreviews();
@@ -4971,12 +4963,13 @@ namespace VisionInspectionApp.UI.ViewModels
     
             if (string.Equals(node.Type, "SegmentLineDistance", StringComparison.OrdinalIgnoreCase))
             {
+                _config.SegmentLineDistances ??= new List<SegmentLineDistance>();
                 var existed = _config.SegmentLineDistances.Any(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
                 if (!existed)
                 {
                     _config.SegmentLineDistances.Add(new SegmentLineDistance { Name = node.RefName });
                 }
-    
+
                 return;
             }
     
@@ -5315,13 +5308,23 @@ namespace VisionInspectionApp.UI.ViewModels
                 var def = _config.SegmentLineDistances?.FirstOrDefault(x => string.Equals(x.Name, to.RefName, StringComparison.OrdinalIgnoreCase));
                 if (def is null)
                     return;
-                if (string.Equals(edge.ToPort, "L1", StringComparison.OrdinalIgnoreCase) && string.Equals(def.LineA, from.RefName, StringComparison.OrdinalIgnoreCase))
+                if ((string.Equals(edge.ToPort, "L1", StringComparison.OrdinalIgnoreCase)
+                     || string.Equals(edge.ToPort, "LineA", StringComparison.OrdinalIgnoreCase)
+                     || string.Equals(edge.ToPort, "InA", StringComparison.OrdinalIgnoreCase)
+                     || string.Equals(edge.ToPort, "In1", StringComparison.OrdinalIgnoreCase))
+                    && string.Equals(def.LineA, from.RefName, StringComparison.OrdinalIgnoreCase))
                 {
                     def.LineA = string.Empty;
+                    OnPropertyChanged(nameof(SegmentLineDistance_LineA));
                 }
-                else if (string.Equals(edge.ToPort, "L2", StringComparison.OrdinalIgnoreCase) && string.Equals(def.LineB, from.RefName, StringComparison.OrdinalIgnoreCase))
+                else if ((string.Equals(edge.ToPort, "L2", StringComparison.OrdinalIgnoreCase)
+                          || string.Equals(edge.ToPort, "LineB", StringComparison.OrdinalIgnoreCase)
+                          || string.Equals(edge.ToPort, "InB", StringComparison.OrdinalIgnoreCase)
+                          || string.Equals(edge.ToPort, "In2", StringComparison.OrdinalIgnoreCase))
+                         && string.Equals(def.LineB, from.RefName, StringComparison.OrdinalIgnoreCase))
                 {
                     def.LineB = string.Empty;
+                    OnPropertyChanged(nameof(SegmentLineDistance_LineB));
                 }
                 return;
             }

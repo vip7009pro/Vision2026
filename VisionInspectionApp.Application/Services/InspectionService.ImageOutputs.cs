@@ -112,8 +112,9 @@ public partial class InspectionService
                 // và bàn giao toàn bộ quyền sở hữu Native Mat cho AsyncImageSaver.
                 Mat saveMat = sourceMat.Clone();
 
+                bool shouldBurnAny = io.IncludeOverlay || io.ShowResultTable;
                 Func<Mat, Mat>? preProcess = null;
-                if (io.IncludeOverlay || sourceMat.Channels() == 1)
+                if (shouldBurnAny || sourceMat.Channels() == 1)
                 {
                     // Chuyển toàn bộ việc CvtColor sang BGR và BurnOverlaysToMat sang Background Worker của AsyncImageSaver.
                     // Luồng kiểm tra chính không bị chặn, chu kỳ inspection kết thúc ngay tức thì (< 2ms).
@@ -129,7 +130,7 @@ public partial class InspectionService
                                 m.Dispose();
                             }
 
-                            if (io.IncludeOverlay)
+                            if (shouldBurnAny)
                             {
                                 BurnOverlaysToMat(colorMat, config, result, io, inputName, nodesById, edges);
                             }
@@ -166,6 +167,28 @@ public partial class InspectionService
         {
             return;
         }
+
+        // Adaptive scaling based on image resolution
+        double autoScale = Math.Max(1.0, Math.Max(mat.Cols, mat.Rows) / 1280.0);
+        if (io is not null && io.OverlayScale > 0.05)
+        {
+            autoScale *= io.OverlayScale;
+        }
+
+        if (io is null || io.IncludeOverlay)
+        {
+            BurnToolOverlaysToMat(mat, config, result, io, resolvedInputNodeName, nodesById, edges, autoScale);
+        }
+
+        // 22. Result Table Overlay (Bảng kết quả đo đạc & thông tin sản phẩm ở góc dưới cùng bên phải)
+        if (io is null || io.ShowResultTable)
+        {
+            DrawResultTableOverlay(mat, config, result, io, autoScale);
+        }
+    }
+
+    private static void BurnToolOverlaysToMat(Mat mat, VisionConfig config, InspectionResult result, ImageOutputDefinition? io, string? resolvedInputNodeName, Dictionary<string, ToolGraphNode>? nodesById, List<ToolGraphEdge>? edges, double autoScale)
+    {
 
         var targetNodeName = !string.IsNullOrWhiteSpace(resolvedInputNodeName) ? resolvedInputNodeName : io?.InputNodeName;
         var renderAll = string.IsNullOrWhiteSpace(targetNodeName) ||
@@ -265,13 +288,6 @@ public partial class InspectionService
         var yellow = new Scalar(0, 255, 255);     // Yellow
         var white = new Scalar(255, 255, 255);   // White
         var showRoiBoxes = io is null || io.ShowRoi;
-
-        // Adaptive scaling based on image resolution
-        double autoScale = Math.Max(1.0, Math.Max(mat.Cols, mat.Rows) / 1280.0);
-        if (io is not null && io.OverlayScale > 0.05)
-        {
-            autoScale *= io.OverlayScale;
-        }
 
         int ScalePx(int px) => Math.Max(1, (int)Math.Round(px * autoScale));
         int ScaleThick(int th) => Math.Max(1, (int)Math.Round(th * autoScale));
@@ -1077,12 +1093,6 @@ public partial class InspectionService
                 RenderTextWithNewlines(mat, text, new Point(t.X, t.Y), HersheyFonts.HersheySimplex, textFontScale, col, textThick);
             }
         }
-
-        // 22. Result Table Overlay (Bảng kết quả đo đạc & thông tin sản phẩm ở góc dưới cùng bên phải)
-        if (io is null || io.ShowResultTable)
-        {
-            DrawResultTableOverlay(mat, config, result, io, autoScale);
-        }
     }
 
     private static void DrawResultTableOverlay(Mat mat, VisionConfig config, InspectionResult result, ImageOutputDefinition? io, double autoScale)
@@ -1270,7 +1280,11 @@ public partial class InspectionService
         if (x0 < 0) x0 = 0;
         if (y0 < 0) y0 = 0;
 
-        var tableRect = new Rect(x0, y0, tableWidth, totalTableHeight);
+        tableWidth = Math.Clamp(tableWidth, 0, Math.Max(0, mat.Width - x0));
+        int tableHeight = Math.Clamp(totalTableHeight, 0, Math.Max(0, mat.Height - y0));
+        if (tableWidth <= 0 || tableHeight <= 0) return;
+
+        var tableRect = new Rect(x0, y0, tableWidth, tableHeight);
 
         // 3. Vẽ nền bảng bán trong suốt (Semi-transparent dark overlay)
         using (var overlay = mat.SubMat(tableRect))

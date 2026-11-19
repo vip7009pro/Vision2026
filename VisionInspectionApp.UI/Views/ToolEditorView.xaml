@@ -7,6 +7,7 @@
              xmlns:models="clr-namespace:VisionInspectionApp.Models;assembly=VisionInspectionApp.Models"
              xmlns:converters="clr-namespace:VisionInspectionApp.UI.Converters"
              xmlns:hmiViews="clr-namespace:VisionInspectionApp.UI.Views.HMI"
+             xmlns:vm="clr-namespace:VisionInspectionApp.UI.ViewModels"
              mc:Ignorable="d"
              Focusable="True"
              Foreground="{DynamicResource TextBrush}">
@@ -47,14 +48,17 @@
             <Setter Property="Margin" Value="0,1,0,0" />
         </Style>
 
-        <!-- ===== Style cho 20 nấc sản phẩm gần nhất (OK/NG) — bấm xem lại ảnh ===== -->
+        <!-- ===== Style cho 20 nấc sản phẩm gần nhất (OK/NG) — đánh số 1..20 từ trái sang phải, bấm xem lại ảnh ===== -->
         <Style x:Key="RecentSlotButtonStyle" TargetType="Button">
-            <Setter Property="Width" Value="12" />
-            <Setter Property="Height" Value="18" />
-            <Setter Property="Margin" Value="1.5,0" />
+            <Setter Property="Width" Value="18" />
+            <Setter Property="Height" Value="20" />
+            <Setter Property="Margin" Value="1,0" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="Padding" Value="0" />
             <Setter Property="BorderThickness" Value="1.5" />
+            <Setter Property="FontSize" Value="9.5" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="Foreground" Value="White" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
@@ -63,7 +67,10 @@
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
                                 CornerRadius="3">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              SnapsToDevicePixels="True"
+                                              TextOptions.TextFormattingMode="Display" />
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
@@ -73,6 +80,11 @@
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
+            <Style.Triggers>
+                <Trigger Property="Background" Value="{x:Static vm:ToolEditorViewModel.EmptySlotBrush}">
+                    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+                </Trigger>
+            </Style.Triggers>
         </Style>
     </UserControl.Resources>
 
@@ -184,27 +196,27 @@
                     <!-- Discrete Stepped Slots (20 items, Clickable to view OK/NG images) -->
                     <Border Background="#12000000" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="3,2" VerticalAlignment="Center">
                         <StackPanel Orientation="Horizontal">
-                            <!-- 20 Clickable Stepped Slots with widened buttons (12x18px) -->
-                            <Button Style="{StaticResource RecentSlotButtonStyle}" Background="{Binding RecentPartSlot0Bg}" BorderBrush="{Binding RecentPartSlot0Border}" ToolTip="{Binding RecentPartSlot0ToolTip}" Command="{Binding SelectRecentPartSlotCommand}" CommandParameter="0"/>
-                            <Button Style="{StaticResource RecentSlotButtonStyle}" Background="{Binding RecentPartSlot1Bg}" BorderBrush="{Binding RecentPartSlot1Border}" ToolTip="{Binding RecentPartSlot1ToolTip}" Command="{Binding SelectRecentPartSlotCommand}" CommandParameter="1"/>
-                            <Button Style="{StaticResource RecentSlotButtonStyle}" Background="{Binding RecentPartSlot2Bg}" BorderBrush="{Binding RecentPartSlot2Border}" ToolTip="{Binding RecentPartSlot2ToolTip}" Command="{Binding SelectRecentPartSlotCommand}" CommandParameter="2"/>
-                            <Button Style="{StaticResource RecentSlotButtonStyle}" Background="{Binding RecentPartSlot3Bg}" BorderBrush="{Binding RecentPartSlot3Border}" ToolTip="{Binding RecentPartSlot3ToolTip}" Command="{Binding SelectRecentPartSlotCommand}" CommandParameter="3"/>
-                            <Button Style="{StaticResource RecentSlotButtonStyle}" Background="{Binding RecentPartSlot4Bg}" BorderBrush="{Binding RecentPartSlot4Border}" ToolTip="{Binding RecentPartSlot4ToolTip}" Command="{Binding SelectRecentPartSlotCommand}" CommandParameter="4"/>
-                            <Button Style="{StaticResource RecentSlotButtonStyle}" Background="{Binding RecentPartSlot5Bg}" BorderBrush="{Binding RecentPartSlot5Border}" ToolTip="{Binding RecentPartSlot5ToolTip}" Command="{Binding SelectRecentPartSlotCommand}" CommandParameter="5"/>
-                            <Button Style="{StaticResource RecentSlotButtonStyle}" Background="{Binding RecentPartSlot6Bg}" BorderBrush="{Binding RecentPartSlot6Border}" ToolTip="{Binding RecentPartSlot6ToolTip}" Command="{Binding SelectRecentPartSlotCommand}" CommandParameter="6"/>
-                            <Button Style="{StaticResource RecentSlotButtonStyle}" Background="{Binding RecentPartSlot7Bg}" BorderBrush="{Binding RecentPartSlot7Border}" ToolTip="{Binding RecentPartSlot7ToolTip}" Command="{Binding SelectRecentPartSlotCommand}" CommandParameter="7"/>
-                            <Button Style="{StaticResource RecentSlotButtonStyle}" Background="{Binding RecentPartSlot8Bg}" BorderBrush="{Binding RecentPartSlot8Border}" ToolTip="{Binding RecentPartSlot8ToolTip}" Command="{Binding SelectRecentPartSlotCommand}" CommandParameter="8"/>
-                            <Button Style="{StaticResource RecentSlotButtonStyle}" Background="{Binding RecentPartSlot9Bg}" BorderBrush="{Binding RecentPartSlot9Border}" ToolTip="{Binding RecentPartSlot9ToolTip}" Command="{Binding SelectRecentPartSlotCommand}" CommandParameter="9"/>
-                            <Button Style="{StaticResource RecentSlotButtonStyle}" Background="{Binding RecentPartSlot10Bg}" BorderBrush="{Binding RecentPartSlot10Border}" ToolTip="{Binding RecentPartSlot10ToolTip}" Command="{Binding SelectRecentPartSlotCommand}" CommandParameter="10"/>
-                            <Button Style="{StaticResource RecentSlotButtonStyle}" Background="{Binding RecentPartSlot11Bg}" BorderBrush="{Binding RecentPartSlot11Border}" ToolTip="{Binding RecentPartSlot11ToolTip}" Command="{Binding SelectRecentPartSlotCommand}" CommandParameter="11"/>
-                            <Button Style="{StaticResource RecentSlotButtonStyle}" Background="{Binding RecentPartSlot12Bg}" BorderBrush="{Binding RecentPartSlot12Border}" ToolTip="{Binding RecentPartSlot12ToolTip}" Command="{Binding SelectRecentPartSlotCommand}" CommandParameter="12"/>
-                            <Button Style="{StaticResource RecentSlotButtonStyle}" Background="{Binding RecentPartSlot13Bg}" BorderBrush="{Binding RecentPartSlot13Border}" ToolTip="{Binding RecentPartSlot13ToolTip}" Command="{Binding SelectRecentPartSlotCommand}" CommandParameter="13"/>
-                            <Button Style="{StaticResource RecentSlotButtonStyle}" Background="{Binding RecentPartSlot14Bg}" BorderBrush="{Binding RecentPartSlot14Border}" ToolTip="{Binding RecentPartSlot14ToolTip}" Command="{Binding SelectRecentPartSlotCommand}" CommandParameter="14"/>
-                            <Button Style="{StaticResource RecentSlotButtonStyle}" Background="{Binding RecentPartSlot15Bg}" BorderBrush="{Binding RecentPartSlot15Border}" ToolTip="{Binding RecentPartSlot15ToolTip}" Command="{Binding SelectRecentPartSlotCommand}" CommandParameter="15"/>
-                            <Button Style="{StaticResource RecentSlotButtonStyle}" Background="{Binding RecentPartSlot16Bg}" BorderBrush="{Binding RecentPartSlot16Border}" ToolTip="{Binding RecentPartSlot16ToolTip}" Command="{Binding SelectRecentPartSlotCommand}" CommandParameter="16"/>
-                            <Button Style="{StaticResource RecentSlotButtonStyle}" Background="{Binding RecentPartSlot17Bg}" BorderBrush="{Binding RecentPartSlot17Border}" ToolTip="{Binding RecentPartSlot17ToolTip}" Command="{Binding SelectRecentPartSlotCommand}" CommandParameter="17"/>
-                            <Button Style="{StaticResource RecentSlotButtonStyle}" Background="{Binding RecentPartSlot18Bg}" BorderBrush="{Binding RecentPartSlot18Border}" ToolTip="{Binding RecentPartSlot18ToolTip}" Command="{Binding SelectRecentPartSlotCommand}" CommandParameter="18"/>
-                            <Button Style="{StaticResource RecentSlotButtonStyle}" Background="{Binding RecentPartSlot19Bg}" BorderBrush="{Binding RecentPartSlot19Border}" ToolTip="{Binding RecentPartSlot19ToolTip}" Command="{Binding SelectRecentPartSlotCommand}" CommandParameter="19"/>
+                            <!-- 20 Clickable Stepped Slots (1..20 left-to-right, 18x20px) -->
+                            <Button Content="1" Style="{StaticResource RecentSlotButtonStyle}" Background="{Binding RecentPartSlot0Bg}" BorderBrush="{Binding RecentPartSlot0Border}" ToolTip="{Binding RecentPartSlot0ToolTip}" Command="{Binding SelectRecentPartSlotCommand}" CommandParameter="0"/>
+                            <Button Content="2" Style="{StaticResource RecentSlotButtonStyle}" Background="{Binding RecentPartSlot1Bg}" BorderBrush="{Binding RecentPartSlot1Border}" ToolTip="{Binding RecentPartSlot1ToolTip}" Command="{Binding SelectRecentPartSlotCommand}" CommandParameter="1"/>
+                            <Button Content="3" Style="{StaticResource RecentSlotButtonStyle}" Background="{Binding RecentPartSlot2Bg}" BorderBrush="{Binding RecentPartSlot2Border}" ToolTip="{Binding RecentPartSlot2ToolTip}" Command="{Binding SelectRecentPartSlotCommand}" CommandParameter="2"/>
+                            <Button Content="4" Style="{StaticResource RecentSlotButtonStyle}" Background="{Binding RecentPartSlot3Bg}" BorderBrush="{Binding RecentPartSlot3Border}" ToolTip="{Binding RecentPartSlot3ToolTip}" Command="{Binding SelectRecentPartSlotCommand}" CommandParameter="3"/>
+                            <Button Content="5" Style="{StaticResource RecentSlotButtonStyle}" Background="{Binding RecentPartSlot4Bg}" BorderBrush="{Binding RecentPartSlot4Border}" ToolTip="{Binding RecentPartSlot4ToolTip}" Command="{Binding SelectRecentPartSlotCommand}" CommandParameter="4"/>
+                            <Button Content="6" Style="{StaticResource RecentSlotButtonStyle}" Background="{Binding RecentPartSlot5Bg}" BorderBrush="{Binding RecentPartSlot5Border}" ToolTip="{Binding RecentPartSlot5ToolTip}" Command="{Binding SelectRecentPartSlotCommand}" CommandParameter="5"/>
+                            <Button Content="7" Style="{StaticResource RecentSlotButtonStyle}" Background="{Binding RecentPartSlot6Bg}" BorderBrush="{Binding RecentPartSlot6Border}" ToolTip="{Binding RecentPartSlot6ToolTip}" Command="{Binding SelectRecentPartSlotCommand}" CommandParameter="6"/>
+                            <Button Content="8" Style="{StaticResource RecentSlotButtonStyle}" Background="{Binding RecentPartSlot7Bg}" BorderBrush="{Binding RecentPartSlot7Border}" ToolTip="{Binding RecentPartSlot7ToolTip}" Command="{Binding SelectRecentPartSlotCommand}" CommandParameter="7"/>
+                            <Button Content="9" Style="{StaticResource RecentSlotButtonStyle}" Background="{Binding RecentPartSlot8Bg}" BorderBrush="{Binding RecentPartSlot8Border}" ToolTip="{Binding RecentPartSlot8ToolTip}" Command="{Binding SelectRecentPartSlotCommand}" CommandParameter="8"/>
+                            <Button Content="10" Style="{StaticResource RecentSlotButtonStyle}" Background="{Binding RecentPartSlot9Bg}" BorderBrush="{Binding RecentPartSlot9Border}" ToolTip="{Binding RecentPartSlot9ToolTip}" Command="{Binding SelectRecentPartSlotCommand}" CommandParameter="9"/>
+                            <Button Content="11" Style="{StaticResource RecentSlotButtonStyle}" Background="{Binding RecentPartSlot10Bg}" BorderBrush="{Binding RecentPartSlot10Border}" ToolTip="{Binding RecentPartSlot10ToolTip}" Command="{Binding SelectRecentPartSlotCommand}" CommandParameter="10"/>
+                            <Button Content="12" Style="{StaticResource RecentSlotButtonStyle}" Background="{Binding RecentPartSlot11Bg}" BorderBrush="{Binding RecentPartSlot11Border}" ToolTip="{Binding RecentPartSlot11ToolTip}" Command="{Binding SelectRecentPartSlotCommand}" CommandParameter="11"/>
+                            <Button Content="13" Style="{StaticResource RecentSlotButtonStyle}" Background="{Binding RecentPartSlot12Bg}" BorderBrush="{Binding RecentPartSlot12Border}" ToolTip="{Binding RecentPartSlot12ToolTip}" Command="{Binding SelectRecentPartSlotCommand}" CommandParameter="12"/>
+                            <Button Content="14" Style="{StaticResource RecentSlotButtonStyle}" Background="{Binding RecentPartSlot13Bg}" BorderBrush="{Binding RecentPartSlot13Border}" ToolTip="{Binding RecentPartSlot13ToolTip}" Command="{Binding SelectRecentPartSlotCommand}" CommandParameter="13"/>
+                            <Button Content="15" Style="{StaticResource RecentSlotButtonStyle}" Background="{Binding RecentPartSlot14Bg}" BorderBrush="{Binding RecentPartSlot14Border}" ToolTip="{Binding RecentPartSlot14ToolTip}" Command="{Binding SelectRecentPartSlotCommand}" CommandParameter="14"/>
+                            <Button Content="16" Style="{StaticResource RecentSlotButtonStyle}" Background="{Binding RecentPartSlot15Bg}" BorderBrush="{Binding RecentPartSlot15Border}" ToolTip="{Binding RecentPartSlot15ToolTip}" Command="{Binding SelectRecentPartSlotCommand}" CommandParameter="15"/>
+                            <Button Content="17" Style="{StaticResource RecentSlotButtonStyle}" Background="{Binding RecentPartSlot16Bg}" BorderBrush="{Binding RecentPartSlot16Border}" ToolTip="{Binding RecentPartSlot16ToolTip}" Command="{Binding SelectRecentPartSlotCommand}" CommandParameter="16"/>
+                            <Button Content="18" Style="{StaticResource RecentSlotButtonStyle}" Background="{Binding RecentPartSlot17Bg}" BorderBrush="{Binding RecentPartSlot17Border}" ToolTip="{Binding RecentPartSlot17ToolTip}" Command="{Binding SelectRecentPartSlotCommand}" CommandParameter="17"/>
+                            <Button Content="19" Style="{StaticResource RecentSlotButtonStyle}" Background="{Binding RecentPartSlot18Bg}" BorderBrush="{Binding RecentPartSlot18Border}" ToolTip="{Binding RecentPartSlot18ToolTip}" Command="{Binding SelectRecentPartSlotCommand}" CommandParameter="18"/>
+                            <Button Content="20" Style="{StaticResource RecentSlotButtonStyle}" Background="{Binding RecentPartSlot19Bg}" BorderBrush="{Binding RecentPartSlot19Border}" ToolTip="{Binding RecentPartSlot19ToolTip}" Command="{Binding SelectRecentPartSlotCommand}" CommandParameter="19"/>
                         </StackPanel>
                     </Border>
 
@@ -2414,50 +2426,56 @@
                                     </Grid>
                                 </Border>
 
-                                 <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
-                                     <Grid>
-                                         <Grid.ColumnDefinitions>
-                                             <ColumnDefinition Width="120" />
-                                             <ColumnDefinition Width="*" />
-                                         </Grid.ColumnDefinitions>
-                                         <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
-                                             <TextBlock Text="Burn Overlay" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
-                                         </Border>
-                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                             <CheckBox IsChecked="{Binding ImageOutput_IncludeOverlay, UpdateSourceTrigger=PropertyChanged}" Margin="2,1" FontSize="11" VerticalAlignment="Center" Content="V&#x1EBD; ROI &amp; Overlay v&#xE0;o &#x1EA3;nh xu&#x1EA5;t" />
-                                         </Border>
-                                     </Grid>
-                                 </Border>
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Burn Overlay" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <CheckBox IsChecked="{Binding ImageOutput_IncludeOverlay, UpdateSourceTrigger=PropertyChanged}" Margin="2,2" FontSize="11" VerticalAlignment="Center" VerticalContentAlignment="Center">
+                                                <TextBlock Text="Vẽ ROI &amp; Overlay vào ảnh xuất" FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource TextBrush}"/>
+                                            </CheckBox>
+                                        </Border>
+                                    </Grid>
+                                </Border>
 
-                                 <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
-                                     <Grid>
-                                         <Grid.ColumnDefinitions>
-                                             <ColumnDefinition Width="120" />
-                                             <ColumnDefinition Width="*" />
-                                         </Grid.ColumnDefinitions>
-                                         <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
-                                             <TextBlock Text="Show ROI Boxes" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
-                                         </Border>
-                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                             <CheckBox IsChecked="{Binding ImageOutput_ShowRoi, UpdateSourceTrigger=PropertyChanged}" Margin="2,1" FontSize="11" VerticalAlignment="Center" Content="V&#x1EBD; &#xF4; vu&#xF4;ng ROI t&#xEC;m ki&#x1EBF;m (B&#x1ECF; ch&#x1ECD;n &#x111;&#x1EC3; ch&#x1EC9; hi&#x1EC7;n k&#x1EBF;t qu&#x1EA3;)" />
-                                         </Border>
-                                     </Grid>
-                                 </Border>
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Show ROI Boxes" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <CheckBox IsChecked="{Binding ImageOutput_ShowRoi, UpdateSourceTrigger=PropertyChanged}" Margin="2,2" FontSize="11" VerticalAlignment="Center" VerticalContentAlignment="Center">
+                                                <TextBlock Text="Vẽ ô vuông ROI tìm kiếm (Bỏ chọn để chỉ hiện kết quả)" FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource TextBrush}"/>
+                                            </CheckBox>
+                                        </Border>
+                                    </Grid>
+                                </Border>
 
-                                 <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
-                                     <Grid>
-                                         <Grid.ColumnDefinitions>
-                                             <ColumnDefinition Width="120" />
-                                             <ColumnDefinition Width="*" />
-                                         </Grid.ColumnDefinitions>
-                                         <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
-                                             <TextBlock Text="Result Table" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
-                                         </Border>
-                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                             <CheckBox IsChecked="{Binding ImageOutput_ShowResultTable, UpdateSourceTrigger=PropertyChanged}" Margin="2,1" FontSize="11" VerticalAlignment="Center" Content="B&#x1EA3;ng k&#x1EBF;t qu&#x1EA3; &#x111;o &#x111;&#x1EA1;c (T&#xEA;n SP, M&#xE3; SP, Ng&#xE0;y, K&#x1EBF;t qu&#x1EA3;)" ToolTip="Hi&#x1EC3;n th&#x1ECB; overlay b&#x1EA3;ng th&#xF4;ng tin v&#xE0; k&#x1EBF;t qu&#x1EA3; &#x111;o &#x111;&#x1EA1;c chi ti&#x1EBF;t &#x1EDF; g&#xF3;c d&#x1B0;&#x1EDB;i b&#xEA;n ph&#x1EA3;i &#x1EA3;nh xu&#x1EA5;t" />
-                                         </Border>
-                                     </Grid>
-                                 </Border>
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Result Table" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <CheckBox IsChecked="{Binding ImageOutput_ShowResultTable, UpdateSourceTrigger=PropertyChanged}" Margin="2,2" FontSize="11" VerticalAlignment="Center" VerticalContentAlignment="Center" ToolTip="Ẩn/hiện bảng thông tin và kết quả đo đạc nhúng vào góc dưới bên phải ảnh đầu ra">
+                                                <TextBlock Text="Hiện bảng kết quả nhúng vào ảnh đầu ra (Tên SP, Mã SP, Ngày, Kết quả)" FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource TextBrush}"/>
+                                            </CheckBox>
+                                        </Border>
+                                    </Grid>
+                                </Border>
 
                                 <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
                                     <Grid>

@@ -1,10 +1,17 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
+using System.Threading;
+using System.Windows.Controls;
+using System.Windows.Data;
+using System.Xml.Linq;
 using OpenCvSharp;
 using VisionInspectionApp.Application;
+using VisionInspectionApp.Application.Services;
 using VisionInspectionApp.Models;
+using VisionInspectionApp.UI.ViewModels;
 using VisionInspectionApp.VisionEngine;
 
 namespace TestExtractApp;
@@ -30,10 +37,12 @@ public static class PreprocessAndImageOutputTests
         Test_09_JsonSerialization_And_BackwardCompatibility();
         Test_10_MemoryLeak_SoakLoop();
         Test_11_AsyncImageSaver_PreProcessBeforeSave_NonBlocking();
+        Test_12_ImageOutput_InspectPipeline_ShowResultTableToggle();
+        Test_13_ImageOutput_ViewModelAndXamlCheckboxBinding();
 
         Console.ForegroundColor = ConsoleColor.Green;
         Console.WriteLine("----------------------------------------------------------");
-        Console.WriteLine(" ALL PREPROCESS & IMAGE OUTPUT TESTS PASSED (11/11)!");
+        Console.WriteLine(" ALL PREPROCESS & IMAGE OUTPUT TESTS PASSED (13/13)!");
         Console.WriteLine("----------------------------------------------------------\n");
         Console.ResetColor();
     }
@@ -339,13 +348,45 @@ public static class PreprocessAndImageOutputTests
         bool innerModified = (pixelInner.Item0 != 40 || pixelInner.Item1 != 40 || pixelInner.Item2 != 40);
         Assert(innerModified, "Result table width expanded to 680px covers check point (Width - 600px)");
 
-        // Khi ShowResultTable = false thì không vẽ bảng kết quả
+        // Overlay của CodeDetection tại (50, 50) cũng phải được vẽ khi IncludeOverlay = true
+        var overlayPt = testMatWithTable.Get<Vec3b>(50, 50);
+        Assert(overlayPt.Item0 != 40 || overlayPt.Item1 != 40 || overlayPt.Item2 != 40, "Tool overlay drawn when IncludeOverlay is true");
+
+        // Case 2: IncludeOverlay = true, ShowResultTable = false -> có tool overlay, KHÔNG có bảng kết quả
+        outputDef.IncludeOverlay = true;
+        outputDef.ShowResultTable = false;
+        using var testMatOverlayOnly = img.Clone();
+        InspectionService.BurnOverlaysToMat(testMatOverlayOnly, config, inspectionResult, outputDef);
+        var pixelOverlayOnlyTable = testMatOverlayOnly.Get<Vec3b>(checkY, checkX);
+        Assert(pixelOverlayOnlyTable.Item0 == 40 && pixelOverlayOnlyTable.Item1 == 40 && pixelOverlayOnlyTable.Item2 == 40, "No table drawn when ShowResultTable is false even if IncludeOverlay is true");
+        var pixelOverlayOnlyBox = testMatOverlayOnly.Get<Vec3b>(50, 50);
+        Assert(pixelOverlayOnlyBox.Item0 != 40 || pixelOverlayOnlyBox.Item1 != 40 || pixelOverlayOnlyBox.Item2 != 40, "Tool overlay still drawn when IncludeOverlay is true and ShowResultTable is false");
+
+        // Case 3: IncludeOverlay = false, ShowResultTable = true -> KHÔNG có tool overlay, CÓ bảng kết quả
+        outputDef.IncludeOverlay = false;
+        outputDef.ShowResultTable = true;
+        using var testMatTableOnly = img.Clone();
+        InspectionService.BurnOverlaysToMat(testMatTableOnly, config, inspectionResult, outputDef);
+        var pixelTableOnlyTable = testMatTableOnly.Get<Vec3b>(checkY, checkX);
+        Assert(pixelTableOnlyTable.Item0 != 40 || pixelTableOnlyTable.Item1 != 40 || pixelTableOnlyTable.Item2 != 40, "Result table drawn when ShowResultTable is true even if IncludeOverlay is false");
+        var pixelTableOnlyBox = testMatTableOnly.Get<Vec3b>(50, 50);
+        Assert(pixelTableOnlyBox.Item0 == 40 && pixelTableOnlyBox.Item1 == 40 && pixelTableOnlyBox.Item2 == 40, "No tool overlay drawn when IncludeOverlay is false");
+
+        // Case 4: IncludeOverlay = false, ShowResultTable = false -> không vẽ cả overlay lẫn bảng kết quả
         outputDef.ShowResultTable = false;
         outputDef.IncludeOverlay = false;
         using var testMatWithoutTable = img.Clone();
         InspectionService.BurnOverlaysToMat(testMatWithoutTable, config, inspectionResult, outputDef);
         var pixelNoTable = testMatWithoutTable.Get<Vec3b>(checkY, checkX);
         Assert(pixelNoTable.Item0 == 40 && pixelNoTable.Item1 == 40 && pixelNoTable.Item2 == 40, "No table drawn when ShowResultTable is false");
+        var pixelNoOverlay = testMatWithoutTable.Get<Vec3b>(50, 50);
+        Assert(pixelNoOverlay.Item0 == 40 && pixelNoOverlay.Item1 == 40 && pixelNoOverlay.Item2 == 40, "No tool overlay drawn when IncludeOverlay is false");
+
+        // Case 5: Ảnh kích thước nhỏ hơn chiều cao bảng không gây crash OpenCV SubMat
+        outputDef.ShowResultTable = true;
+        outputDef.IncludeOverlay = false;
+        using var smallImg = new Mat(180, 400, MatType.CV_8UC3, new Scalar(40, 40, 40));
+        InspectionService.BurnOverlaysToMat(smallImg, config, inspectionResult, outputDef);
 
         Console.ForegroundColor = ConsoleColor.Green;
         Console.WriteLine("PASSED");
@@ -517,6 +558,239 @@ public static class PreprocessAndImageOutputTests
             }
             catch { }
         }
+    }
+
+    private static void Test_12_ImageOutput_InspectPipeline_ShowResultTableToggle()
+    {
+        Console.Write("[Test 12] ImageOutput Inspect Pipeline (ShowResultTable On/Off x IncludeOverlay On/Off)... ");
+        var tempFolder = Path.Combine(Path.GetTempPath(), "VisionTest_ImgOutPipeline_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempFolder);
+
+        try
+        {
+            var svc = new InspectionService(
+                new ImagePreprocessor(),
+                new PatternMatcher(),
+                new DistanceCalculator(),
+                new LineDetector(),
+                new DefectDetector());
+
+            using var src = new Mat(720, 1280, MatType.CV_8UC3, new Scalar(80, 80, 80));
+            Cv2.Circle(src, new Point(120, 120), 25, new Scalar(250, 250, 250), -1);
+
+            var blobDef = new BlobDetectionDefinition
+            {
+                Name = "BLOB1",
+                InspectRoi = new Roi { X = 60, Y = 60, Width = 140, Height = 140 },
+                Threshold = 150,
+                Polarity = BlobPolarity.LightOnDark,
+                MinBlobArea = 100,
+                MaxBlobArea = 10000,
+                MaxAllowedBlobs = 5
+            };
+
+            var scenarios = new[]
+            {
+                (Name: "both_on", IncludeOverlay: true, ShowResultTable: true, ExpectOverlay: true, ExpectTable: true),
+                (Name: "table_off", IncludeOverlay: true, ShowResultTable: false, ExpectOverlay: true, ExpectTable: false),
+                (Name: "table_only", IncludeOverlay: false, ShowResultTable: true, ExpectOverlay: false, ExpectTable: true),
+                (Name: "both_off", IncludeOverlay: false, ShowResultTable: false, ExpectOverlay: false, ExpectTable: false)
+            };
+
+            foreach (var sc in scenarios)
+            {
+                var config = new VisionConfig
+                {
+                    ProductName = "PCB_TABLE_TEST",
+                    ProductCode = "PRD-TBL-01",
+                    BlobDetections = new List<BlobDetectionDefinition> { blobDef },
+                    ImageOutputs = new List<ImageOutputDefinition>
+                    {
+                        new ImageOutputDefinition
+                        {
+                            Name = "IMG_OUT1",
+                            SaveFolderPath = tempFolder,
+                            FileNameFormat = $"out_{sc.Name}",
+                            Format = ImageOutputFormat.PNG,
+                            EnableOutput = true,
+                            IncludeOverlay = sc.IncludeOverlay,
+                            ShowRoi = true,
+                            ShowResultTable = sc.ShowResultTable
+                        }
+                    }
+                };
+
+                var result = svc.Inspect(src, config);
+                Assert(result.ImageOutputs.Count == 1 && result.ImageOutputs[0].Saved, $"ImageOutput must enqueue for {sc.Name}");
+                string savedPath = result.ImageOutputs[0].SavedFilePath;
+
+                AsyncImageSaver.Instance.FlushAsync(5000).GetAwaiter().GetResult();
+                for (int i = 0; i < 30 && !File.Exists(savedPath); i++)
+                {
+                    Thread.Sleep(50);
+                }
+                Assert(File.Exists(savedPath), $"Saved PNG file must exist for {sc.Name}");
+
+                using var savedMat = Cv2.ImRead(savedPath, ImreadModes.Color);
+                Assert(savedMat != null && !savedMat.Empty(), $"Saved PNG must be readable for {sc.Name}");
+
+                // Góc dưới phải thuộc phạm vi bảng kết quả
+                var tableCornerPixel = savedMat!.Get<Vec3b>(savedMat.Height - 50, savedMat.Width - 50);
+                bool hasTable = tableCornerPixel.Item0 != 80 || tableCornerPixel.Item1 != 80 || tableCornerPixel.Item2 != 80;
+                Assert(hasTable == sc.ExpectTable, $"Scenario {sc.Name}: expected hasTable={sc.ExpectTable}, actual={hasTable}");
+
+                // Góc trên trái ROI blob (60, 60) có vẽ viền overlay khi IncludeOverlay = true
+                var roiCornerPixel = savedMat.Get<Vec3b>(60, 60);
+                bool hasOverlay = roiCornerPixel.Item0 != 80 || roiCornerPixel.Item1 != 80 || roiCornerPixel.Item2 != 80;
+                Assert(hasOverlay == sc.ExpectOverlay, $"Scenario {sc.Name}: expected hasOverlay={sc.ExpectOverlay}, actual={hasOverlay}");
+            }
+
+            Console.ForegroundColor = ConsoleColor.Green;
+            Console.WriteLine("PASSED");
+            Console.ResetColor();
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(tempFolder))
+                {
+                    Directory.Delete(tempFolder, true);
+                }
+            }
+            catch { }
+        }
+    }
+
+    private static void Test_13_ImageOutput_ViewModelAndXamlCheckboxBinding()
+    {
+        Console.Write("[Test 13] ImageOutput Result Table CheckBox ViewModel & XAML Binding... ");
+
+        string xamlPath = FindRepoFile("VisionInspectionApp.UI", "Views", "ToolEditorView.xaml");
+        var doc = XDocument.Load(xamlPath);
+
+        // Kiểm tra trong ToolEditorView.xaml có đúng CheckBox binding ImageOutput_ShowResultTable bên trong panel IsImageOutputNode
+        var imageOutputPanel = doc.Descendants()
+            .FirstOrDefault(el => el.Name.LocalName == "StackPanel"
+                                  && (string?)el.Attribute("Visibility") is string vis
+                                  && vis.Contains("IsImageOutputNode", StringComparison.Ordinal));
+        Assert(imageOutputPanel is not null, "Must find IsImageOutputNode panel in ToolEditorView.xaml");
+
+        var resultTableCheckboxEl = imageOutputPanel!.Descendants()
+            .FirstOrDefault(el => el.Name.LocalName == "CheckBox"
+                                  && (string?)el.Attribute("IsChecked") is string chk
+                                  && chk.Contains("ImageOutput_ShowResultTable", StringComparison.Ordinal));
+        Assert(resultTableCheckboxEl is not null, "Must find CheckBox bound to ImageOutput_ShowResultTable in ToolEditorView.xaml");
+
+        var wrappedTextEl = resultTableCheckboxEl!.Descendants()
+            .FirstOrDefault(el => el.Name.LocalName == "TextBlock"
+                                  && string.Equals((string?)el.Attribute("TextWrapping"), "Wrap", StringComparison.Ordinal));
+        Assert(wrappedTextEl is not null, "Result Table CheckBox must wrap label text cleanly");
+
+        Exception? staEx = null;
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                var vm = new ToolEditorViewModel();
+                vm.NewGraphCommand.Execute(null);
+
+                var out1 = vm.Nodes.FirstOrDefault(n => string.Equals(n.Type, "ImageOutput", StringComparison.OrdinalIgnoreCase));
+                Assert(out1 is not null, "NewJob must contain IMG_OUT1");
+
+                // Thêm node ImageOutput thứ 2 để kiểm tra chuyển đổi giữa các node
+                var out2 = new ToolGraphNodeViewModel
+                {
+                    Id = Guid.NewGuid().ToString("N"),
+                    Type = "ImageOutput",
+                    RefName = "IMG_OUT2",
+                    X = 800,
+                    Y = 260
+                };
+                vm.Nodes.Add(out2);
+                vm.Config!.ImageOutputs.Add(new ImageOutputDefinition { Name = "IMG_OUT2", ShowResultTable = true });
+
+                // Dựng CheckBox binding thật với ToolEditorViewModel
+                var cb = new CheckBox();
+                cb.SetBinding(System.Windows.Controls.Primitives.ToggleButton.IsCheckedProperty,
+                    new Binding(nameof(ToolEditorViewModel.ImageOutput_ShowResultTable))
+                    {
+                        Mode = BindingMode.TwoWay,
+                        UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged
+                    });
+
+                var win = new System.Windows.Window
+                {
+                    DataContext = vm,
+                    Content = cb,
+                    Width = 320,
+                    Height = 80,
+                    Left = -10000,
+                    Top = -10000,
+                    ShowInTaskbar = false,
+                    ShowActivated = false,
+                    WindowStyle = System.Windows.WindowStyle.None
+                };
+                win.Show();
+                try
+                {
+                    vm.SelectedNode = out1;
+                    Assert(vm.IsImageOutputNode, "IsImageOutputNode must be true for IMG_OUT1");
+                    Assert(cb.IsChecked == true, "Default Result Table checkbox must be checked (true)");
+
+                    // Bỏ check trên UI -> phải cập nhật xuống IMG_OUT1 trong Config
+                    cb.IsChecked = false;
+                    Assert(vm.ImageOutput_ShowResultTable == false, "ViewModel property must reflect unchecked state");
+                    var def1 = vm.Config.ImageOutputs.First(x => x.Name == "IMG_OUT1");
+                    var def2 = vm.Config.ImageOutputs.First(x => x.Name == "IMG_OUT2");
+                    Assert(def1.ShowResultTable == false, "IMG_OUT1.ShowResultTable must become false");
+                    Assert(def2.ShowResultTable == true, "IMG_OUT2.ShowResultTable must remain true");
+                    Assert(vm.IsDirty, "Toggling ShowResultTable must mark job dirty");
+
+                    // Chuyển sang IMG_OUT2 -> CheckBox phải tự cập nhật thành true, quay lại IMG_OUT1 -> false
+                    vm.SelectedNode = out2;
+                    Assert(cb.IsChecked == true, "Selecting IMG_OUT2 must update CheckBox to true");
+
+                    vm.SelectedNode = out1;
+                    Assert(cb.IsChecked == false, "Selecting IMG_OUT1 again must update CheckBox to false");
+
+                    // Check lại trên UI -> phải cập nhật về true
+                    cb.IsChecked = true;
+                    Assert(def1.ShowResultTable == true, "Re-checking CheckBox must restore ShowResultTable = true");
+                }
+                finally
+                {
+                    win.Close();
+                }
+            }
+            catch (Exception ex)
+            {
+                staEx = ex;
+            }
+        });
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        thread.Join();
+
+        if (staEx is not null)
+            throw new Exception(staEx.Message, staEx);
+
+        Console.ForegroundColor = ConsoleColor.Green;
+        Console.WriteLine("PASSED");
+        Console.ResetColor();
+    }
+
+    private static string FindRepoFile(params string[] relativeParts)
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null)
+        {
+            var candidate = Path.Combine(new[] { dir.FullName }.Concat(relativeParts).ToArray());
+            if (File.Exists(candidate))
+                return candidate;
+            dir = dir.Parent;
+        }
+        throw new FileNotFoundException($"Could not find {Path.Combine(relativeParts)} from {AppContext.BaseDirectory}");
     }
 
     private static void Assert(bool condition, string message)

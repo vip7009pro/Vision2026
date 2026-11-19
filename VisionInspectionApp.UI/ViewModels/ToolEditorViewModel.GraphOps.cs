@@ -355,6 +355,7 @@ namespace VisionInspectionApp.UI.ViewModels
             SelectedNode = newNodes[newNodes.Count - 1];
 
             SyncSelectedToolPreprocessChoiceFromGraph();
+            SyncAllAvailableReferenceNamesAndNotify();
             RaiseToolPropertyPanelsChanged();
             RefreshPreviews();
             RequestAutoSave();
@@ -922,6 +923,7 @@ namespace VisionInspectionApp.UI.ViewModels
             _lastRun = null;
             _lastRunError = null;
             SyncToolGraphToConfig();
+            SyncAllAvailableReferenceNamesAndNotify();
             RefreshPreviews();
             RequestAutoSave();
         }
@@ -963,6 +965,7 @@ namespace VisionInspectionApp.UI.ViewModels
             Nodes.Add(node);
             // Ensure there is a backing definition in config so ROI overlays exist and can be taught immediately.
             EnsureDefinitionForNewNode(node);
+            SyncAllAvailableReferenceNamesAndNotify();
             SelectedNode = node;
             RaiseToolPropertyPanelsChanged();
             CompleteNodeDeletion();
@@ -989,10 +992,21 @@ namespace VisionInspectionApp.UI.ViewModels
                 return;
             }
     
-            // Image-processing nodes accept exactly one source image.  This also makes
-            // Properties Panel selection and direct canvas wiring deterministically use
-            // the same edge.
-            if (string.Equals(toPort, "Image", StringComparison.OrdinalIgnoreCase) || string.Equals(toPort, "Preprocess", StringComparison.OrdinalIgnoreCase))
+            // Image-processing and SegmentLineDistance input ports accept a single source connection.
+            // Replacing the prior edge keeps Properties Panel selection and canvas wiring synchronized.
+            var isSegmentLineSinglePort = string.Equals(toNode.Type, "SegmentLineDistance", StringComparison.OrdinalIgnoreCase)
+                && (string.Equals(toPort, "L1", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(toPort, "L2", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(toPort, "LineA", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(toPort, "LineB", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(toPort, "InA", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(toPort, "InB", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(toPort, "In1", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(toPort, "In2", StringComparison.OrdinalIgnoreCase));
+
+            if (string.Equals(toPort, "Image", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(toPort, "Preprocess", StringComparison.OrdinalIgnoreCase)
+                || isSegmentLineSinglePort)
             {
                 for (var i = Edges.Count - 1; i >= 0; i--)
                 {
@@ -1068,8 +1082,15 @@ namespace VisionInspectionApp.UI.ViewModels
             }
             else if (string.Equals(toNode.Type, "SegmentLineDistance", StringComparison.OrdinalIgnoreCase))
             {
+                _config.SegmentLineDistances ??= new List<SegmentLineDistance>();
                 var def = _config.SegmentLineDistances.FirstOrDefault(x => string.Equals(x.Name, toNode.RefName, StringComparison.OrdinalIgnoreCase));
-                if (def is not null)
+                if (def is null && !string.IsNullOrWhiteSpace(toNode.RefName))
+                {
+                    def = new SegmentLineDistance { Name = toNode.RefName };
+                    _config.SegmentLineDistances.Add(def);
+                }
+
+                if (def is not null && IsLineSourceNodeType(fromNode.Type))
                 {
                     if (string.Equals(toPort, "L1", StringComparison.OrdinalIgnoreCase) || string.Equals(toPort, "LineA", StringComparison.OrdinalIgnoreCase) || string.Equals(toPort, "InA", StringComparison.OrdinalIgnoreCase) || string.Equals(toPort, "In1", StringComparison.OrdinalIgnoreCase))
                         def.LineA = fromNode.RefName;
@@ -1902,7 +1923,7 @@ namespace VisionInspectionApp.UI.ViewModels
     
             if (string.Equals(node.Type, "SegmentLineDistance", StringComparison.OrdinalIgnoreCase))
             {
-                var dd = _config.SegmentLineDistances.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                var dd = _config.SegmentLineDistances?.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
                 if (dd is null)
                 {
                     return;

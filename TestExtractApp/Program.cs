@@ -212,6 +212,18 @@ class Program
             return;
         }
 
+        if (args.Length > 0 && (args[0].Equals("sld", StringComparison.OrdinalIgnoreCase) || args[0].Equals("segment-line", StringComparison.OrdinalIgnoreCase)))
+        {
+            SegmentLineDistanceSelectionTests.RunAllTests();
+            return;
+        }
+
+        if (args.Length > 0 && (args[0].Equals("image-output", StringComparison.OrdinalIgnoreCase) || args[0].Equals("imageoutput", StringComparison.OrdinalIgnoreCase) || args[0].Equals("result-table", StringComparison.OrdinalIgnoreCase)))
+        {
+            PreprocessAndImageOutputTests.RunTests();
+            return;
+        }
+
         HikApiTest.PrintApi();
         CameraTest.TestCameraParametersJobSerialization();
         CameraTest.TestNativeMatPoolAndMetadata();
@@ -280,5 +292,6 @@ class Program
         PlcHandshakeDelayTests.RunAllTestsAsync().GetAwaiter().GetResult();
         ToolEditorColumnResizeTests.RunAllTests();
         ToolEditorContinuousSlotPreviewTests.RunAllTests();
+        SegmentLineDistanceSelectionTests.RunAllTests();
     }
 }

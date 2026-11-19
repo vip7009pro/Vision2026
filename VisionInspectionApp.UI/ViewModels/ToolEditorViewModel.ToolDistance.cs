@@ -206,7 +206,13 @@ namespace VisionInspectionApp.UI.ViewModels
 
         public string? SegmentLineDistance_LineA
         {
-            get => SelectedSegmentLineDistanceDef()?.LineA;
+            get
+            {
+                var lineName = SelectedSegmentLineDistanceDef()?.LineA;
+                if (string.IsNullOrWhiteSpace(lineName))
+                    lineName = ResolveIncomingSegmentLineEdgeName("L1", "LineA", "InA", "In1");
+                return ResolveCanonicalLineName(lineName);
+            }
             set
             {
                 if (string.IsNullOrEmpty(value))
@@ -214,10 +220,11 @@ namespace VisionInspectionApp.UI.ViewModels
                 var def = SelectedSegmentLineDistanceDef();
                 if (def is null)
                     return;
-                if (string.Equals(def.LineA ?? "", value ?? "", StringComparison.OrdinalIgnoreCase))
+                var canonical = ResolveCanonicalLineName(value) ?? value;
+                if (string.Equals(def.LineA ?? "", canonical ?? "", StringComparison.OrdinalIgnoreCase))
                     return;
-                def.LineA = value ?? string.Empty;
-                SyncInputEdgeForSegmentLineDistancePort("L1", value);
+                def.LineA = canonical ?? string.Empty;
+                SyncInputEdgeForSegmentLineDistancePort("L1", canonical);
                 OnPropertyChanged();
                 RefreshPreviews();
                 RequestAutoSave();
@@ -226,7 +233,13 @@ namespace VisionInspectionApp.UI.ViewModels
 
         public string? SegmentLineDistance_LineB
         {
-            get => SelectedSegmentLineDistanceDef()?.LineB;
+            get
+            {
+                var lineName = SelectedSegmentLineDistanceDef()?.LineB;
+                if (string.IsNullOrWhiteSpace(lineName))
+                    lineName = ResolveIncomingSegmentLineEdgeName("L2", "LineB", "InB", "In2");
+                return ResolveCanonicalLineName(lineName);
+            }
             set
             {
                 if (string.IsNullOrEmpty(value))
@@ -234,14 +247,35 @@ namespace VisionInspectionApp.UI.ViewModels
                 var def = SelectedSegmentLineDistanceDef();
                 if (def is null)
                     return;
-                if (string.Equals(def.LineB ?? "", value ?? "", StringComparison.OrdinalIgnoreCase))
+                var canonical = ResolveCanonicalLineName(value) ?? value;
+                if (string.Equals(def.LineB ?? "", canonical ?? "", StringComparison.OrdinalIgnoreCase))
                     return;
-                def.LineB = value ?? string.Empty;
-                SyncInputEdgeForSegmentLineDistancePort("L2", value);
+                def.LineB = canonical ?? string.Empty;
+                SyncInputEdgeForSegmentLineDistancePort("L2", canonical);
                 OnPropertyChanged();
                 RefreshPreviews();
                 RequestAutoSave();
             }
+        }
+
+        private string? ResolveIncomingSegmentLineEdgeName(params string[] portNames)
+        {
+            if (SelectedNode is null)
+                return null;
+
+            foreach (var edge in Edges)
+            {
+                if (!string.Equals(edge.ToNodeId, SelectedNode.Id, StringComparison.OrdinalIgnoreCase))
+                    continue;
+                if (!portNames.Any(p => string.Equals(edge.ToPort, p, StringComparison.OrdinalIgnoreCase)))
+                    continue;
+
+                var fromNode = Nodes.FirstOrDefault(n => string.Equals(n.Id, edge.FromNodeId, StringComparison.OrdinalIgnoreCase));
+                if (fromNode is not null && IsLineSourceNodeType(fromNode.Type) && !string.IsNullOrWhiteSpace(fromNode.RefName))
+                    return fromNode.RefName;
+            }
+
+            return null;
         }
 
         public SegmentLineDistanceMode SegmentLineDistance_Mode
@@ -284,7 +318,14 @@ namespace VisionInspectionApp.UI.ViewModels
                 return null;
             if (!string.Equals(SelectedNode.Type, "SegmentLineDistance", StringComparison.OrdinalIgnoreCase))
                 return null;
-            return _config.SegmentLineDistances.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
+            _config.SegmentLineDistances ??= new List<SegmentLineDistance>();
+            var def = _config.SegmentLineDistances.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
+            if (def is null && !string.IsNullOrWhiteSpace(SelectedNode.RefName))
+            {
+                def = new SegmentLineDistance { Name = SelectedNode.RefName };
+                _config.SegmentLineDistances.Add(def);
+            }
+            return def;
         }
     
         public double Distance_Nominal

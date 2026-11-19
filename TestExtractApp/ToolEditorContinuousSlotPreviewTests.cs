@@ -1,8 +1,15 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using System.Threading;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Data;
+using System.Windows.Markup;
+using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using System.Xml.Linq;
 using OpenCvSharp;
 using VisionInspectionApp.Application;
 using VisionInspectionApp.Models;
@@ -39,8 +46,9 @@ public static class ToolEditorContinuousSlotPreviewTests
         Test_10_AutoFindNearestNgCheckbox_FallsBackToSelectedSlotWhenAll20AreOk();
         Test_11_AutoFindNearestNgCheckbox_IgnoresNgBeforeSelectedSlot_OnlyLooksAtOrAfter();
         Test_12_AutoFindNearestNgCheckbox_ToggleOnOff_UpdatesPreviewAndInteractsWithPin();
+        Test_13_Recent20SlotsBar_Numbered1To20LeftToRight_WithReadableForeground();
 
-        Console.WriteLine("✅ ALL 12 TOOL EDITOR CONTINUOUS SLOT PREVIEW & PIN TESTS PASSED!");
+        Console.WriteLine("✅ ALL 13 TOOL EDITOR CONTINUOUS SLOT PREVIEW & PIN TESTS PASSED!");
         Console.WriteLine("=========================================================\n");
     }
 
@@ -490,6 +498,149 @@ public static class ToolEditorContinuousSlotPreviewTests
             "Vì đã bấm Ghim, ảnh NG 470px vẫn phải được giữ cố định dù 20 nấc đã toàn OK!");
 
         Console.WriteLine("PASSED");
+    }
+
+    private static void Test_13_Recent20SlotsBar_Numbered1To20LeftToRight_WithReadableForeground()
+    {
+        Console.Write("--- [13/13] Thanh 20 nấc đánh số 1..20 từ trái sang phải, màu chữ tương phản theo trạng thái... ");
+
+        string xamlPath = FindRepoFile("VisionInspectionApp.UI", "Views", "ToolEditorView.xaml");
+        var doc = XDocument.Load(xamlPath);
+        XNamespace xNs = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        var styleElement = doc.Descendants()
+            .FirstOrDefault(el => el.Name.LocalName == "Style" && string.Equals((string?)el.Attribute(xNs + "Key"), "RecentSlotButtonStyle", StringComparison.Ordinal));
+        Assert(styleElement is not null, "Phải tìm thấy RecentSlotButtonStyle trong ToolEditorView.xaml");
+
+        var slotButtonElements = doc.Descendants()
+            .Where(el => el.Name.LocalName == "Button"
+                         && string.Equals((string?)el.Attribute("Style"), "{StaticResource RecentSlotButtonStyle}", StringComparison.Ordinal))
+            .ToList();
+        Assert(slotButtonElements.Count == 20, $"ToolEditorView.xaml phải có đúng 20 nút nấc, thực tế: {slotButtonElements.Count}");
+
+        for (int i = 0; i < 20; i++)
+        {
+            var el = slotButtonElements[i];
+            Assert(string.Equals((string?)el.Attribute("Content"), (i + 1).ToString(), StringComparison.Ordinal),
+                $"XAML nấc thứ {i} phải có Content='{i + 1}', thực tế: '{(string?)el.Attribute("Content")}'");
+            Assert(string.Equals((string?)el.Attribute("CommandParameter"), i.ToString(), StringComparison.Ordinal),
+                $"XAML nấc {i + 1} phải giữ CommandParameter='{i}', thực tế: '{(string?)el.Attribute("CommandParameter")}'");
+        }
+
+        // Dựng live Style từ ToolEditorView.xaml + bind với ToolEditorViewModel thật trên STA Window để kiểm chứng Foreground & Trigger
+        Exception? staEx = null;
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                var styleXml = new XElement(styleElement!);
+                styleXml.SetAttributeValue("xmlns", "http://schemas.microsoft.com/winfx/2006/xaml/presentation");
+                styleXml.SetAttributeValue(XNamespace.Xmlns + "x", "http://schemas.microsoft.com/winfx/2006/xaml");
+                styleXml.SetAttributeValue(XNamespace.Xmlns + "vm", "clr-namespace:VisionInspectionApp.UI.ViewModels;assembly=VisionInspectionApp.UI");
+                styleXml.Attribute(xNs + "Key")?.Remove();
+
+                var liveStyle = (Style)XamlReader.Parse(styleXml.ToString());
+
+                var vm = new ToolEditorViewModel { IsRunningFolderFlow = true };
+                var mutedBrush = new SolidColorBrush(Color.FromRgb(120, 120, 120));
+                mutedBrush.Freeze();
+
+                var panel = new StackPanel { Orientation = Orientation.Horizontal };
+                panel.Resources["TextMutedBrush"] = mutedBrush;
+
+                var buttons = new List<Button>(20);
+                for (int i = 0; i < 20; i++)
+                {
+                    var btn = new Button
+                    {
+                        Content = (string?)slotButtonElements[i].Attribute("Content"),
+                        CommandParameter = (string?)slotButtonElements[i].Attribute("CommandParameter"),
+                        Style = liveStyle
+                    };
+                    btn.SetBinding(Button.BackgroundProperty, new Binding($"RecentPartSlot{i}Bg"));
+                    btn.SetBinding(Button.BorderBrushProperty, new Binding($"RecentPartSlot{i}Border"));
+                    btn.SetBinding(FrameworkElement.ToolTipProperty, new Binding($"RecentPartSlot{i}ToolTip"));
+                    btn.SetBinding(System.Windows.Controls.Primitives.ButtonBase.CommandProperty, new Binding(nameof(ToolEditorViewModel.SelectRecentPartSlotCommand)));
+                    panel.Children.Add(btn);
+                    buttons.Add(btn);
+                }
+
+                var win = new System.Windows.Window
+                {
+                    DataContext = vm,
+                    Content = panel,
+                    Width = 480,
+                    Height = 80,
+                    Left = -10000,
+                    Top = -10000,
+                    ShowInTaskbar = false,
+                    ShowActivated = false,
+                    WindowStyle = WindowStyle.None
+                };
+                win.Show();
+                try
+                {
+                    for (int i = 0; i < 20; i++)
+                    {
+                        var btn = buttons[i];
+                        Assert(Equals(btn.Content?.ToString(), (i + 1).ToString()), $"Nấc {i} phải hiển thị '{i + 1}'");
+                        Assert(btn.Width >= 17, $"Nấc {i + 1} phải đủ rộng cho 2 chữ số (Width >= 17), thực tế: {btn.Width}");
+                        Assert(ReferenceEquals(btn.Background, ToolEditorViewModel.EmptySlotBrush), $"Ban đầu nấc {i + 1} phải là EmptySlotBrush");
+                        Assert(Equals(btn.Foreground, mutedBrush), $"Nấc trống {i + 1} phải dùng TextMutedBrush");
+                    }
+
+                    // Đẩy 1 NG rồi 1 OK -> mới nhất (nấc 1) = OK, nấc 2 = NG, nấc 3 = Empty
+                    using var okMat = new Mat(180, 240, MatType.CV_8UC3, new Scalar(0, 200, 0));
+                    using var ngMat = new Mat(180, 240, MatType.CV_8UC3, new Scalar(0, 0, 255));
+                    vm.PushRecentPartInspectionResult(new InspectionResult { Pass = false }, ngMat);
+                    vm.PushRecentPartInspectionResult(new InspectionResult { Pass = true }, okMat);
+
+                    Assert(ReferenceEquals(buttons[0].Background, ToolEditorViewModel.OkSlotBrush), "Nấc 1 phải có nền OK");
+                    Assert(Equals(buttons[0].Foreground, Brushes.White), "Nấc 1 (OK) phải có chữ trắng tương phản cao");
+                    Assert(ReferenceEquals(buttons[1].Background, ToolEditorViewModel.NgSlotBrush), "Nấc 2 phải có nền NG");
+                    Assert(Equals(buttons[1].Foreground, Brushes.White), "Nấc 2 (NG) phải có chữ trắng tương phản cao");
+                    Assert(ReferenceEquals(buttons[2].Background, ToolEditorViewModel.EmptySlotBrush), "Nấc 3 vẫn trống");
+                    Assert(Equals(buttons[2].Foreground, mutedBrush), "Nấc 3 trống phải giữ chữ TextMutedBrush");
+
+                    // Click nút số "2" (CommandParameter="1") phải chọn đúng index 1
+                    buttons[1].Command.Execute(buttons[1].CommandParameter);
+                    Assert(vm.SelectedRecentSlotIndex == 1, $"Click nút số 2 phải chọn index 1, thực tế: {vm.SelectedRecentSlotIndex}");
+
+                    Assert(vm.RecentPartSlot0ToolTip.Contains("Nấc 1"), $"Tooltip nấc 0 phải ghi 'Nấc 1', thực tế: {vm.RecentPartSlot0ToolTip}");
+                    Assert(vm.RecentPartSlot1ToolTip.Contains("Nấc 2"), $"Tooltip nấc 1 phải ghi 'Nấc 2', thực tế: {vm.RecentPartSlot1ToolTip}");
+                    Assert(vm.RecentPartSlot19ToolTip.Contains("Nấc 20"), $"Tooltip nấc 19 phải ghi 'Nấc 20', thực tế: {vm.RecentPartSlot19ToolTip}");
+                }
+                finally
+                {
+                    win.Close();
+                }
+            }
+            catch (Exception ex)
+            {
+                staEx = ex;
+            }
+        });
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        thread.Join();
+
+        if (staEx is not null)
+            throw new Exception(staEx.Message, staEx);
+
+        Console.WriteLine("PASSED");
+    }
+
+    private static string FindRepoFile(params string[] relativeParts)
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null)
+        {
+            var candidate = Path.Combine(new[] { dir.FullName }.Concat(relativeParts).ToArray());
+            if (File.Exists(candidate))
+                return candidate;
+            dir = dir.Parent;
+        }
+        throw new FileNotFoundException($"Không tìm thấy file {Path.Combine(relativeParts)} từ {AppContext.BaseDirectory}");
     }
 
     private static void Assert(bool condition, string message)
