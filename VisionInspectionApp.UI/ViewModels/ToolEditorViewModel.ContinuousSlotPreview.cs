@@ -82,7 +82,7 @@ public sealed partial class ToolEditorViewModel
     private Brush _recentSlotPreviewBadgeFg = Brushes.Gray;
 
     [ObservableProperty]
-    private string _recentSlotEmptyHintText = "Chọn một nấc trên thanh 20 nấc (0–19) để xem preview.";
+    private string _recentSlotEmptyHintText = "Chọn một nấc trên thanh 20 nấc (1–20) để xem preview.";
 
     public event Action? RequestAutoFitRecentSlotPreview;
 
@@ -231,7 +231,7 @@ public sealed partial class ToolEditorViewModel
             {
                 _hasPinnedNgOutputDisplayed = false;
             }
-            RecentSlotEmptyHintText = "⚠️ Chưa có nấc nào được chọn. Hãy bấm chọn một nấc trên thanh 20 nấc (0–19) rồi bấm Ghim.";
+            RecentSlotEmptyHintText = "⚠️ Chưa có nấc nào được chọn. Hãy bấm chọn một nấc trên thanh 20 nấc (1–20) rồi bấm Ghim.";
             StatusBarText = "⚠️ Vui lòng chọn một nấc trên thanh 20 nấc trước khi bấm Ghim.";
             return;
         }
@@ -249,18 +249,21 @@ public sealed partial class ToolEditorViewModel
             _hasPinnedNgOutputDisplayed = hasNgToPin;
         }
 
+        int selectedDisplay = ToDisplaySlotNumber(selectedIdx);
+        int resolvedDisplay = ToDisplaySlotNumber(resolvedIdx);
+
         if (hasNgToPin && resolvedItem != null)
         {
             // Dù đang Live View, nếu có ảnh NG tại nấc được chọn (hoặc nấc sau gần nhất khi bật checkbox) -> show ảnh output lên preview mới thêm
             LoadRecentSlotPreviewItem(resolvedItem, selectedIdx, resolvedIdx, preferOutputForNg: true, autoFit: true, isPinnedNg: true);
-            string slotDesc = resolvedIdx == selectedIdx ? $"#{selectedIdx}" : $"#{resolvedIdx} (NG sau #{selectedIdx})";
-            StatusBarText = $"📌 Đã ghim nấc #{selectedIdx}: Đang hiển thị ảnh Output NG tại nấc {slotDesc} lúc {resolvedItem.FormattedTimestamp} (giữ cố định khi Live View).";
+            string slotDesc = resolvedIdx == selectedIdx ? $"#{selectedDisplay}" : $"#{resolvedDisplay} (NG sau #{selectedDisplay})";
+            StatusBarText = $"📌 Đã ghim nấc #{selectedDisplay}: Đang hiển thị ảnh Output NG tại nấc {slotDesc} lúc {resolvedItem.FormattedTimestamp} (giữ cố định khi Live View).";
         }
         else
         {
             // Chưa có ảnh NG tại nấc chọn / các nấc sau: hiển thị nấc được chọn và sẵn sàng bắt NG ngay khi xuất hiện
             LoadRecentSlotPreviewItem(resolvedItem, selectedIdx, resolvedIdx, preferOutputForNg: false, autoFit: false, isPinnedNg: false);
-            StatusBarText = $"📌 Đã ghim nấc #{selectedIdx}: Sẵn sàng hiển thị ngay ảnh Output khi có NG.";
+            StatusBarText = $"📌 Đã ghim nấc #{selectedDisplay}: Sẵn sàng hiển thị ngay ảnh Output khi có NG.";
         }
 
         UpdateRecentPartsVisuals();
@@ -333,19 +336,22 @@ public sealed partial class ToolEditorViewModel
             autoFit: true,
             isPinnedNg: isPinnedNg);
 
+        int slotDisplay = ToDisplaySlotNumber(slotIndex);
+        int resolvedDisplay = ToDisplaySlotNumber(resolvedIdx);
+
         if (resolvedItem == null)
         {
             StatusBarText = IsPinnedRecentSlot
-                ? $"📌 Đang ghim nấc #{slotIndex}: Chưa có dữ liệu sản phẩm, đang chờ ảnh NG..."
-                : $"⚪ Nấc #{slotIndex} chưa có dữ liệu sản phẩm.";
+                ? $"📌 Đang ghim nấc #{slotDisplay}: Chưa có dữ liệu sản phẩm, đang chờ ảnh NG..."
+                : $"⚪ Nấc #{slotDisplay} chưa có dữ liệu sản phẩm.";
         }
         else if (resolvedIdx != slotIndex)
         {
-            StatusBarText = $"🔍 Đang hiển thị nấc NG gần nhất #{resolvedIdx} (sau nấc #{slotIndex}) lúc {resolvedItem.FormattedTimestamp} — Live View vẫn tiếp tục chạy.";
+            StatusBarText = $"🔍 Đang hiển thị nấc NG gần nhất #{resolvedDisplay} (sau nấc #{slotDisplay}) lúc {resolvedItem.FormattedTimestamp} — Live View vẫn tiếp tục chạy.";
         }
         else
         {
-            StatusBarText = $"🔍 Preview nấc #{slotIndex} ({resolvedItem.StatusText}) lúc {resolvedItem.FormattedTimestamp} — Live View vẫn tiếp tục chạy.";
+            StatusBarText = $"🔍 Preview nấc #{slotDisplay} ({resolvedItem.StatusText}) lúc {resolvedItem.FormattedTimestamp} — Live View vẫn tiếp tục chạy.";
         }
 
         UpdateRecentPartsVisuals();
@@ -734,6 +740,11 @@ public sealed partial class ToolEditorViewModel
         UpdateRecentSlotPreviewHeader(item, selectedSlotIndex, resolvedSlotIndex, isPinnedNg, loadedFromOutputFile);
     }
 
+    /// <summary>
+    /// Quy đổi chỉ số nội bộ (0..19) sang số thứ tự hiển thị trên thanh 20 nấc (1..20).
+    /// </summary>
+    private static int ToDisplaySlotNumber(int slotIndex) => slotIndex + 1;
+
     private void UpdateRecentSlotPreviewHeader(
         RecentPartInspectionSlotItem? item,
         int selectedSlotIndex,
@@ -746,29 +757,31 @@ public sealed partial class ToolEditorViewModel
             RecentSlotPreviewTitleText = "🖼️ Preview Nấc Thanh 20 Nấc";
             HasRecentSlotPreviewBadge = false;
             RecentSlotPreviewBadgeText = string.Empty;
-            RecentSlotEmptyHintText = "Chọn một nấc trên thanh 20 nấc (0–19) để xem preview.";
+            RecentSlotEmptyHintText = "Chọn một nấc trên thanh 20 nấc (1–20) để xem preview.";
             return;
         }
 
+        int selectedDisplay = ToDisplaySlotNumber(selectedSlotIndex);
+        int resolvedDisplay = ToDisplaySlotNumber(resolvedSlotIndex);
         string pinPrefix = IsPinnedRecentSlot ? "📌 Đang ghim " : "🔍 ";
         if (item == null)
         {
-            RecentSlotPreviewTitleText = $"{pinPrefix}Nấc #{selectedSlotIndex}";
+            RecentSlotPreviewTitleText = $"{pinPrefix}Nấc #{selectedDisplay}";
             HasRecentSlotPreviewBadge = IsPinnedRecentSlot;
             RecentSlotPreviewBadgeText = IsPinnedRecentSlot ? "CHỜ NG" : string.Empty;
             RecentSlotPreviewBadgeBg = PinnedWaitBg;
             RecentSlotPreviewBadgeBorder = PinnedWaitBorder;
             RecentSlotPreviewBadgeFg = PinnedWaitFg;
             RecentSlotEmptyHintText = IsPinnedRecentSlot
-                ? $"📌 Đang ghim nấc #{selectedSlotIndex} — Chưa có dữ liệu, tự động hiển thị ảnh Output khi có NG."
-                : $"⚪ Nấc #{selectedSlotIndex} chưa có dữ liệu sản phẩm.";
+                ? $"📌 Đang ghim nấc #{selectedDisplay} — Chưa có dữ liệu, tự động hiển thị ảnh Output khi có NG."
+                : $"⚪ Nấc #{selectedDisplay} chưa có dữ liệu sản phẩm.";
             return;
         }
 
         string sourceKind = loadedFromOutputFile ? "Ảnh Output" : (item.MemorySnapshot != null ? "RAM Output" : "Không có ảnh");
         string slotLabel = resolvedSlotIndex != selectedSlotIndex
-            ? (IsPinnedRecentSlot ? $"#{selectedSlotIndex} ➔ Nấc #{resolvedSlotIndex}" : $"Nấc #{resolvedSlotIndex} (NG sau #{selectedSlotIndex})")
-            : $"Nấc #{selectedSlotIndex}";
+            ? (IsPinnedRecentSlot ? $"#{selectedDisplay} ➔ Nấc #{resolvedDisplay}" : $"Nấc #{resolvedDisplay} (NG sau #{selectedDisplay})")
+            : $"Nấc #{selectedDisplay}";
 
         RecentSlotPreviewTitleText = $"{pinPrefix}{slotLabel} • {item.FormattedTimestamp} ({sourceKind})";
         HasRecentSlotPreviewBadge = true;

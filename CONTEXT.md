@@ -6,8 +6,8 @@ Hỗ trợ Camera GigE/USB3/USB/RTSP/Android Pro Mode Native Server, nạp ảnh
 
 ## 2. Trạng thái mã nguồn gần nhất
 - **Phiên bản hiện tại**: .NET 8 WPF, x64/x86 Multi-targeting, C# 12.
-- **Biên dịch**: 0 Errors (`TestExtractApp.csproj` Debug và toàn solution `VisionInspectionApp.slnx` Release sau Task 448).
-- **Kiểm thử tự động**: PASSED 100% các suite kiểm tra sau Task 448 (`image-output` / `PreprocessAndImageOutputTests` 13/13, `newjob` / `NewJobDefaultToolsTests` 8/8, `slot-preview` / `ToolEditorContinuousSlotPreviewTests` 13/13).
+- **Biên dịch**: 0 Errors (`VisionInspectionApp.slnx` cả Debug và Release sau Task 449).
+- **Kiểm thử tự động**: PASSED 100% các suite liên quan sau Task 449 ở cả Debug và Release (`slot-preview` / `ToolEditorContinuousSlotPreviewTests` 14/14, `column` / `ToolEditorColumnResizeTests` 10/10, `speed` / `ToolEditorContinuousRenderAndSpeedTests` 8/8). Trước đó sau Task 448 đã pass `image-output` 13/13, `newjob` 8/8.
 - **Cấu hình chuẩn xưởng CMS_VINA**: 
   - Database: `CMS_VINA` (192.168.1.2:6789)
   - OQC Server API: `https://192.168.1.192/vision_upload.php`
@@ -32,6 +32,10 @@ Hỗ trợ Camera GigE/USB3/USB/RTSP/Android Pro Mode Native Server, nạp ảnh
      - `UpdateQueueVisuals` và `UpdateRecentPartsVisuals` được bọc bởi cờ `_isQueueVisualUpdatePending` / `_isRecentPartsVisualUpdatePending` với `DispatcherPriority.Background`, loại bỏ hoàn toàn hiện tượng bão Dispatcher queue.
 
 ## 4. Các sự kiện & thay đổi gần đây
+- **Task 449**: Đồng bộ đánh số hiển thị 1-based (`#1`..`#20` và `(1–20)`) giữa thanh 20 nấc và khu vực preview/trạng thái bên dưới:
+  - [`ToolEditorViewModel.ContinuousSlotPreview.cs`](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.ContinuousSlotPreview.cs): Bổ sung helper `ToDisplaySlotNumber(int slotIndex)` (`slotIndex + 1`) dùng thống nhất cho tiêu đề preview (`UpdateRecentSlotPreviewHeader`), gợi ý trống (`_recentSlotEmptyHintText`, đổi `(0–19)` -> `(1–20)`), thông báo ghim (`PinSelectedRecentSlot`), và trạng thái chọn nấc (`HandleSelectRecentPartSlotContinuous`), trong khi giữ nguyên index nội bộ `0..19`.
+  - [`ToolEditorViewModel.Engine.cs`](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.Engine.cs): Cập nhật `SelectRecentPartSlot` ở chế độ xem lại lịch sử (không chạy liên tục) dùng `ToDisplaySlotNumber(slotIndex)` cho `HistoricalViewingStatusText` và `StatusBarText`.
+  - [`ToolEditorContinuousSlotPreviewTests.cs`](file:///g:/NODEJS/Vision2026/TestExtractApp/ToolEditorContinuousSlotPreviewTests.cs): Cập nhật khẳng định tiêu đề ở `Test_09` và bổ sung `Test_14_SlotIndexDisplay_Synced1To20_ForBarTitleAndStatus` kiểm chứng click nấc `1`/`12`/`20` ở cả trạng thái trống, có dữ liệu, tự tìm NG, ghim và dừng máy (`slot-preview` 14/14, `column` 10/10, `speed` 8/8 PASSED trên cả Debug & Release).
 - **Task 448**: Hoàn thiện & tách độc lập checkbox ẩn/hiện bảng kết quả nhúng vào ảnh đầu ra trong tool `ImageOutput`:
   - [`ToolEditorView.xaml`](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/ToolEditorView.xaml): Chuẩn hóa hiển thị bọc dòng (`TextWrapping="Wrap"`) cho 3 checkbox (`ImageOutput_IncludeOverlay`, `ImageOutput_ShowRoi`, `ImageOutput_ShowResultTable`) trong bảng thuộc tính `Output Image Params` để không bị cắt chữ; cập nhật nhãn `Result Table` thành *"Hiện bảng kết quả nhúng vào ảnh đầu ra (Tên SP, Mã SP, Ngày, Kết quả)"* kèm tooltip mô tả rõ ràng.
   - [`InspectionService.ImageOutputs.cs`](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/Services/InspectionService.ImageOutputs.cs): Tách độc lập `ShowResultTable` khỏi `IncludeOverlay` trong `ExecuteImageOutputs` và `BurnOverlaysToMat` (tách `BurnToolOverlaysToMat` cho phần ROI/overlay các tool), bảo đảm cả 4 tổ hợp (`IncludeOverlay` × `ShowResultTable`) đều hoạt động chuẩn xác (kể cả khi tắt `Burn Overlay` mà vẫn muốn nhúng bảng kết quả); đồng thời clamp `tableRect` trong `DrawResultTableOverlay` để tránh lỗi `SubMat` trên ảnh nhỏ.

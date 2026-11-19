@@ -47,8 +47,9 @@ public static class ToolEditorContinuousSlotPreviewTests
         Test_11_AutoFindNearestNgCheckbox_IgnoresNgBeforeSelectedSlot_OnlyLooksAtOrAfter();
         Test_12_AutoFindNearestNgCheckbox_ToggleOnOff_UpdatesPreviewAndInteractsWithPin();
         Test_13_Recent20SlotsBar_Numbered1To20LeftToRight_WithReadableForeground();
+        Test_14_SlotIndexDisplay_Synced1To20_ForBarTitleAndStatus();
 
-        Console.WriteLine("✅ ALL 13 TOOL EDITOR CONTINUOUS SLOT PREVIEW & PIN TESTS PASSED!");
+        Console.WriteLine("✅ ALL 14 TOOL EDITOR CONTINUOUS SLOT PREVIEW & PIN TESTS PASSED!");
         Console.WriteLine("=========================================================\n");
     }
 
@@ -372,20 +373,20 @@ public static class ToolEditorContinuousSlotPreviewTests
         vm.PushRecentPartInspectionResult(new InspectionResult { Pass = true }, okMat);
         vm.PushRecentPartInspectionResult(new InspectionResult { Pass = true }, okMat);
 
-        // Chọn nấc #0 (hiện đang OK)
+        // Chọn nấc 1 (index 0, hiện đang OK)
         vm.SelectRecentPartSlotCommand.Execute("0");
 
         Assert(vm.RecentSlotPreviewImage is BitmapSource bmp && bmp.PixelWidth == 460 && bmp.PixelHeight == 320,
-            "Khi nấc #0 đang OK, phải tự động lấy ảnh của nấc NG gần nhất sau #0 là nấc #2 (460x320)");
-        Assert(vm.RecentSlotPreviewTitleText.Contains("#2"),
-            $"Tiêu đề preview phải ghi rõ đang hiển thị nấc #2, thực tế: '{vm.RecentSlotPreviewTitleText}'");
+            "Khi nấc #1 (index 0) đang OK, phải tự động lấy ảnh của nấc NG gần nhất sau #1 là nấc #3 (index 2, 460x320)");
+        Assert(vm.RecentSlotPreviewTitleText.Contains("#3") && vm.RecentSlotPreviewTitleText.Contains("#1"),
+            $"Tiêu đề preview phải ghi rõ đang hiển thị nấc #3 (NG sau #1), thực tế: '{vm.RecentSlotPreviewTitleText}'");
 
-        // Đẩy thêm 1 con OK -> nấc #2 trượt sang #3, preview vẫn bám theo nấc NG gần nhất đó (#3)
+        // Đẩy thêm 1 con OK -> nấc #3 (index 2) trượt sang #4 (index 3), preview vẫn bám theo nấc NG gần nhất đó (#4)
         vm.PushRecentPartInspectionResult(new InspectionResult { Pass = true }, okMat);
         Assert(vm.RecentSlotPreviewImage is BitmapSource bmpShifted && bmpShifted.PixelWidth == 460,
-            "Khi nấc NG trượt sang #3, preview vẫn giữ hiển thị ảnh NG gần nhất đó");
-        Assert(vm.RecentSlotPreviewTitleText.Contains("#3"),
-            $"Tiêu đề preview phải cập nhật sang #3, thực tế: '{vm.RecentSlotPreviewTitleText}'");
+            "Khi nấc NG trượt sang #4 (index 3), preview vẫn giữ hiển thị ảnh NG gần nhất đó");
+        Assert(vm.RecentSlotPreviewTitleText.Contains("#4"),
+            $"Tiêu đề preview phải cập nhật sang #4, thực tế: '{vm.RecentSlotPreviewTitleText}'");
 
         Console.WriteLine("PASSED");
     }
@@ -626,6 +627,77 @@ public static class ToolEditorContinuousSlotPreviewTests
 
         if (staEx is not null)
             throw new Exception(staEx.Message, staEx);
+
+        Console.WriteLine("PASSED");
+    }
+
+    private static void Test_14_SlotIndexDisplay_Synced1To20_ForBarTitleAndStatus()
+    {
+        Console.Write("--- [14/14] Đồng bộ đánh số 1..20 giữa thanh nấc và tiêu đề/trạng thái hiển thị (#1..#20)... ");
+
+        var vm = new ToolEditorViewModel { IsRunningFolderFlow = true };
+        Assert(vm.RecentSlotEmptyHintText.Contains("1–20") && !vm.RecentSlotEmptyHintText.Contains("0–19"),
+            $"Gợi ý ban đầu phải ghi (1–20), thực tế: '{vm.RecentSlotEmptyHintText}'");
+
+        // 1. Khi chưa có dữ liệu: click nút số 1 (param "0") và nút số 12 (param "11")
+        vm.SelectRecentPartSlotCommand.Execute("0");
+        Assert(vm.RecentSlotPreviewTitleText.Contains("Nấc #1") && !vm.RecentSlotPreviewTitleText.Contains("#0"),
+            $"Click nấc 1 trống phải hiện #1 (không hiện #0), thực tế: '{vm.RecentSlotPreviewTitleText}'");
+        Assert(vm.RecentSlotEmptyHintText.Contains("#1") && !vm.RecentSlotEmptyHintText.Contains("#0"),
+            $"EmptyHint nấc 1 phải hiện #1, thực tế: '{vm.RecentSlotEmptyHintText}'");
+        Assert(vm.StatusBarText.Contains("#1") && !vm.StatusBarText.Contains("#0"),
+            $"StatusBar nấc 1 phải hiện #1, thực tế: '{vm.StatusBarText}'");
+
+        vm.SelectRecentPartSlotCommand.Execute("11");
+        Assert(vm.RecentSlotPreviewTitleText.Contains("Nấc #12") && !vm.RecentSlotPreviewTitleText.Contains("#11"),
+            $"Click nấc 12 trống phải hiện #12 (không hiện #11), thực tế: '{vm.RecentSlotPreviewTitleText}'");
+        Assert(vm.RecentSlotEmptyHintText.Contains("#12") && !vm.RecentSlotEmptyHintText.Contains("#11"),
+            $"EmptyHint nấc 12 phải hiện #12, thực tế: '{vm.RecentSlotEmptyHintText}'");
+
+        // 2. Khi có 1 NG ở index 14 (nấc #15) và các nấc còn lại đến #1..#14 là OK
+        using var okMat = new Mat(180, 240, MatType.CV_8UC3, new Scalar(0, 200, 0));
+        using var ngMat = new Mat(300, 420, MatType.CV_8UC3, new Scalar(0, 0, 255));
+        vm.PushRecentPartInspectionResult(new InspectionResult { Pass = false }, ngMat);
+        for (int i = 0; i < 14; i++)
+        {
+            vm.PushRecentPartInspectionResult(new InspectionResult { Pass = true }, okMat);
+        }
+
+        // Tắt tự tìm NG để kiểm tra đúng từng nấc 1 và nấc 12
+        vm.AutoFindNearestNgAfterSelectedSlot = false;
+        vm.SelectRecentPartSlotCommand.Execute("0");
+        Assert(vm.RecentSlotPreviewTitleText.Contains("Nấc #1 ") && !vm.RecentSlotPreviewTitleText.Contains("#0"),
+            $"Click nấc 1 có dữ liệu phải hiện Nấc #1, thực tế: '{vm.RecentSlotPreviewTitleText}'");
+        Assert(vm.StatusBarText.Contains("#1") && !vm.StatusBarText.Contains("#0"),
+            $"StatusBar khi xem nấc 1 phải hiện #1, thực tế: '{vm.StatusBarText}'");
+
+        vm.SelectRecentPartSlotCommand.Execute("11");
+        Assert(vm.RecentSlotPreviewTitleText.Contains("Nấc #12 ") && !vm.RecentSlotPreviewTitleText.Contains("#11"),
+            $"Click nấc 12 có dữ liệu phải hiện Nấc #12, thực tế: '{vm.RecentSlotPreviewTitleText}'");
+        Assert(vm.StatusBarText.Contains("#12") && !vm.StatusBarText.Contains("#11"),
+            $"StatusBar khi xem nấc 12 phải hiện #12, thực tế: '{vm.StatusBarText}'");
+
+        // 3. Bật lại tìm NG sau nấc & ghim nấc 12 (NG đang ở index 14 => nấc #15)
+        vm.AutoFindNearestNgAfterSelectedSlot = true;
+        vm.TogglePinRecentSlotCommand.Execute(null);
+        Assert(vm.RecentSlotPreviewTitleText.Contains("#12") && vm.RecentSlotPreviewTitleText.Contains("#15")
+               && !vm.RecentSlotPreviewTitleText.Contains("#11") && !vm.RecentSlotPreviewTitleText.Contains("#14"),
+            $"Ghim nấc 12 với NG ở 15 phải hiện #12 -> #15, thực tế: '{vm.RecentSlotPreviewTitleText}'");
+        Assert(vm.StatusBarText.Contains("#12") && vm.StatusBarText.Contains("#15")
+               && !vm.StatusBarText.Contains("#11") && !vm.StatusBarText.Contains("#14"),
+            $"StatusBar khi ghim nấc 12 phải hiện #12 và #15, thực tế: '{vm.StatusBarText}'");
+
+        // 4. Chế độ dừng máy (xem lịch sử ở preview chính) cũng phải đồng bộ #1..#20
+        vm.IsRunningFolderFlow = false;
+        vm.SelectRecentPartSlotCommand.Execute("19"); // nấc 20 đang trống
+        Assert(vm.StatusBarText.Contains("#20") && !vm.StatusBarText.Contains("#19"),
+            $"Khi dừng, click nấc 20 trống phải hiện #20, thực tế: '{vm.StatusBarText}'");
+
+        vm.SelectRecentPartSlotCommand.Execute("11"); // nấc 12 có dữ liệu
+        Assert(vm.HistoricalViewingStatusText.Contains("#12") && !vm.HistoricalViewingStatusText.Contains("#11"),
+            $"HistoricalViewingStatusText nấc 12 phải hiện #12, thực tế: '{vm.HistoricalViewingStatusText}'");
+        Assert(vm.StatusBarText.Contains("#12") && !vm.StatusBarText.Contains("#11"),
+            $"StatusBarText khi xem lại nấc 12 phải hiện #12, thực tế: '{vm.StatusBarText}'");
 
         Console.WriteLine("PASSED");
     }

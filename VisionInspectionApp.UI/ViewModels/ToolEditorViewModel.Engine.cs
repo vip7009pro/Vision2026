@@ -2839,9 +2839,11 @@ namespace VisionInspectionApp.UI.ViewModels
                 return;
             }
 
+            int displaySlotNumber = ToDisplaySlotNumber(slotIndex);
+
             if (item == null)
             {
-                StatusBarText = $"Nấc #{slotIndex} chưa có dữ liệu sản phẩm.";
+                StatusBarText = $"Nấc #{displaySlotNumber} chưa có dữ liệu sản phẩm.";
                 return;
             }
 
@@ -2892,8 +2894,8 @@ namespace VisionInspectionApp.UI.ViewModels
 
             if (loadedFromFile)
             {
-                HistoricalViewingStatusText = $"🔍 Đang xem lại nấc #{slotIndex} ({item.StatusText}) lúc {item.FormattedTimestamp} — Tệp ảnh: {System.IO.Path.GetFileName(item.SavedImagePath)}";
-                StatusBarText = $"🔍 Đang xem lại ảnh {item.StatusText} của con hàng nấc #{slotIndex} lúc {item.FormattedTimestamp}. Tệp: {item.SavedImagePath}";
+                HistoricalViewingStatusText = $"🔍 Đang xem lại nấc #{displaySlotNumber} ({item.StatusText}) lúc {item.FormattedTimestamp} — Tệp ảnh: {System.IO.Path.GetFileName(item.SavedImagePath)}";
+                StatusBarText = $"🔍 Đang xem lại ảnh {item.StatusText} của con hàng nấc #{displaySlotNumber} lúc {item.FormattedTimestamp}. Tệp: {item.SavedImagePath}";
             }
             else if (item.MemorySnapshot != null && !item.MemorySnapshot.IsDisposed && !item.MemorySnapshot.Empty())
             {
@@ -2919,18 +2921,18 @@ namespace VisionInspectionApp.UI.ViewModels
                         conditionNotice = " (Chưa kích hoạt xuất file trong node Image Output)";
                     }
 
-                    HistoricalViewingStatusText = $"🔍 Đang xem lại nấc #{slotIndex} ({item.StatusText}) lúc {item.FormattedTimestamp} — Ảnh từ RAM{conditionNotice}";
-                    StatusBarText = $"🔍 Đang xem lại ảnh {item.StatusText} nấc #{slotIndex} lúc {item.FormattedTimestamp} (Ảnh snapshot từ bộ nhớ RAM){conditionNotice}";
+                    HistoricalViewingStatusText = $"🔍 Đang xem lại nấc #{displaySlotNumber} ({item.StatusText}) lúc {item.FormattedTimestamp} — Ảnh từ RAM{conditionNotice}";
+                    StatusBarText = $"🔍 Đang xem lại ảnh {item.StatusText} nấc #{displaySlotNumber} lúc {item.FormattedTimestamp} (Ảnh snapshot từ bộ nhớ RAM){conditionNotice}";
                 }
                 catch (Exception ex)
                 {
-                    StatusBarText = $"Lỗi hiển thị ảnh snapshot nấc #{slotIndex}: {ex.Message}";
+                    StatusBarText = $"Lỗi hiển thị ảnh snapshot nấc #{displaySlotNumber}: {ex.Message}";
                 }
             }
             else
             {
-                HistoricalViewingStatusText = $"⚠️ Nấc #{slotIndex} ({item.StatusText}) lúc {item.FormattedTimestamp}: Không có ảnh lưu trữ";
-                StatusBarText = $"⚠️ Con hàng nấc #{slotIndex} không có tệp ảnh và không có snapshot trong RAM.";
+                HistoricalViewingStatusText = $"⚠️ Nấc #{displaySlotNumber} ({item.StatusText}) lúc {item.FormattedTimestamp}: Không có ảnh lưu trữ";
+                StatusBarText = $"⚠️ Con hàng nấc #{displaySlotNumber} không có tệp ảnh và không có snapshot trong RAM.";
             }
 
             UpdateRecentPartsVisuals();
