@@ -3166,6 +3166,8 @@ namespace VisionInspectionApp.UI.ViewModels
                 return;
             }
 
+            SyncContinuousSummaryMetrics();
+
             int currentQueueCount = _industrialCameraFrameChannel?.Reader?.Count ?? 0;
             if (_queueCurrentCount != currentQueueCount)
             {
@@ -3909,7 +3911,7 @@ namespace VisionInspectionApp.UI.ViewModels
                         }
 
                         _plcManagerService?.AcquirePollingLock("RunContinuousMode");
-                        ProcessedImageCount = 0;
+                        ResetContinuousCounters();
                         _continuousStopwatch.Restart();
                         _continuousStatsTimer?.Start();
                         ResetInstantaneousSpeed();
@@ -3924,7 +3926,7 @@ namespace VisionInspectionApp.UI.ViewModels
                         _plcManagerService?.ReleasePollingLock("RunContinuousMode");
                         _continuousStopwatch.Reset();
                         _continuousStatsTimer?.Stop();
-                        ProcessedImageCount = 0;
+                        ResetContinuousCounters();
                         ResetInstantaneousSpeed();
                         UpdateContinuousStats();
                     }
@@ -4355,7 +4357,7 @@ namespace VisionInspectionApp.UI.ViewModels
 
             Interlocked.Exchange(ref _droppedContinuousFramesCount, 0);
             _handshakeStateMachine?.ClearDelayedQueue();
-            ProcessedImageCount = 0;
+            ResetContinuousCounters();
             QueueCurrentCount = 0;
             UpdateQueueVisuals();
             ResetRecentPartsHistory();
@@ -4390,7 +4392,7 @@ namespace VisionInspectionApp.UI.ViewModels
             IsRunningFolderFlow = true;
             _continuousStopwatch.Restart();
             _continuousStatsTimer?.Start();
-            ProcessedImageCount = 0;
+            ResetContinuousCounters();
             _droppedContinuousFramesCount = 0;
             UpdateContinuousStats();
 
@@ -4836,8 +4838,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 return;
 
             _lastRun = inspectionResult;
-            ProcessedImageCount++;
-            RecordPieceCompleted();
+            RecordContinuousPartCompleted(inspectionResult, updateStatsNow: false);
 
             // Cơ chế UI Frame Throttling & Non-blocking Preview Drop:
             // Chỉ yêu cầu UI render khi:
@@ -5212,7 +5213,7 @@ namespace VisionInspectionApp.UI.ViewModels
 
             _continuousStopwatch.Reset();
             _continuousStatsTimer?.Stop();
-            ProcessedImageCount = 0;
+            ResetContinuousCounters();
             ResetInstantaneousSpeed();
             UpdateContinuousStats();
             StatusBarText = "Đã dừng chạy liên tục.";
@@ -5280,9 +5281,7 @@ namespace VisionInspectionApp.UI.ViewModels
 
             if (IsRunningFolderFlow)
             {
-                ProcessedImageCount++;
-                RecordPieceCompleted();
-                UpdateContinuousStats();
+                RecordContinuousPartCompleted(inspectionResult, updateStatsNow: true);
             }
             // ✅ Tránh dựng dashboard 2 lần/frame: setter LastResult ở cuối hàm sẽ tự gọi
             // RefreshInspectionDashboard(). Chỉ gọi trực tiếp khi reference không đổi
@@ -5594,9 +5593,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 UpdateNodeExecutionTimes();
                 if (IsRunningFolderFlow)
                 {
-                    ProcessedImageCount++;
-                    RecordPieceCompleted();
-                    UpdateContinuousStats();
+                    RecordContinuousPartCompleted(inspectionResult, updateStatsNow: true);
                 }
                 // ✅ Tránh dựng dashboard 2 lần/frame: setter LastResult ở cuối hàm sẽ tự gọi
                 // RefreshInspectionDashboard(). Chỉ gọi trực tiếp khi reference không đổi.

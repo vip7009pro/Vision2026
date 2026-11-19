@@ -14,6 +14,7 @@
 
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis" />
+        <converters:InverseBoolToVisConverter x:Key="InverseBoolToVisConverter" />
         <converters:HexToBrushConverter x:Key="HexToBrush" />
         <converters:ToolToIconConverter x:Key="ToolToIcon" />
         <converters:ToolToColorConverter x:Key="ToolToColor" />
@@ -5821,20 +5822,21 @@
                           Visibility="{Binding IsDebugColumnVisible, Converter={StaticResource BoolToVis}}"
                           DragCompleted="MainSplitter_DragCompleted" />
 
-            <!-- Column 6: Integrated Live Inspection Dashboard & Selected Slot Preview (Split 2 rows when Continuous) -->
+            <!-- Column 6: Integrated Live Inspection Dashboard (stopped) & Continuous Slot Preview (running) -->
             <Grid Grid.Column="6"
                   Visibility="{Binding IsDebugColumnVisible, Converter={StaticResource BoolToVis}}">
                 <Grid.RowDefinitions>
-                    <!-- Hàng trên: Kết quả kiểm tra như thường -->
-                    <RowDefinition x:Name="RowDebugResults" Height="{Binding DebugResultsRowHeight, Mode=TwoWay}" MinHeight="120" />
-                    <!-- GridSplitter ngăn cách 2 hàng khi Chạy liên tục -->
+                    <!-- Hàng trên: Kết quả kiểm tra như thường (ẩn khi Chạy liên tục) -->
+                    <RowDefinition x:Name="RowDebugResults" Height="{Binding DebugResultsRowHeight, Mode=TwoWay}" MinHeight="{Binding DebugResultsMinHeight}" />
+                    <!-- GridSplitter (ẩn khi chỉ hiển thị 1 dòng duy nhất) -->
                     <RowDefinition Height="Auto" />
-                    <!-- Hàng dưới: Preview của nấc được chọn trên thanh 20 nấc -->
+                    <!-- Hàng dưới: Preview của nấc được chọn trên thanh 20 nấc (chiếm toàn bộ cột khi Chạy liên tục) -->
                     <RowDefinition x:Name="RowDebugSlotPreview" Height="{Binding DebugSlotPreviewRowHeight, Mode=TwoWay}" MinHeight="{Binding DebugSlotPreviewMinHeight}" />
                 </Grid.RowDefinitions>
 
-                <!-- HÀNG TRÊN: KẾT QUẢ KIỂM TRA NHƯ THƯỜNG -->
-                <Border Grid.Row="0" BorderBrush="{DynamicResource DarkBorderBrush}" BorderThickness="1" Padding="6">
+                <!-- HÀNG TRÊN: KẾT QUẢ KIỂM TRA NHƯ THƯỜNG (ẩn khi Chạy liên tục) -->
+                <Border Grid.Row="0" BorderBrush="{DynamicResource DarkBorderBrush}" BorderThickness="1" Padding="6"
+                        Visibility="{Binding IsRunningContinuous, Converter={StaticResource InverseBoolToVisConverter}}">
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
@@ -6201,23 +6203,128 @@
                     </Grid>
                 </Border>
 
-                <!-- GRIDSPLITTER NGĂN CÁCH HÀNG KẾT QUẢ VÀ HÀNG PREVIEW NẤC -->
+                <!-- GRIDSPLITTER (ẩn vì chỉ giữ 1 khu vực hiển thị tùy trạng thái dừng/chạy) -->
                 <GridSplitter x:Name="SplitterDebugRows" Grid.Row="1" Height="5" HorizontalAlignment="Stretch" VerticalAlignment="Center"
                               Background="{DynamicResource DarkBorderBrush}"
-                              Visibility="{Binding IsRunningContinuous, Converter={StaticResource BoolToVis}}"
+                              Visibility="Collapsed"
                               DragCompleted="DebugRowSplitter_DragCompleted" />
 
-                <!-- HÀNG DƯỚI: PREVIEW CỦA NẤC ĐƯỢC CHỌN TRÊN THANH 20 NẤC -->
+                <!-- HÀNG DƯỚI: PREVIEW CỦA NẤC ĐƯỢC CHỌN TRÊN THANH 20 NẤC (chiếm trọn cột khi Chạy liên tục) -->
                 <Border Grid.Row="2" BorderBrush="{DynamicResource DarkBorderBrush}" BorderThickness="1" Padding="6"
                         Visibility="{Binding IsRunningContinuous, Converter={StaticResource BoolToVis}}">
                     <Grid>
                         <Grid.RowDefinitions>
+                            <!-- Khối thông tin tóm tắt ở trên toolbar của preview nấc (tỉ lệ ~1/10) -->
+                            <RowDefinition x:Name="RowSlotSummaryPanel" Height="1*" MinHeight="68" MaxHeight="110" />
+                            <!-- Toolbar của preview nấc -->
                             <RowDefinition Height="Auto" />
-                            <RowDefinition Height="*" />
+                            <!-- Khung hiển thị ảnh preview của nấc được chọn -->
+                            <RowDefinition x:Name="RowSlotPreviewImage" Height="9*" />
                         </Grid.RowDefinitions>
 
+                        <!-- Khối thông tin cơ bản (OK/NG to + Tổng kiểm, Tổng OK, Tổng NG, Tốc độ tức thời, Thời gian kiểm tra tổng) -->
+                        <Border x:Name="ContinuousSlotSummaryPanel" Grid.Row="0" CornerRadius="6" Margin="0,0,0,6"
+                                Background="{DynamicResource PanelAltBackgroundBrush}"
+                                BorderBrush="{Binding RecentSlotSummaryBorderBrush}"
+                                BorderThickness="1.5">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="5" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+
+                                <Border Grid.Column="0" Background="{Binding RecentSlotSummaryForegroundBrush}" CornerRadius="5,0,0,5" />
+
+                                <Grid Grid.Column="1" Margin="10,4,10,4">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" MinWidth="112" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <!-- OK/NG thật to của con hàng tại nấc được chọn -->
+                                    <Grid Grid.Column="0" VerticalAlignment="Center" Margin="0,0,12,0">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="*" />
+                                            <RowDefinition Height="Auto" />
+                                        </Grid.RowDefinitions>
+                                        <Viewbox Grid.Row="0" Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Left" MaxHeight="50">
+                                            <TextBlock x:Name="TxtContinuousSlotStatus"
+                                                       Text="{Binding RecentSlotSummaryStatusText}"
+                                                       FontSize="42" FontWeight="ExtraBold"
+                                                       Foreground="{Binding RecentSlotSummaryForegroundBrush}"
+                                                       VerticalAlignment="Center" />
+                                        </Viewbox>
+                                        <TextBlock Grid.Row="1"
+                                                   Text="{Binding RecentSlotSummarySubText}"
+                                                   FontSize="10" FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource TextMutedBrush}"
+                                                   TextTrimming="CharacterEllipsis" MaxWidth="175" />
+                                    </Grid>
+
+                                    <!-- 5 ô chỉ số: Tổng kiểm, Tổng OK, Tổng NG, Tốc độ tức thời, Thời gian tổng (ms) -->
+                                    <UniformGrid Grid.Column="1" Columns="5" VerticalAlignment="Center">
+                                        <Border Margin="2,0" Padding="6,4" CornerRadius="4"
+                                                Background="{DynamicResource PanelBackgroundBrush}"
+                                                BorderBrush="{DynamicResource AccentBrush}" BorderThickness="1"
+                                                ToolTip="Tổng số sản phẩm đã kiểm tra trong phiên chạy liên tục hiện tại.">
+                                            <StackPanel>
+                                                <TextBlock Text="TỔNG KIỂM" Style="{StaticResource DashChipLabelStyle}" TextTrimming="CharacterEllipsis" />
+                                                <TextBlock Text="{Binding ProcessedImageCount}"
+                                                           Style="{StaticResource DashChipValueStyle}" FontSize="14"
+                                                           Foreground="{DynamicResource TextBrush}" />
+                                            </StackPanel>
+                                        </Border>
+                                        <Border Margin="2,0" Padding="6,4" CornerRadius="4"
+                                                Background="{DynamicResource PanelBackgroundBrush}"
+                                                BorderBrush="#10B981" BorderThickness="1"
+                                                ToolTip="Tổng số sản phẩm đạt (OK) trong phiên chạy liên tục hiện tại.">
+                                            <StackPanel>
+                                                <TextBlock Text="TỔNG OK" Style="{StaticResource DashChipLabelStyle}" TextTrimming="CharacterEllipsis" />
+                                                <TextBlock Text="{Binding ContinuousOkCount}"
+                                                           Style="{StaticResource DashChipValueStyle}" FontSize="14"
+                                                           Foreground="#10B981" />
+                                            </StackPanel>
+                                        </Border>
+                                        <Border Margin="2,0" Padding="6,4" CornerRadius="4"
+                                                Background="{DynamicResource PanelBackgroundBrush}"
+                                                BorderBrush="#EF4444" BorderThickness="1"
+                                                ToolTip="Tổng số sản phẩm lỗi (NG) trong phiên chạy liên tục hiện tại.">
+                                            <StackPanel>
+                                                <TextBlock Text="TỔNG NG" Style="{StaticResource DashChipLabelStyle}" TextTrimming="CharacterEllipsis" />
+                                                <TextBlock Text="{Binding ContinuousNgCount}"
+                                                           Style="{StaticResource DashChipValueStyle}" FontSize="14"
+                                                           Foreground="#EF4444" />
+                                            </StackPanel>
+                                        </Border>
+                                        <Border Margin="2,0" Padding="6,4" CornerRadius="4"
+                                                Background="{DynamicResource PanelBackgroundBrush}"
+                                                BorderBrush="#0284C7" BorderThickness="1"
+                                                ToolTip="Tốc độ kiểm tra tức thời (pcs/s) đo theo chu kỳ giữa các con hàng gần nhất (Rolling Window). Tự động về 0 khi máy dừng.">
+                                            <StackPanel>
+                                                <TextBlock Text="TỐC ĐỘ (pcs/s)" Style="{StaticResource DashChipLabelStyle}" TextTrimming="CharacterEllipsis" />
+                                                <TextBlock Text="{Binding InstantaneousSpeedText}"
+                                                           Style="{StaticResource DashChipValueStyle}" FontSize="14"
+                                                           Foreground="#0284C7" />
+                                            </StackPanel>
+                                        </Border>
+                                        <Border Margin="2,0" Padding="6,4" CornerRadius="4"
+                                                Background="{DynamicResource PanelBackgroundBrush}"
+                                                BorderBrush="#4CAF50" BorderThickness="1"
+                                                ToolTip="Thời gian kiểm tra tổng (ms) của con hàng gần nhất.">
+                                            <StackPanel>
+                                                <TextBlock Text="THỜI GIAN (ms)" Style="{StaticResource DashChipLabelStyle}" TextTrimming="CharacterEllipsis" />
+                                                <TextBlock Text="{Binding LatestContinuousTotalTimeMsText}"
+                                                           Style="{StaticResource DashChipValueStyle}" FontSize="14"
+                                                           Foreground="#4CAF50" />
+                                            </StackPanel>
+                                        </Border>
+                                    </UniformGrid>
+                                </Grid>
+                            </Grid>
+                        </Border>
+
                         <!-- Toolbar của preview mới thêm -->
-                        <Grid Grid.Row="0" Margin="0,0,0,6">
+                        <Grid Grid.Row="1" Margin="0,0,0,6">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
@@ -6296,7 +6403,7 @@
                             </StackPanel>
                         </Grid>
 
-                        <Border Grid.Row="1" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Background="Transparent">
+                        <Border Grid.Row="2" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Background="Transparent">
                             <Grid>
                                 <controls:ImageViewerControl x:Name="RecentSlotPreviewViewer"
                                                            ImageSource="{Binding RecentSlotPreviewImage}"

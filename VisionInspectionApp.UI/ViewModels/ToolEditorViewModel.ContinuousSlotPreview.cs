@@ -20,7 +20,7 @@ namespace VisionInspectionApp.UI.ViewModels;
 
 public sealed partial class ToolEditorViewModel
 {
-    // ==================== SPLIT CỘT KẾT QUẢ KIỂM TRA (CHẠY LIÊN TỤC) ====================
+    // ==================== CỘT KẾT QUẢ KIỂM TRA (CHẠY LIÊN TỤC) ====================
 
     [ObservableProperty]
     private GridLength _debugResultsRowHeight = new(1, GridUnitType.Star);
@@ -28,13 +28,15 @@ public sealed partial class ToolEditorViewModel
     [ObservableProperty]
     private GridLength _debugSlotPreviewRowHeight = new(0);
 
+    public double DebugResultsMinHeight => IsRunningContinuous ? 0 : 120;
     public double DebugSlotPreviewMinHeight => IsRunningContinuous ? 120 : 0;
 
     private void UpdateDebugColumnRowLayout(bool isContinuous)
     {
         if (isContinuous)
         {
-            DebugResultsRowHeight = new GridLength(1.0, GridUnitType.Star);
+            // Khi Chạy liên tục: Ẩn dòng kết quả kiểm tra hiện tại, chỉ hiển thị preview của nấc được chọn
+            DebugResultsRowHeight = new GridLength(0);
             DebugSlotPreviewRowHeight = new GridLength(1.0, GridUnitType.Star);
         }
         else
@@ -43,7 +45,86 @@ public sealed partial class ToolEditorViewModel
             DebugSlotPreviewRowHeight = new GridLength(0);
         }
 
+        OnPropertyChanged(nameof(DebugResultsMinHeight));
         OnPropertyChanged(nameof(DebugSlotPreviewMinHeight));
+    }
+
+    // ==================== KHỐI THÔNG TIN TÓM TẮT (1/10 TRÊN TOOLBAR PREVIEW NẤC) ====================
+
+    private static readonly SolidColorBrush SummaryEmptyFg = CreateFrozenBrush(Color.FromRgb(107, 114, 128));
+    private static readonly SolidColorBrush SummaryEmptyBorder = CreateFrozenBrush(Color.FromRgb(148, 163, 184));
+
+    [ObservableProperty]
+    private string _recentSlotSummaryStatusText = "--";
+
+    [ObservableProperty]
+    private string _recentSlotSummarySubText = "Chọn một nấc (1–20) để xem trạng thái";
+
+    [ObservableProperty]
+    private Brush _recentSlotSummaryForegroundBrush = SummaryEmptyFg;
+
+    [ObservableProperty]
+    private Brush _recentSlotSummaryBorderBrush = SummaryEmptyBorder;
+
+    [ObservableProperty]
+    private int _continuousOkCount;
+
+    [ObservableProperty]
+    private int _continuousNgCount;
+
+    [ObservableProperty]
+    private string _latestContinuousTotalTimeMsText = "0.0";
+
+    private int _continuousOkCountRaw;
+    private int _continuousNgCountRaw;
+    private double _latestContinuousTotalTimeMsRaw;
+
+    /// <summary>
+    /// Ghi nhận kết quả một con hàng vừa hoàn thành trong chế độ chạy liên tục (an toàn đa luồng).
+    /// </summary>
+    public void RecordContinuousPartCompleted(InspectionResult? result, bool updateStatsNow)
+    {
+        ProcessedImageCount++;
+        RecordPieceCompleted();
+
+        if (result != null && result.Pass)
+        {
+            Interlocked.Increment(ref _continuousOkCountRaw);
+        }
+        else
+        {
+            Interlocked.Increment(ref _continuousNgCountRaw);
+        }
+
+        double totalMs = result?.Timings?.TotalMs ?? 0.0;
+        Volatile.Write(ref _latestContinuousTotalTimeMsRaw, totalMs);
+
+        if (updateStatsNow)
+        {
+            UpdateContinuousStats();
+        }
+    }
+
+    private void SyncContinuousSummaryMetrics()
+    {
+        int ok = Volatile.Read(ref _continuousOkCountRaw);
+        int ng = Volatile.Read(ref _continuousNgCountRaw);
+        double totalMs = Volatile.Read(ref _latestContinuousTotalTimeMsRaw);
+
+        ContinuousOkCount = ok;
+        ContinuousNgCount = ng;
+        LatestContinuousTotalTimeMsText = $"{totalMs:0.0}";
+    }
+
+    private void ResetContinuousCounters()
+    {
+        ProcessedImageCount = 0;
+        Interlocked.Exchange(ref _continuousOkCountRaw, 0);
+        Interlocked.Exchange(ref _continuousNgCountRaw, 0);
+        Volatile.Write(ref _latestContinuousTotalTimeMsRaw, 0.0);
+        ContinuousOkCount = 0;
+        ContinuousNgCount = 0;
+        LatestContinuousTotalTimeMsText = "0.0";
     }
 
     // ==================== PREVIEW NẤC ĐƯỢC CHỌN & GHIM NẤC TRONG CHẠY LIÊN TỤC ====================
@@ -745,6 +826,18 @@ public sealed partial class ToolEditorViewModel
     /// </summary>
     private static int ToDisplaySlotNumber(int slotIndex) => slotIndex + 1;
 
+    private void ApplyRecentSlotSummaryDisplay(
+        string statusText,
+        string subText,
+        Brush foregroundBrush,
+        Brush borderBrush)
+    {
+        RecentSlotSummaryStatusText = statusText;
+        RecentSlotSummarySubText = subText;
+        RecentSlotSummaryForegroundBrush = foregroundBrush;
+        RecentSlotSummaryBorderBrush = borderBrush;
+    }
+
     private void UpdateRecentSlotPreviewHeader(
         RecentPartInspectionSlotItem? item,
         int selectedSlotIndex,
@@ -758,6 +851,11 @@ public sealed partial class ToolEditorViewModel
             HasRecentSlotPreviewBadge = false;
             RecentSlotPreviewBadgeText = string.Empty;
             RecentSlotEmptyHintText = "Chọn một nấc trên thanh 20 nấc (1–20) để xem preview.";
+            ApplyRecentSlotSummaryDisplay(
+                "--",
+                "Chọn một nấc (1–20) để xem trạng thái",
+                SummaryEmptyFg,
+                SummaryEmptyBorder);
             return;
         }
 
@@ -775,6 +873,11 @@ public sealed partial class ToolEditorViewModel
             RecentSlotEmptyHintText = IsPinnedRecentSlot
                 ? $"📌 Đang ghim nấc #{selectedDisplay} — Chưa có dữ liệu, tự động hiển thị ảnh Output khi có NG."
                 : $"⚪ Nấc #{selectedDisplay} chưa có dữ liệu sản phẩm.";
+            ApplyRecentSlotSummaryDisplay(
+                "--",
+                IsPinnedRecentSlot ? $"📌 Đang ghim nấc #{selectedDisplay} • Chờ dữ liệu" : $"Nấc #{selectedDisplay} • Chưa có dữ liệu",
+                IsPinnedRecentSlot ? PinnedWaitFg : SummaryEmptyFg,
+                IsPinnedRecentSlot ? PinnedWaitBorder : SummaryEmptyBorder);
             return;
         }
 
@@ -786,12 +889,16 @@ public sealed partial class ToolEditorViewModel
         RecentSlotPreviewTitleText = $"{pinPrefix}{slotLabel} • {item.FormattedTimestamp} ({sourceKind})";
         HasRecentSlotPreviewBadge = true;
 
+        string summaryPinPrefix = IsPinnedRecentSlot ? "📌 " : string.Empty;
+        string summarySubText = $"{summaryPinPrefix}{slotLabel} • {item.FormattedTimestamp}";
+
         if (!item.IsOk)
         {
             RecentSlotPreviewBadgeText = isPinnedNg ? "NG • GHIM OUTPUT" : "NG";
             RecentSlotPreviewBadgeBg = SlotNgBadgeBg;
             RecentSlotPreviewBadgeBorder = NgSlotBorder;
             RecentSlotPreviewBadgeFg = NgSlotBrush;
+            ApplyRecentSlotSummaryDisplay("NG", summarySubText, NgSlotBrush, NgSlotBorder);
         }
         else
         {
@@ -799,6 +906,7 @@ public sealed partial class ToolEditorViewModel
             RecentSlotPreviewBadgeBg = IsPinnedRecentSlot ? PinnedWaitBg : SlotOkBadgeBg;
             RecentSlotPreviewBadgeBorder = IsPinnedRecentSlot ? PinnedWaitBorder : OkSlotBorder;
             RecentSlotPreviewBadgeFg = IsPinnedRecentSlot ? PinnedWaitFg : OkSlotBrush;
+            ApplyRecentSlotSummaryDisplay("OK", summarySubText, OkSlotBrush, OkSlotBorder);
         }
 
         RecentSlotEmptyHintText = $"⚠️ {slotLabel} ({item.StatusText}) lúc {item.FormattedTimestamp}: Không có dữ liệu ảnh.";

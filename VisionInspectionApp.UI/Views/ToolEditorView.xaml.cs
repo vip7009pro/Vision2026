@@ -250,7 +250,11 @@ public partial class ToolEditorView : UserControl
             _subscribedVm.RequestAutoFitRecentSlotPreview += OnRequestAutoFitRecentSlotPreview;
             _subscribedVm.PropertyChanged += OnViewModelPropertyChanged;
             Dispatcher.BeginInvoke(DispatcherPriority.ContextIdle, AutoFitAndCenterGraph);
-            Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () => ApplyColumnLayout(vm));
+            Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () =>
+            {
+                ApplyColumnLayout(vm);
+                ApplyDebugRowLayout(vm);
+            });
         }
     }
 
@@ -329,13 +333,7 @@ public partial class ToolEditorView : UserControl
     private void DebugRowSplitter_DragCompleted(object sender, DragCompletedEventArgs e)
     {
         if (DataContext is not ToolEditorViewModel vm || !vm.IsRunningContinuous) return;
-        if (RowDebugResults != null && RowDebugSlotPreview != null)
-        {
-            double topH = Math.Max(120, RowDebugResults.ActualHeight);
-            double bottomH = Math.Max(120, RowDebugSlotPreview.ActualHeight);
-            vm.DebugResultsRowHeight = new GridLength(topH, GridUnitType.Star);
-            vm.DebugSlotPreviewRowHeight = new GridLength(bottomH, GridUnitType.Star);
-        }
+        ApplyDebugRowLayout(vm);
     }
 
     private void ApplyDebugRowLayout(ToolEditorViewModel vm)
@@ -343,7 +341,7 @@ public partial class ToolEditorView : UserControl
         if (RowDebugResults == null || RowDebugSlotPreview == null) return;
         if (vm.IsRunningContinuous)
         {
-            vm.DebugResultsRowHeight = new GridLength(1.0, GridUnitType.Star);
+            vm.DebugResultsRowHeight = new GridLength(0);
             vm.DebugSlotPreviewRowHeight = new GridLength(1.0, GridUnitType.Star);
         }
         else

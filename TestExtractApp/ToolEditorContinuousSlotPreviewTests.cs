@@ -48,18 +48,20 @@ public static class ToolEditorContinuousSlotPreviewTests
         Test_12_AutoFindNearestNgCheckbox_ToggleOnOff_UpdatesPreviewAndInteractsWithPin();
         Test_13_Recent20SlotsBar_Numbered1To20LeftToRight_WithReadableForeground();
         Test_14_SlotIndexDisplay_Synced1To20_ForBarTitleAndStatus();
+        Test_15_ContinuousSummaryPanelAboveToolbar_LayoutCountsStatusAndTiming();
 
-        Console.WriteLine("✅ ALL 14 TOOL EDITOR CONTINUOUS SLOT PREVIEW & PIN TESTS PASSED!");
+        Console.WriteLine("✅ ALL 15 TOOL EDITOR CONTINUOUS SLOT PREVIEW & PIN TESTS PASSED!");
         Console.WriteLine("=========================================================\n");
     }
 
     private static void Test_01_DebugColumnSplitsTwoRows5050OnContinuousAndRestoresOnStop()
     {
-        Console.Write("--- [1/8] Khi Chạy liên tục: chỉ hiện 2 cột & cột kết quả chia đôi 2 hàng (50/50)... ");
+        Console.Write("--- [1/15] Khi Chạy liên tục: cột 4 ẩn dòng kết quả cũ, chỉ hiện preview nấc 20 & khôi phục khi dừng... ");
 
         var vm = new ToolEditorViewModel();
         Assert(vm.DebugResultsRowHeight.GridUnitType == GridUnitType.Star && vm.DebugResultsRowHeight.Value == 1.0,
             "Ban đầu hàng kết quả phải chiếm trọn (1*)");
+        Assert(vm.DebugResultsMinHeight >= 100, "Ban đầu DebugResultsMinHeight phải >= 100");
         Assert(vm.DebugSlotPreviewRowHeight.Value == 0,
             $"Ban đầu hàng preview nấc phải ẩn (0), thực tế: {vm.DebugSlotPreviewRowHeight.Value}");
         Assert(vm.DebugSlotPreviewMinHeight == 0, "Ban đầu DebugSlotPreviewMinHeight phải là 0");
@@ -71,19 +73,20 @@ public static class ToolEditorContinuousSlotPreviewTests
             "Chỉ hiển thị 2 cột Preview và Kết quả kiểm tra");
         Assert(vm.PreviewColumnWidth.Value == 1.0 && vm.DebugColumnWidth.Value == 1.0,
             "2 cột Preview và Kết quả kiểm tra phải chia 50/50 (1*:1*)");
-        Assert(vm.DebugResultsRowHeight.GridUnitType == GridUnitType.Star && vm.DebugResultsRowHeight.Value == 1.0,
-            "Hàng trên (kết quả kiểm tra) phải là 1.0*");
+        Assert(vm.DebugResultsRowHeight.Value == 0 && vm.DebugResultsMinHeight == 0,
+            $"Khi chạy liên tục hàng kết quả kiểm tra hiện tại phải ẩn về 0, thực tế Height={vm.DebugResultsRowHeight.Value}, MinHeight={vm.DebugResultsMinHeight}");
         Assert(vm.DebugSlotPreviewRowHeight.GridUnitType == GridUnitType.Star && vm.DebugSlotPreviewRowHeight.Value == 1.0,
-            "Hàng dưới (preview nấc 20) phải là 1.0* (chia đôi cột)");
+            "Hàng preview nấc 20 phải chiếm trọn chiều cao cột 4 (1.0*)");
         Assert(vm.DebugSlotPreviewMinHeight >= 100, "DebugSlotPreviewMinHeight phải >= 100 khi chạy liên tục");
 
         vm.IsRunningFolderFlow = false;
 
         Assert(vm.IsToolboxColumnVisible && vm.IsCanvasColumnVisible, "Khi dừng phải hiện lại Cột 1 & 2");
         Assert(vm.DebugResultsRowHeight.GridUnitType == GridUnitType.Star && vm.DebugResultsRowHeight.Value == 1.0,
-            "Khi dừng hàng trên kết quả vẫn là 1.0*");
+            "Khi dừng hàng kết quả phải khôi phục về 1.0*");
+        Assert(vm.DebugResultsMinHeight >= 100, "Khi dừng DebugResultsMinHeight phải >= 100");
         Assert(vm.DebugSlotPreviewRowHeight.Value == 0,
-            $"Khi dừng hàng dưới preview nấc phải thu về 0, thực tế: {vm.DebugSlotPreviewRowHeight.Value}");
+            $"Khi dừng hàng preview nấc phải thu về 0, thực tế: {vm.DebugSlotPreviewRowHeight.Value}");
         Assert(vm.DebugSlotPreviewMinHeight == 0, "Khi dừng DebugSlotPreviewMinHeight phải về 0");
 
         Console.WriteLine("PASSED");
@@ -698,6 +701,122 @@ public static class ToolEditorContinuousSlotPreviewTests
             $"HistoricalViewingStatusText nấc 12 phải hiện #12, thực tế: '{vm.HistoricalViewingStatusText}'");
         Assert(vm.StatusBarText.Contains("#12") && !vm.StatusBarText.Contains("#11"),
             $"StatusBarText khi xem lại nấc 12 phải hiện #12, thực tế: '{vm.StatusBarText}'");
+
+        Console.WriteLine("PASSED");
+    }
+
+    private static void Test_15_ContinuousSummaryPanelAboveToolbar_LayoutCountsStatusAndTiming()
+    {
+        Console.Write("--- [15/15] Khối 1/10 trên toolbar preview: ẩn dòng kết quả cũ & đủ OK/NG to, Tổng kiểm/OK/NG, tốc độ, tổng ms... ");
+
+        // 1. Kiểm tra XAML layout của cột 4
+        string xamlPath = FindRepoFile("VisionInspectionApp.UI", "Views", "ToolEditorView.xaml");
+        var doc = XDocument.Load(xamlPath);
+        XNamespace xNs = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        var rowDebugResults = doc.Descendants().FirstOrDefault(el =>
+            el.Name.LocalName == "RowDefinition" && string.Equals((string?)el.Attribute(xNs + "Name"), "RowDebugResults", StringComparison.Ordinal));
+        Assert(rowDebugResults is not null, "Phải tìm thấy RowDebugResults trong ToolEditorView.xaml");
+        Assert(string.Equals((string?)rowDebugResults!.Attribute("MinHeight"), "{Binding DebugResultsMinHeight}", StringComparison.Ordinal),
+            "RowDebugResults phải bind MinHeight='{Binding DebugResultsMinHeight}' để ẩn hoàn toàn về 0 khi chạy liên tục");
+
+        var splitterDebugRows = doc.Descendants().FirstOrDefault(el =>
+            el.Name.LocalName == "GridSplitter" && string.Equals((string?)el.Attribute(xNs + "Name"), "SplitterDebugRows", StringComparison.Ordinal));
+        Assert(splitterDebugRows is not null && string.Equals((string?)splitterDebugRows.Attribute("Visibility"), "Collapsed", StringComparison.Ordinal),
+            "SplitterDebugRows phải ẩn (Collapsed) vì không còn chia đôi 2 hàng");
+
+        var summaryPanel = doc.Descendants().FirstOrDefault(el =>
+            el.Name.LocalName == "Border" && string.Equals((string?)el.Attribute(xNs + "Name"), "ContinuousSlotSummaryPanel", StringComparison.Ordinal));
+        Assert(summaryPanel is not null, "Phải có khối ContinuousSlotSummaryPanel trong cột 4");
+        Assert(string.Equals((string?)summaryPanel!.Attribute("Grid.Row"), "0", StringComparison.Ordinal),
+            "Khối ContinuousSlotSummaryPanel phải nằm ở Grid.Row='0' (trên toolbar)");
+
+        var rowSummaryDef = doc.Descendants().FirstOrDefault(el =>
+            el.Name.LocalName == "RowDefinition" && string.Equals((string?)el.Attribute(xNs + "Name"), "RowSlotSummaryPanel", StringComparison.Ordinal));
+        var rowImageDef = doc.Descendants().FirstOrDefault(el =>
+            el.Name.LocalName == "RowDefinition" && string.Equals((string?)el.Attribute(xNs + "Name"), "RowSlotPreviewImage", StringComparison.Ordinal));
+        Assert(rowSummaryDef is not null && string.Equals((string?)rowSummaryDef.Attribute("Height"), "1*", StringComparison.Ordinal),
+            "RowSlotSummaryPanel phải có Height='1*' (tỉ lệ 1/10)");
+        Assert(rowImageDef is not null && string.Equals((string?)rowImageDef.Attribute("Height"), "9*", StringComparison.Ordinal),
+            "RowSlotPreviewImage phải có Height='9*' (tỉ lệ 9/10)");
+
+        string rawXaml = File.ReadAllText(xamlPath);
+        Assert(rawXaml.Contains("RecentSlotSummaryStatusText"), "XAML phải bind RecentSlotSummaryStatusText");
+        Assert(rawXaml.Contains("ProcessedImageCount"), "XAML phải bind ProcessedImageCount (Tổng kiểm)");
+        Assert(rawXaml.Contains("ContinuousOkCount"), "XAML phải bind ContinuousOkCount (Tổng OK)");
+        Assert(rawXaml.Contains("ContinuousNgCount"), "XAML phải bind ContinuousNgCount (Tổng NG)");
+        Assert(rawXaml.Contains("InstantaneousSpeedText"), "XAML phải bind InstantaneousSpeedText (Tốc độ tức thời)");
+        Assert(rawXaml.Contains("LatestContinuousTotalTimeMsText"), "XAML phải bind LatestContinuousTotalTimeMsText (Thời gian ms)");
+
+        var statusTxtEl = doc.Descendants().FirstOrDefault(el =>
+            el.Name.LocalName == "TextBlock" && string.Equals((string?)el.Attribute(xNs + "Name"), "TxtContinuousSlotStatus", StringComparison.Ordinal));
+        Assert(statusTxtEl is not null && double.TryParse((string?)statusTxtEl.Attribute("FontSize"), out double statusFs) && statusFs >= 30,
+            "TxtContinuousSlotStatus phải hiển thị thật to (FontSize >= 30)");
+
+        // 2. Kiểm tra runtime ViewModel: OK/NG của nấc chọn + bộ đếm Tổng kiểm / Tổng OK / Tổng NG + thời gian ms gần nhất + tốc độ
+        var vm = new ToolEditorViewModel { IsRunningFolderFlow = true };
+        Assert(vm.RecentSlotSummaryStatusText == "--", $"Ban đầu chưa chọn nấc phải là '--', thực tế: '{vm.RecentSlotSummaryStatusText}'");
+        Assert(vm.ProcessedImageCount == 0 && vm.ContinuousOkCount == 0 && vm.ContinuousNgCount == 0,
+            "Ban đầu bộ đếm Tổng kiểm / OK / NG phải bằng 0");
+        Assert(vm.LatestContinuousTotalTimeMsText == "0.0",
+            $"Ban đầu LatestContinuousTotalTimeMsText phải là '0.0', thực tế: '{vm.LatestContinuousTotalTimeMsText}'");
+
+        using var okMat = new Mat(180, 240, MatType.CV_8UC3, new Scalar(0, 200, 0));
+        using var ngMat = new Mat(220, 320, MatType.CV_8UC3, new Scalar(0, 0, 255));
+
+        void PushContinuous(bool pass, int totalMs)
+        {
+            var res = new InspectionResult { Pass = pass };
+            res.Timings.TotalMs = totalMs;
+            vm.PushRecentPartInspectionResult(res, pass ? okMat : ngMat);
+            vm.RecordContinuousPartCompleted(res, updateStatsNow: true);
+        }
+
+        // Đẩy theo thứ tự: NG(24), OK(12), OK(15), OK(18), NG(31)
+        // Thanh 20 nấc (mới nhất ở trái #1 = index 0): #1=NG(31), #2=OK(18), #3=OK(15), #4=OK(12), #5=NG(24)
+        PushContinuous(false, 24);
+        Thread.Sleep(5);
+        PushContinuous(true, 12);
+        Thread.Sleep(5);
+        PushContinuous(true, 15);
+        Thread.Sleep(5);
+        PushContinuous(true, 18);
+        Thread.Sleep(5);
+        PushContinuous(false, 31);
+
+        Assert(vm.ProcessedImageCount == 5, $"Tổng kiểm phải bằng 5, thực tế: {vm.ProcessedImageCount}");
+        Assert(vm.ContinuousOkCount == 3, $"Tổng OK phải bằng 3, thực tế: {vm.ContinuousOkCount}");
+        Assert(vm.ContinuousNgCount == 2, $"Tổng NG phải bằng 2, thực tế: {vm.ContinuousNgCount}");
+        Assert(vm.LatestContinuousTotalTimeMsText == "31.0",
+            $"Thời gian kiểm tra tổng của con hàng gần nhất phải là '31.0', thực tế: '{vm.LatestContinuousTotalTimeMsText}'");
+        Assert(vm.InstantaneousSpeedText != "0.0",
+            $"Tốc độ tức thời phải > 0 khi liên tục có hàng hoàn thành, thực tế: '{vm.InstantaneousSpeedText}'");
+
+        // Chọn nấc 1 (index 0) -> con hàng NG vừa chạy
+        vm.SelectRecentPartSlotCommand.Execute("0");
+        Assert(vm.RecentSlotSummaryStatusText == "NG", $"Nấc #1 phải hiện 'NG', thực tế: '{vm.RecentSlotSummaryStatusText}'");
+        Assert(ReferenceEquals(vm.RecentSlotSummaryForegroundBrush, ToolEditorViewModel.NgSlotBrush),
+            "Nấc #1 (NG) phải dùng NgSlotBrush");
+
+        // Tắt tự tìm NG & chọn nấc 3 (index 2, OK) -> phải hiện OK màu xanh
+        vm.AutoFindNearestNgAfterSelectedSlot = false;
+        vm.SelectRecentPartSlotCommand.Execute("2");
+        Assert(vm.RecentSlotSummaryStatusText == "OK", $"Nấc #3 (OK) phải hiện 'OK', thực tế: '{vm.RecentSlotSummaryStatusText}'");
+        Assert(ReferenceEquals(vm.RecentSlotSummaryForegroundBrush, ToolEditorViewModel.OkSlotBrush),
+            "Nấc #3 (OK) phải dùng OkSlotBrush");
+
+        // Chọn nấc trống #10 (index 9) -> phải hiện '--'
+        vm.SelectRecentPartSlotCommand.Execute("9");
+        Assert(vm.RecentSlotSummaryStatusText == "--", $"Nấc #10 trống phải hiện '--', thực tế: '{vm.RecentSlotSummaryStatusText}'");
+
+        // Khi Reset hoặc Dừng chạy liên tục -> bộ đếm về 0
+        vm.ResetQueueAndCounters();
+        Assert(vm.ProcessedImageCount == 0 && vm.ContinuousOkCount == 0 && vm.ContinuousNgCount == 0,
+            "ResetQueueAndCounters phải đưa Tổng kiểm / OK / NG về 0");
+        Assert(vm.LatestContinuousTotalTimeMsText == "0.0",
+            "ResetQueueAndCounters phải đưa LatestContinuousTotalTimeMsText về '0.0'");
+        Assert(vm.RecentSlotSummaryStatusText == "--",
+            "ResetQueueAndCounters phải đưa trạng thái nấc về '--'");
 
         Console.WriteLine("PASSED");
     }
