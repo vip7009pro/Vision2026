@@ -2342,7 +2342,7 @@ namespace VisionInspectionApp.UI.ViewModels
         private bool _isQueueActive;
 
         [ObservableProperty]
-        private string _queueToolTipText = "📦 Hàng Đợi Xử Lý Ảnh (Inspection Queue):\n• Đang chờ: 0/16 con hàng\n• Trạng thái: Trống";
+        private string _queueToolTipText = "📦 Hàng Đợi Xử Lý Ảnh (Inspection Queue):\n• Đang chờ: 0/16 con hàng\n• Trạng thái: Trống\n• Chiều hiển thị: Trái ➔ Phải\n👉 Click vào khối Queue (không bấm vào nấc) để đảo chiều hiển thị (cả 2 thanh queue)!";
 
         [ObservableProperty] private bool _queueSlot0Active;
         [ObservableProperty] private bool _queueSlot1Active;
@@ -2434,7 +2434,9 @@ namespace VisionInspectionApp.UI.ViewModels
                                $"• Tình trạng: {loadLevel}\n" +
                                $"• Tổng số ảnh đã xử lý: {ProcessedImageCount}\n" +
                                $"• Số frame bị rớt (Dropped): {_droppedContinuousFramesCount}\n" +
-                               $"• Luồng xử lý: {(IsRunningContinuous ? "▶ Đang chạy liên tục" : "⏹ Tạm dừng")}";
+                               $"• Luồng xử lý: {(IsRunningContinuous ? "▶ Đang chạy liên tục" : "⏹ Tạm dừng")}\n" +
+                               $"• Chiều hiển thị: {QueueDirectionDisplayText}\n" +
+                               $"👉 Click vào khối Queue (không bấm vào nấc) để đảo chiều hiển thị (cả 2 thanh queue)!";
         }
 
         #region Recent 20 Parts Stepped Bar (OK/NG Inspection History)
@@ -2478,7 +2480,7 @@ namespace VisionInspectionApp.UI.ViewModels
         [ObservableProperty] private int _recentPartsNgCount = 0;
         [ObservableProperty] private int _recentPartsTotalCount = 0;
         [ObservableProperty] private Brush _recentPartsBorderBrush = EmeraldBorder;
-        [ObservableProperty] private string _recentPartsToolTipText = "🎯 20 Con Hàng Gần Nhất:\n• Chưa có sản phẩm kiểm tra\n• Chiều luồng: Trái (Mới nhất: Nấc 1) ➔ Phải (Cũ dần: Nấc 20)\n👉 Click vào từng nấc để xem lại ảnh kết quả OK/NG!";
+        [ObservableProperty] private string _recentPartsToolTipText = "🎯 20 Con Hàng Gần Nhất:\n• Chưa có sản phẩm kiểm tra\n• Chiều luồng: Trái (Mới nhất: Nấc 1) ➔ Phải (Cũ dần: Nấc 20)\n👉 Click vào từng nấc để xem lại ảnh kết quả OK/NG!\n👉 Click vào khối Recent (không bấm vào nấc) để đảo chiều hiển thị (cả 2 thanh queue)!";
 
         [ObservableProperty] private int _selectedRecentSlotIndex = -1;
         [ObservableProperty] private bool _isViewingHistoricalRecentPart = false;
@@ -2720,13 +2722,17 @@ namespace VisionInspectionApp.UI.ViewModels
                 RecentPartsBorderBrush = EmeraldBorder;
             }
 
+            string recentFlowDirectionLine = IsQueueRightToLeft
+                ? "• Chiều luồng: Phải (Mới nhất: Nấc 1) ➔ Trái (Cũ dần: Nấc 20)"
+                : "• Chiều luồng: Trái (Mới nhất: Nấc 1) ➔ Phải (Cũ dần: Nấc 20)";
             RecentPartsToolTipText = $"🎯 Lịch Sử 20 Sản Phẩm Gần Nhất:\n" +
                                      $"• Đã kiểm tra: {total}/20 con hàng\n" +
                                      $"• Đạt (OK): {okCount} con hàng\n" +
                                      $"• Lỗi (NG): {ngCount} con hàng\n" +
                                      $"• Tỉ lệ đạt (Yield): {yield:F1}%\n" +
-                                     $"• Chiều luồng: Trái (Mới nhất: Nấc 1) ➔ Phải (Cũ dần: Nấc 20)\n" +
-                                     $"👉 Bấm vào từng nấc để xem lại ảnh kết quả OK/NG!";
+                                     $"{recentFlowDirectionLine}\n" +
+                                     $"👉 Bấm vào từng nấc để xem lại ảnh kết quả OK/NG!\n" +
+                                     $"👉 Click vào khối Recent (không bấm vào nấc) để đảo chiều hiển thị (cả 2 thanh queue)!";
 
             for (int i = 0; i < 20; i++)
             {

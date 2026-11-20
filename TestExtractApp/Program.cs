@@ -64,6 +64,12 @@ class Program
             return;
         }
 
+        if (args.Length > 0 && (args[0].Equals("queue-direction", StringComparison.OrdinalIgnoreCase) || args[0].Equals("queue-dir", StringComparison.OrdinalIgnoreCase) || args[0].Equals("reverse-queue", StringComparison.OrdinalIgnoreCase)))
+        {
+            ToolEditorQueueDirectionTests.RunAllTests();
+            return;
+        }
+
         if (args.Length > 0 && (args[0].Equals("column", StringComparison.OrdinalIgnoreCase) || args[0].Equals("column-resize", StringComparison.OrdinalIgnoreCase) || args[0].Equals("editor-column", StringComparison.OrdinalIgnoreCase)))
         {
             ToolEditorColumnResizeTests.RunAllTests();

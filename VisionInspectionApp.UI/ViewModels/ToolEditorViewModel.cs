@@ -370,6 +370,7 @@ namespace VisionInspectionApp.UI.ViewModels
             _plcManagerService.OnTagChanged += OnPlcTagChangedForTrigger;
             InitHandshakeUiMonitoring();
             InitHmiPanelMonitoring();
+            InitQueueDirectionSetting(_globalSettingsService);
             _autoSaveTimer = new DispatcherTimer
             {
                 Interval = TimeSpan.FromMilliseconds(400)

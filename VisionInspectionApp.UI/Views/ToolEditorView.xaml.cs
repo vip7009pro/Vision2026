@@ -209,15 +209,80 @@ public partial class ToolEditorView : UserControl
         }
     }
 
+    private static DependencyObject? GetSafeParent(DependencyObject current)
+    {
+        if (current is Visual || current is System.Windows.Media.Media3D.Visual3D)
+        {
+            var visualParent = VisualTreeHelper.GetParent(current);
+            if (visualParent != null)
+            {
+                return visualParent;
+            }
+        }
+
+        return LogicalTreeHelper.GetParent(current);
+    }
+
     private static bool IsElementOrDescendant(DependencyObject child, DependencyObject parent)
     {
         DependencyObject? current = child;
         while (current != null)
         {
             if (ReferenceEquals(current, parent)) return true;
-            current = VisualTreeHelper.GetParent(current) ?? LogicalTreeHelper.GetParent(current);
+            current = GetSafeParent(current);
         }
         return false;
+    }
+
+    /// <summary>
+    /// Kiểm tra xem điểm click có nằm trong vùng các nấc queue (16 nấc / 20 nấc) hoặc nút bấm con (vd: ✕ Live) hay không.
+    /// Click vào nấc hoặc nút con sẽ KHÔNG kích hoạt đảo chiều hiển thị 2 thanh queue.
+    /// </summary>
+    internal bool IsClickExcludedFromQueueBlockToggle(DependencyObject? source)
+    {
+        DependencyObject? current = source;
+        while (current != null)
+        {
+            if (current is ButtonBase)
+            {
+                return true;
+            }
+
+            if (ReferenceEquals(current, RecentPartsSlotsContainer) ||
+                ReferenceEquals(current, InspectionQueueSlotsContainer))
+            {
+                return true;
+            }
+
+            if (ReferenceEquals(current, RecentPartsQueueBlock) ||
+                ReferenceEquals(current, InspectionQueueBlock))
+            {
+                return false;
+            }
+
+            current = GetSafeParent(current);
+        }
+
+        return false;
+    }
+
+    private void QueueBlock_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ChangedButton != MouseButton.Left)
+        {
+            return;
+        }
+
+        if (IsClickExcludedFromQueueBlockToggle(e.OriginalSource as DependencyObject))
+        {
+            return;
+        }
+
+        if (DataContext is ToolEditorViewModel vm && vm.ToggleQueueDirectionCommand.CanExecute(null))
+        {
+            vm.ToggleQueueDirectionCommand.Execute(null);
+            e.Handled = true;
+        }
     }
 
     private void ComboBox_PreviewMouseDown(object sender, MouseButtonEventArgs e)

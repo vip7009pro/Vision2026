@@ -29,6 +29,9 @@ public sealed class GlobalAppSettings
     // Trạng thái hiển thị hàng HMI giám sát trên Tool Editor (nhớ khi mở lại app)
     public bool ToolEditorIsHmiVisible { get; set; } = false;
 
+    // Chiều hiển thị thanh Queue 16 nấc & Recent 20 nấc trên Tool Editor (false = Trái -> Phải, true = Phải -> Trái)
+    public bool ToolEditorQueueRightToLeft { get; set; } = false;
+
     // OTA Update Settings (Local Server / GitHub Releases)
     public OtaSettings Ota { get; set; } = new();
 }

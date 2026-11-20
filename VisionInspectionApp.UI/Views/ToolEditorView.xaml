@@ -49,7 +49,7 @@
             <Setter Property="Margin" Value="0,1,0,0" />
         </Style>
 
-        <!-- ===== Style cho 20 nấc sản phẩm gần nhất (OK/NG) — đánh số 1..20 từ trái sang phải, bấm xem lại ảnh ===== -->
+        <!-- ===== Style cho 20 nấc sản phẩm gần nhất (OK/NG) — đánh số 1..20 (theo chiều hiển thị), bấm xem lại ảnh ===== -->
         <Style x:Key="RecentSlotButtonStyle" TargetType="Button">
             <Setter Property="Width" Value="18" />
             <Setter Property="Height" Value="20" />
@@ -60,6 +60,7 @@
             <Setter Property="FontSize" Value="9.5" />
             <Setter Property="FontWeight" Value="Bold" />
             <Setter Property="Foreground" Value="White" />
+            <Setter Property="FlowDirection" Value="LeftToRight" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
@@ -188,16 +189,28 @@
             </Border>
 
             <!-- 3. Recent 20 Parts Stepped Bar (Right-Aligned, OK/NG Inspection History) -->
-            <Border DockPanel.Dock="Right" Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{Binding RecentPartsBorderBrush}" BorderThickness="1" CornerRadius="8" Padding="8,4" VerticalAlignment="Center" Margin="6,0,0,0" ToolTip="{Binding RecentPartsToolTipText}">
+            <Border x:Name="RecentPartsQueueBlock"
+                    DockPanel.Dock="Right"
+                    Background="{DynamicResource PanelBackgroundBrush}"
+                    BorderBrush="{Binding RecentPartsBorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Padding="8,4"
+                    VerticalAlignment="Center"
+                    Margin="6,0,0,0"
+                    Cursor="Hand"
+                    MouseLeftButtonDown="QueueBlock_MouseLeftButtonDown"
+                    ToolTip="{Binding RecentPartsToolTipText}">
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock Text="🎯" FontSize="12" VerticalAlignment="Center" Margin="0,0,4,0"/>
                     <TextBlock Text="Recent:" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" Margin="0,0,4,0"/>
-                    <TextBlock Text="{Binding RecentPartsStatusText}" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                    <TextBlock Text="{Binding RecentPartsStatusText}" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                    <TextBlock x:Name="TxtRecentQueueDirectionArrow" Text="{Binding QueueDirectionArrowText}" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" Margin="0,0,6,0"/>
 
                     <!-- Discrete Stepped Slots (20 items, Clickable to view OK/NG images) -->
-                    <Border Background="#12000000" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="3,2" VerticalAlignment="Center">
-                        <StackPanel Orientation="Horizontal">
-                            <!-- 20 Clickable Stepped Slots (1..20 left-to-right, 18x20px) -->
+                    <Border x:Name="RecentPartsSlotsContainer" Cursor="Arrow" Background="#12000000" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="3,2" VerticalAlignment="Center">
+                        <StackPanel x:Name="RecentPartsSlotsPanel" Orientation="Horizontal" FlowDirection="{Binding QueueFlowDirection}">
+                            <!-- 20 Clickable Stepped Slots (1..20, đảo chiều theo QueueFlowDirection, 18x20px) -->
                             <Button Content="1" Style="{StaticResource RecentSlotButtonStyle}" Background="{Binding RecentPartSlot0Bg}" BorderBrush="{Binding RecentPartSlot0Border}" ToolTip="{Binding RecentPartSlot0ToolTip}" Command="{Binding SelectRecentPartSlotCommand}" CommandParameter="0"/>
                             <Button Content="2" Style="{StaticResource RecentSlotButtonStyle}" Background="{Binding RecentPartSlot1Bg}" BorderBrush="{Binding RecentPartSlot1Border}" ToolTip="{Binding RecentPartSlot1ToolTip}" Command="{Binding SelectRecentPartSlotCommand}" CommandParameter="1"/>
                             <Button Content="3" Style="{StaticResource RecentSlotButtonStyle}" Background="{Binding RecentPartSlot2Bg}" BorderBrush="{Binding RecentPartSlot2Border}" ToolTip="{Binding RecentPartSlot2ToolTip}" Command="{Binding SelectRecentPartSlotCommand}" CommandParameter="2"/>
@@ -222,7 +235,8 @@
                     </Border>
 
                     <!-- Nút quay lại Live khi đang xem lại ảnh lịch sử -->
-                    <Button Content="✕ Live"
+                    <Button x:Name="BtnExitRecentPartView"
+                            Content="✕ Live"
                             Command="{Binding ExitRecentPartViewCommand}"
                             Visibility="{Binding IsViewingHistoricalRecentPart, Converter={StaticResource BoolToVis}}"
                             Margin="6,0,0,0" Padding="6,1" Height="20" FontSize="10.5" FontWeight="Bold"
@@ -232,15 +246,27 @@
             </Border>
 
             <!-- 4. Queue Visualization Status Bar (Right-Aligned, Stepped Bar 16 Segments) -->
-            <Border DockPanel.Dock="Right" Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{Binding QueueBorderBrush}" BorderThickness="1" CornerRadius="8" Padding="8,4" VerticalAlignment="Center" Margin="6,0,0,0" ToolTip="{Binding QueueToolTipText}">
+            <Border x:Name="InspectionQueueBlock"
+                    DockPanel.Dock="Right"
+                    Background="{DynamicResource PanelBackgroundBrush}"
+                    BorderBrush="{Binding QueueBorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Padding="8,4"
+                    VerticalAlignment="Center"
+                    Margin="6,0,0,0"
+                    Cursor="Hand"
+                    MouseLeftButtonDown="QueueBlock_MouseLeftButtonDown"
+                    ToolTip="{Binding QueueToolTipText}">
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock Text="📦" FontSize="12" VerticalAlignment="Center" Margin="0,0,4,0"/>
                     <TextBlock Text="Queue:" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" Margin="0,0,4,0"/>
-                    <TextBlock Text="{Binding QueueStatusText}" FontWeight="Bold" FontSize="11.5" Foreground="{Binding QueueFillBrush}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                    <TextBlock Text="{Binding QueueStatusText}" FontWeight="Bold" FontSize="11.5" Foreground="{Binding QueueFillBrush}" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                    <TextBlock x:Name="TxtInspectionQueueDirectionArrow" Text="{Binding QueueDirectionArrowText}" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" Margin="0,0,6,0"/>
 
                     <!-- Discrete Stepped Slots (16 items) -->
-                    <Border Background="#12000000" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="2,2" VerticalAlignment="Center">
-                        <StackPanel Orientation="Horizontal">
+                    <Border x:Name="InspectionQueueSlotsContainer" Cursor="Arrow" Background="#12000000" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="2,2" VerticalAlignment="Center">
+                        <StackPanel x:Name="InspectionQueueSlotsPanel" Orientation="Horizontal" FlowDirection="{Binding QueueFlowDirection}">
                             <!-- Slot 0 -->
                             <Border Width="6" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1">
                                 <Border.Style>
