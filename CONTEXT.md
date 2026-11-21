@@ -1,4 +1,4 @@
-﻿# Vision Inspection App — Context & State
+# Vision Inspection App — Context & State
 
 ## 1. Giới thiệu dự án
 Ứng dụng kiểm tra thị giác công nghiệp (.NET 8 WPF, MVVM, OpenCvSharp4, Docnet.Core PDFium, Hikrobot MVS SDK, Industrial PLC Mitsubishi FX5U/Siemens/Modbus & Database MES/ERP).
@@ -32,6 +32,10 @@ Hỗ trợ Camera GigE/USB3/USB/RTSP/Android Pro Mode Native Server, nạp ảnh
      - `UpdateQueueVisuals` và `UpdateRecentPartsVisuals` được bọc bởi cờ `_isQueueVisualUpdatePending` / `_isRecentPartsVisualUpdatePending` với `DispatcherPriority.Background`, loại bỏ hoàn toàn hiện tượng bão Dispatcher queue.
 
 ## 4. Các sự kiện & thay đổi gần đây
+- **Task 452**: Xây dựng bộ chương trình Ladder PLC Mitsubishi FX5U hoàn chỉnh không dùng Encoder (FIFO vòng 100 phần tử theo thứ tự hàng, chống trượt hàng & chống lệch queue WPF) chuẩn import GX Works3 tại `PLC_Programs/PLCProgram/`:
+  - Chia 7 khối POU CSV độc lập (`01_POU_INIT_CONFIG.csv` .. `07_POU_PRODUCTION_COUNTERS.csv`), 1 file Device Comment chung (`DeviceComment_Common.csv`) và tài liệu hướng dẫn (`README_Import_And_Logic.md`).
+  - Khớp phần cứng cố định thực tế: `X0` Start, `X1` Stop, `X4` Reset, `X5` Sensor Camera, `Y0` Băng tải, `Y1` Trigger Camera, `Y2` Đèn xanh (Running), `Y3` Đèn vàng (Standby), `Y4` Đèn đỏ (Lỗi/NG), `Y5` Còi (beep đúng `0.25s` qua `OUTH T16 K25` khi phát sinh lỗi `LDP M14` rồi tự tắt).
+  - Cơ chế chống trượt & chống lệch queue: nguyên tử 1-1 (`1 xung Y1 = 1 ảnh WPF = 1 ô FIFO`), lọc chống rung mép cảm biến `X5` 2 tầng (`T10` ON / `T11` OFF), cổng Trigger `M13` + cửa sổ quán tính `M12`/`T12`, tách 3 con trỏ `HEAD`/`RES`/`TAIL` cho phép `05_POU_VISION_RESULT_RX` nhận nốt 1-2 ảnh tồn pipeline WPF kể cả khi `Y0=OFF` mà không dịch vị trí băng tải, chặn kết quả thừa `M23`/`D1112`, đồng bộ Reset Queue 2 chiều qua `M106`.
 - **Task 451**: Thêm cài đặt đảo chiều hiển thị cả 2 thanh queue (Queue 16 nấc & Recent 20 nấc) từ `Trái ➔ Phải` sang `Phải ➔ Trái` trong Tab Tool Editor bằng cách click vào một trong 2 khối queue (loại trừ click vào nấc / nút con):
   - [`GlobalAppSettings.cs`](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Models/GlobalAppSettings.cs): Thêm thuộc tính lưu bền vững `ToolEditorQueueRightToLeft` (mặc định `false` = Trái ➔ Phải).
   - [`ToolEditorViewModel.QueueDirection.cs`](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.QueueDirection.cs), [`ToolEditorViewModel.cs`](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.cs) & [`ToolEditorViewModel.Engine.cs`](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.Engine.cs): Thêm `IsQueueRightToLeft`, `QueueFlowDirection`, `QueueDirectionArrowText` (`→`/`←`), `QueueDirectionDisplayText`, `ToggleQueueDirectionCommand`, tự động nạp/lưu qua `GlobalAppSettingsService`, và đồng bộ tooltip của cả 2 thanh queue theo chiều hiện tại.
