@@ -1,0 +1,1274 @@
+{
+  "meta": {
+    "format": "vision2026-license-server-backup",
+    "version": 1,
+    "exportedAt": "2026-11-21T02:02:02.467Z",
+    "counts": {
+      "licenses": 7,
+      "machines": 7,
+      "clientRegistrations": 6,
+      "auditLogs": 117
+    },
+    "source": "vision2026.ddns.net:3006"
+  },
+  "licenses": [
+    {
+      "id": "8998787e-b12e-4fa3-89bd-dcdc095cade6",
+      "license_key": "okema",
+      "customer_name": "hung nguyen",
+      "edition": "Enterprise",
+      "license_type": "Perpetual",
+      "max_machines": 5,
+      "allowed_features": "[\"InspectionEngine\",\"HighSpeedCamera\",\"PlcBridge\",\"OqcScanner\",\"AI_OCR_Industrial\",\"DatabaseIntegration\"]",
+      "max_cameras": 4,
+      "issued_at": "2026-09-14T15:22:19.266Z",
+      "expires_at": null,
+      "status": "Active",
+      "notes": "Created via Offline Signing"
+    },
+    {
+      "id": "776c8819-7249-42a7-a93a-af577e3db77a",
+      "license_key": "V26-ENT-YR4P-XSBG-LSE8",
+      "customer_name": "OQC VISION",
+      "edition": "Enterprise",
+      "license_type": "Perpetual",
+      "max_machines": 1,
+      "allowed_features": "[\"InspectionEngine\",\"HighSpeedCamera\",\"PlcBridge\",\"OqcScanner\",\"AI_OCR_Industrial\",\"LightingController\",\"DatabaseIntegration\",\"MultiCameraSupport\",\"SurfaceCompare\",\"ContourCompare\"]",
+      "max_cameras": 4,
+      "issued_at": "2026-09-15T01:46:08.701Z",
+      "expires_at": null,
+      "status": "Active",
+      "notes": null
+    },
+    {
+      "id": "69c05ecc-dbfc-4e14-bf5c-3ecc4dfbbe87",
+      "license_key": "V26-ENT-6M7J-M2DE-BWH2",
+      "customer_name": "Nhà Máy (HUEQC)",
+      "edition": "Enterprise",
+      "license_type": "Perpetual",
+      "max_machines": 1,
+      "allowed_features": "[\"InspectionEngine\",\"HighSpeedCamera\",\"PlcBridge\",\"OqcScanner\",\"AI_OCR_Industrial\",\"LightingController\",\"DatabaseIntegration\",\"MultiCameraSupport\",\"SurfaceCompare\",\"ContourCompare\"]",
+      "max_cameras": 4,
+      "issued_at": "2026-09-19T02:47:37.357Z",
+      "expires_at": null,
+      "status": "Active",
+      "notes": "Tự động phê duyệt từ máy trạm HUEQC"
+    },
+    {
+      "id": "82d40aad-e98b-41a8-a3fc-7f53ba25bd66",
+      "license_key": "V26-ENT-Q2Q4-AVE7-2VFD",
+      "customer_name": "Nhà Máy (THANH-HA)",
+      "edition": "Enterprise",
+      "license_type": "Perpetual",
+      "max_machines": 1,
+      "allowed_features": "[\"InspectionEngine\",\"HighSpeedCamera\",\"PlcBridge\",\"OqcScanner\",\"AI_OCR_Industrial\",\"LightingController\",\"DatabaseIntegration\",\"MultiCameraSupport\",\"SurfaceCompare\",\"ContourCompare\"]",
+      "max_cameras": 4,
+      "issued_at": "2026-09-22T07:45:03.581Z",
+      "expires_at": null,
+      "status": "Active",
+      "notes": "Tự động phê duyệt từ máy trạm THANH-HA"
+    },
+    {
+      "id": "badfc0c8-4f36-4f27-b9bf-7b24c81e1e77",
+      "license_key": "V26-ENT-9Y7Q-4DQQ-Q4EB",
+      "customer_name": "Qua tang cuoc song",
+      "edition": "Enterprise",
+      "license_type": "Perpetual",
+      "max_machines": 10,
+      "allowed_features": "[\"InspectionEngine\",\"HighSpeedCamera\",\"PlcBridge\",\"OqcScanner\",\"AI_OCR_Industrial\",\"LightingController\",\"DatabaseIntegration\",\"MultiCameraSupport\",\"SurfaceCompare\",\"ContourCompare\"]",
+      "max_cameras": 4,
+      "issued_at": "2026-09-22T07:53:47.882Z",
+      "expires_at": null,
+      "status": "Active",
+      "notes": null
+    },
+    {
+      "id": "95548370-a978-4307-917a-f2ccf676274a",
+      "license_key": "V26-ENT-J38Y-JU6C-LD83",
+      "customer_name": "Nhà Máy (THIENTHAI)",
+      "edition": "Enterprise",
+      "license_type": "Perpetual",
+      "max_machines": 1,
+      "allowed_features": "[\"InspectionEngine\",\"HighSpeedCamera\",\"PlcBridge\",\"OqcScanner\",\"AI_OCR_Industrial\",\"LightingController\",\"DatabaseIntegration\",\"MultiCameraSupport\",\"SurfaceCompare\",\"ContourCompare\"]",
+      "max_cameras": 4,
+      "issued_at": "2026-10-01T01:31:35.237Z",
+      "expires_at": null,
+      "status": "Active",
+      "notes": "Tự động phê duyệt từ máy trạm THIENTHAI"
+    },
+    {
+      "id": "f1cab737-566d-4f51-a704-6745c0020b65",
+      "license_key": "V26-ENT-6QW7-45DN-6GCJ",
+      "customer_name": "Nhà Máy (DESKTOP-NIQVQIR)",
+      "edition": "Enterprise",
+      "license_type": "Perpetual",
+      "max_machines": 1,
+      "allowed_features": "[\"InspectionEngine\",\"HighSpeedCamera\",\"PlcBridge\",\"OqcScanner\",\"AI_OCR_Industrial\",\"LightingController\",\"DatabaseIntegration\",\"MultiCameraSupport\",\"SurfaceCompare\",\"ContourCompare\"]",
+      "max_cameras": 4,
+      "issued_at": "2026-11-06T02:34:39.219Z",
+      "expires_at": null,
+      "status": "Active",
+      "notes": "Tự động phê duyệt từ máy trạm DESKTOP-NIQVQIR"
+    }
+  ],
+  "machines": [
+    {
+      "id": "ece7dd6e-1a79-445d-9b6c-73a9a436f17e",
+      "license_id": "8998787e-b12e-4fa3-89bd-dcdc095cade6",
+      "machine_fingerprint": "3D4036C61559B5008D785696B944515946A3C82237CDED733A40C57DA1237C66",
+      "machine_name": "LAPTOP-U5NQHA88",
+      "os_version": "Microsoft Windows NT 10.0.26200.0",
+      "app_version": "2.1.0",
+      "local_ip": "OFFLINE-OT-NETWORK",
+      "public_ip": "OFFLINE",
+      "activated_at": "2026-09-14T15:22:19.406Z",
+      "last_heartbeat": "2026-09-14T15:22:19.406Z",
+      "is_revoked": 0,
+      "revoked_reason": null,
+      "revoked_at": null,
+      "is_suspended": 0
+    },
+    {
+      "id": "1280c7a4-c7bf-464c-81bb-c0a75b38a669",
+      "license_id": "776c8819-7249-42a7-a93a-af577e3db77a",
+      "machine_fingerprint": "B6015E66CD8E370C9C975804ECB51FCF669FF5755A6BDB17E3084CDFEA015356",
+      "machine_name": "DESKTOP-NIQVQIR",
+      "os_version": "Microsoft Windows NT 10.0.19044.0",
+      "app_version": "2.1.0",
+      "local_ip": "127.0.0.1",
+      "public_ip": "14.160.33.94",
+      "activated_at": "2026-09-15T01:46:23.966Z",
+      "last_heartbeat": "2026-11-21T01:39:31.949Z",
+      "is_revoked": 0,
+      "revoked_reason": null,
+      "revoked_at": null,
+      "is_suspended": 0
+    },
+    {
+      "id": "3840c0ee-a320-4aac-9f67-98ec473826c3",
+      "license_id": "8998787e-b12e-4fa3-89bd-dcdc095cade6",
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "machine_name": "DESKTOP-9QHRR0U",
+      "os_version": "Microsoft Windows NT 10.0.26200.0",
+      "app_version": "2.1.0",
+      "local_ip": "127.0.0.1",
+      "public_ip": "14.160.33.94",
+      "activated_at": "2026-09-15T04:30:43.323Z",
+      "last_heartbeat": "2026-11-21T01:47:26.537Z",
+      "is_revoked": 0,
+      "revoked_reason": null,
+      "revoked_at": null,
+      "is_suspended": 0
+    },
+    {
+      "id": "b4984617-222a-498f-bc45-9edd491ee256",
+      "license_id": "69c05ecc-dbfc-4e14-bf5c-3ecc4dfbbe87",
+      "machine_fingerprint": "B08BB13F5203A5AA4CBABA62733F89D34C0BC935ABE716D96FBB9BB48086CC0A",
+      "machine_name": "HUEQC",
+      "os_version": "Microsoft Windows NT 10.0.19044.0",
+      "app_version": "2.1.0",
+      "local_ip": "127.0.0.1",
+      "public_ip": "14.160.33.94",
+      "activated_at": "2026-09-19T02:47:37.570Z",
+      "last_heartbeat": "2026-11-18T09:40:15.380Z",
+      "is_revoked": 0,
+      "revoked_reason": null,
+      "revoked_at": null,
+      "is_suspended": 0
+    },
+    {
+      "id": "bf557e3a-02c6-4ed5-aafe-cb779d518b9e",
+      "license_id": "82d40aad-e98b-41a8-a3fc-7f53ba25bd66",
+      "machine_fingerprint": "0182492F3087D222590D391902DD61862884CB0ADE282C08ED002ACDEC62C7DE",
+      "machine_name": "THANH-HA",
+      "os_version": "Microsoft Windows NT 10.0.19044.0",
+      "app_version": "2.1.0",
+      "local_ip": "127.0.0.1",
+      "public_ip": "192.168.1.42",
+      "activated_at": "2026-09-22T07:45:03.787Z",
+      "last_heartbeat": "2026-09-23T07:13:16.065Z",
+      "is_revoked": 0,
+      "revoked_reason": null,
+      "revoked_at": null,
+      "is_suspended": 0
+    },
+    {
+      "id": "b4e20977-f532-4021-862a-61d492d0eb3b",
+      "license_id": "95548370-a978-4307-917a-f2ccf676274a",
+      "machine_fingerprint": "E0807EF0A03224816B943D63460699F32FEAD72D84E6088A231E51E4C5D1C144",
+      "machine_name": "THIENTHAI",
+      "os_version": "Microsoft Windows NT 10.0.26200.0",
+      "app_version": "2.1.0",
+      "local_ip": "127.0.0.1",
+      "public_ip": "14.231.116.0",
+      "activated_at": "2026-10-01T01:31:35.538Z",
+      "last_heartbeat": "2026-10-01T10:04:43.272Z",
+      "is_revoked": 0,
+      "revoked_reason": null,
+      "revoked_at": null,
+      "is_suspended": 0
+    },
+    {
+      "id": "a49066a2-967e-4940-9847-e783040640f9",
+      "license_id": "f1cab737-566d-4f51-a704-6745c0020b65",
+      "machine_fingerprint": "B3EAF3AB3481DB84C53AC7E76CA58B1AE1733CA0AA505853FCBAD5FA39289EC7",
+      "machine_name": "DESKTOP-NIQVQIR",
+      "os_version": "Microsoft Windows NT 10.0.19044.0",
+      "app_version": "2.1.0",
+      "local_ip": "127.0.0.1",
+      "public_ip": "14.160.33.94",
+      "activated_at": "2026-11-06T02:34:39.771Z",
+      "last_heartbeat": "2026-11-06T02:34:39.771Z",
+      "is_revoked": 0,
+      "revoked_reason": null,
+      "revoked_at": null,
+      "is_suspended": 0
+    }
+  ],
+  "clientRegistrations": [
+    {
+      "id": "8c43e187-22ed-498f-8f1b-cf5baabeb733",
+      "machine_fingerprint": "B6015E66CD8E370C9C975804ECB51FCF669FF5755A6BDB17E3084CDFEA015356",
+      "formatted_machine_code": "V26-B601-5E66-CD8E-370C",
+      "machine_name": "DESKTOP-NIQVQIR",
+      "os_version": "Microsoft Windows NT 10.0.19044.0",
+      "app_version": "2.1.0",
+      "local_ip": "127.0.0.1",
+      "public_ip": "14.160.33.94",
+      "status": "Approved",
+      "assigned_license_id": "776c8819-7249-42a7-a93a-af577e3db77a",
+      "signed_package": "{\"payload\":{\"licenseId\":\"776c8819-7249-42a7-a93a-af577e3db77a\",\"licenseKey\":\"V26-ENT-YR4P-XSBG-LSE8\",\"customerName\":\"OQC VISION\",\"edition\":\"Enterprise\",\"machineFingerprint\":\"B6015E66CD8E370C9C975804ECB51FCF669FF5755A6BDB17E3084CDFEA015356\",\"machineName\":\"DESKTOP-NIQVQIR\",\"licenseType\":\"Perpetual\",\"issuedDateUtc\":\"2026-09-15T01:46:08.701Z\",\"expirationDateUtc\":null,\"allowedFeatures\":[\"InspectionEngine\",\"HighSpeedCamera\",\"PlcBridge\",\"OqcScanner\",\"AI_OCR_Industrial\",\"LightingController\",\"DatabaseIntegration\",\"MultiCameraSupport\",\"SurfaceCompare\",\"ContourCompare\"],\"maxCameraCount\":4,\"heartbeatIntervalHours\":1,\"gracePeriodDays\":1},\"signature\":\"RplKdn+gkUtYmyJNN3W446Ngc5XflfP6luInm2F/6NieP25U9GQu+9S9lOtmiM2eEWbwnvQB73iy8eKeBw1AgzGkiCmuzW/ltHQq2Iwcgq92a+V93FkhMCzFg2ilNtXe600sOWUoTyYqZ/4JCUBOf12Tk9iRr9UboelmE5jw2w1PqPZCeVXxFFsdXaKfT48ivivvKLgSBC1JCZMrdyt7xns4a7ESc0MuPL5LGKoWpGsNMl5u3FMnXoDy72hEWVkTEaCbu2SKEWkPp2AIjJ9ut5Qz9uy5aVQkjCo6G1AdHffKgKRSbWrfOl03VyKyYpiyZa+GRKQrrY4RGWkPVtWOEA==\"}",
+      "registered_at": "2026-09-15T01:45:15.446Z",
+      "last_seen_at": "2026-09-18T01:50:17.755Z",
+      "approved_at": "2026-09-15T01:46:23.845Z",
+      "notes": null
+    },
+    {
+      "id": "83a2bc3d-2b7e-474b-a5d8-ed9461c7f813",
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "formatted_machine_code": "V26-B629-B589-A317-229E",
+      "machine_name": "DESKTOP-9QHRR0U",
+      "os_version": "Microsoft Windows NT 10.0.26300.0",
+      "app_version": "2.1.0",
+      "local_ip": "127.0.0.1",
+      "public_ip": "14.160.33.94",
+      "status": "Approved",
+      "assigned_license_id": "8998787e-b12e-4fa3-89bd-dcdc095cade6",
+      "signed_package": "{\"payload\":{\"licenseId\":\"8998787e-b12e-4fa3-89bd-dcdc095cade6\",\"licenseKey\":\"okema\",\"customerName\":\"hung nguyen\",\"edition\":\"Enterprise\",\"machineFingerprint\":\"B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0\",\"machineName\":\"DESKTOP-9QHRR0U\",\"licenseType\":\"Perpetual\",\"issuedDateUtc\":\"2026-09-14T15:22:19.266Z\",\"expirationDateUtc\":null,\"allowedFeatures\":[\"InspectionEngine\",\"HighSpeedCamera\",\"PlcBridge\",\"OqcScanner\",\"AI_OCR_Industrial\",\"DatabaseIntegration\"],\"maxCameraCount\":4,\"heartbeatIntervalHours\":1,\"gracePeriodDays\":1},\"signature\":\"O7rsynMoo+AmD27ubM3znnhd7dumqEU4+YqN8RPiwXwkJCcnXcBwCuIFBcdH45l/2kJ3SiZHQyPy17yv/9ChPEG1a3QDcNR9GeiK18oeAOH5sKktEZBjjoJ5JwN6yaNrejRNLy5V9UXFsYaGkr/Br7y7yCio6v6KxfG5Jd/acARiOjUku6rZIvszwIu2OhNdG/lJ3Boz95ao9NoTsSdsUpLxFJTgomHLuU3H6zQ3/aRpsXo2nqnyrCkICFr69qicMwYSkrggfTnlF85pLz4sW7VQ35UXSmfF1DhLN/6n2vq/GFIjWicnO1mig7DlZll/dZA90p+sLkuaVdcXrXrPTA==\"}",
+      "registered_at": "2026-09-15T04:30:10.678Z",
+      "last_seen_at": "2026-11-09T01:51:56.870Z",
+      "approved_at": "2026-09-15T04:30:43.186Z",
+      "notes": null
+    },
+    {
+      "id": "04f1aa83-c768-430b-9169-c23f2ec6303c",
+      "machine_fingerprint": "B08BB13F5203A5AA4CBABA62733F89D34C0BC935ABE716D96FBB9BB48086CC0A",
+      "formatted_machine_code": "V26-B08B-B13F-5203-A5AA",
+      "machine_name": "HUEQC",
+      "os_version": "Microsoft Windows NT 10.0.19044.0",
+      "app_version": "2.1.0",
+      "local_ip": "127.0.0.1",
+      "public_ip": "192.168.1.124",
+      "status": "Approved",
+      "assigned_license_id": "69c05ecc-dbfc-4e14-bf5c-3ecc4dfbbe87",
+      "signed_package": "{\"payload\":{\"licenseId\":\"69c05ecc-dbfc-4e14-bf5c-3ecc4dfbbe87\",\"licenseKey\":\"V26-ENT-6M7J-M2DE-BWH2\",\"customerName\":\"Nhà Máy (HUEQC)\",\"edition\":\"Enterprise\",\"machineFingerprint\":\"B08BB13F5203A5AA4CBABA62733F89D34C0BC935ABE716D96FBB9BB48086CC0A\",\"machineName\":\"HUEQC\",\"licenseType\":\"Perpetual\",\"issuedDateUtc\":\"2026-09-19T02:47:37.357Z\",\"expirationDateUtc\":null,\"allowedFeatures\":[\"InspectionEngine\",\"HighSpeedCamera\",\"PlcBridge\",\"OqcScanner\",\"AI_OCR_Industrial\",\"LightingController\",\"DatabaseIntegration\",\"MultiCameraSupport\",\"SurfaceCompare\",\"ContourCompare\"],\"maxCameraCount\":4,\"heartbeatIntervalHours\":1,\"gracePeriodDays\":1},\"signature\":\"e+idvoLNnxDbfa5YZlfHwjqwkAKMsKdjoHeF5qX5+ulsmsvf86ceCqez9AKpQa6u3TNAN5L5jtO+ORjBUHKFBB2vCbC8Wy8TnztlEnFNhYMoqeHh+oQCFmrdPfjVLw2oYndQHXw/Kfojyem/4C+hgqj/pH0NBwt0b8+umU8I+niNJvpTjfTjCHZ/46wZcKnSmhEF1f0GT3TYcUFnY8+LpWPaMVtERONU2sqctvcOlNaQ6FN/jkjY0Jwy67bzQnvX5+9JwfqWvfmWvv6fX7Wv2CuZcNk9rm7TVAyT/XJ4DK7yXq/SqmjuPT+UtnMInXP9iiVP9QdWIepo5q5QnH68kg==\"}",
+      "registered_at": "2026-09-19T02:46:53.809Z",
+      "last_seen_at": "2026-09-19T02:47:44.167Z",
+      "approved_at": "2026-09-19T02:47:37.357Z",
+      "notes": null
+    },
+    {
+      "id": "836bef17-e796-4760-b1b4-6865d78ed55d",
+      "machine_fingerprint": "0182492F3087D222590D391902DD61862884CB0ADE282C08ED002ACDEC62C7DE",
+      "formatted_machine_code": "V26-0182-492F-3087-D222",
+      "machine_name": "THANH-HA",
+      "os_version": "Microsoft Windows NT 10.0.19044.0",
+      "app_version": "2.1.0",
+      "local_ip": "127.0.0.1",
+      "public_ip": "192.168.1.42",
+      "status": "Approved",
+      "assigned_license_id": "82d40aad-e98b-41a8-a3fc-7f53ba25bd66",
+      "signed_package": "{\"payload\":{\"licenseId\":\"82d40aad-e98b-41a8-a3fc-7f53ba25bd66\",\"licenseKey\":\"V26-ENT-Q2Q4-AVE7-2VFD\",\"customerName\":\"Nhà Máy (THANH-HA)\",\"edition\":\"Enterprise\",\"machineFingerprint\":\"0182492F3087D222590D391902DD61862884CB0ADE282C08ED002ACDEC62C7DE\",\"machineName\":\"THANH-HA\",\"licenseType\":\"Perpetual\",\"issuedDateUtc\":\"2026-09-22T07:45:03.581Z\",\"expirationDateUtc\":null,\"allowedFeatures\":[\"InspectionEngine\",\"HighSpeedCamera\",\"PlcBridge\",\"OqcScanner\",\"AI_OCR_Industrial\",\"LightingController\",\"DatabaseIntegration\",\"MultiCameraSupport\",\"SurfaceCompare\",\"ContourCompare\"],\"maxCameraCount\":4,\"heartbeatIntervalHours\":1,\"gracePeriodDays\":1},\"signature\":\"EKXRUshIw15QLFMgrQnDfjRDfe+29cC/ZjlztXZVy9E25edkktBlDQoX8NoWclQDUVNc71KIqHUiNlcnJvRLp8/uFLPKjxgkRhStZFeoa2vWbxd+L0Z2G3J9OjXFsw7n0G3GpHoTm+v8A1nDDpffifqT0K4/h9ZA+vjaW3oCwyOMY876j8Z/VQG0+2qpwZbjqL+/L/Qkp/bEW5jL1Ezmk7H0BqbqLFV0Bon+7ncXkf1bYV0w3uE6qxnT7i/kcr3b+uS6k4BzpDfV8EG3iLX2xTPsVoQ4SmWuSIW/MtsbTWt7ODsFFNkIdcb/4UbultG+px63Y1X+TkZzpUxMvlHVTQ==\"}",
+      "registered_at": "2026-09-22T07:44:37.421Z",
+      "last_seen_at": "2026-09-22T07:45:07.267Z",
+      "approved_at": "2026-09-22T07:45:03.581Z",
+      "notes": null
+    },
+    {
+      "id": "f0f006b5-8b70-4ec8-89e3-488e2ff7d09c",
+      "machine_fingerprint": "E0807EF0A03224816B943D63460699F32FEAD72D84E6088A231E51E4C5D1C144",
+      "formatted_machine_code": "V26-E080-7EF0-A032-2481",
+      "machine_name": "THIENTHAI",
+      "os_version": "Microsoft Windows NT 10.0.26200.0",
+      "app_version": "2.1.0",
+      "local_ip": "127.0.0.1",
+      "public_ip": "14.231.116.0",
+      "status": "Approved",
+      "assigned_license_id": "95548370-a978-4307-917a-f2ccf676274a",
+      "signed_package": "{\"payload\":{\"licenseId\":\"95548370-a978-4307-917a-f2ccf676274a\",\"licenseKey\":\"V26-ENT-J38Y-JU6C-LD83\",\"customerName\":\"Nhà Máy (THIENTHAI)\",\"edition\":\"Enterprise\",\"machineFingerprint\":\"E0807EF0A03224816B943D63460699F32FEAD72D84E6088A231E51E4C5D1C144\",\"machineName\":\"THIENTHAI\",\"licenseType\":\"Perpetual\",\"issuedDateUtc\":\"2026-10-01T01:31:35.237Z\",\"expirationDateUtc\":null,\"allowedFeatures\":[\"InspectionEngine\",\"HighSpeedCamera\",\"PlcBridge\",\"OqcScanner\",\"AI_OCR_Industrial\",\"LightingController\",\"DatabaseIntegration\",\"MultiCameraSupport\",\"SurfaceCompare\",\"ContourCompare\"],\"maxCameraCount\":4,\"heartbeatIntervalHours\":1,\"gracePeriodDays\":1},\"signature\":\"Q6jB6UFCxbi4x+9iNw6NSybt5akyx4mlVyyNPX6Ff5i2RMsAZgKqNMc3RSyRznJzmupmsRgndUzFzd42YBfJPWTm1pr0G5KJGkfcLnLyXWjja7ftxqNpbuFEjpToGhnkdOPSVOSMg9LfEdGEsFjULOMOYhqEPDISzEchr9KUcIWvfV6JMZK1M+eVbJkAmY+5zEEfMWIuCmx8digiszClEsVdc+c6tdEkjD5NtZ2SngBT8szifzOVcE0+GzHEue0ApBLyMLUq5KhgKY3O5lOEe7eYdOP7dAyYR1XU+s7xsdHU7y3ja12wDpfRbDSGB3ELMJbaN8tQKkpaSKjO6xUSdA==\"}",
+      "registered_at": "2026-10-01T01:31:07.979Z",
+      "last_seen_at": "2026-10-01T01:31:39.427Z",
+      "approved_at": "2026-10-01T01:31:35.237Z",
+      "notes": null
+    },
+    {
+      "id": "1448f154-3c78-431f-8bdd-f21743e228a1",
+      "machine_fingerprint": "B3EAF3AB3481DB84C53AC7E76CA58B1AE1733CA0AA505853FCBAD5FA39289EC7",
+      "formatted_machine_code": "V26-B3EA-F3AB-3481-DB84",
+      "machine_name": "DESKTOP-NIQVQIR",
+      "os_version": "Microsoft Windows NT 10.0.19044.0",
+      "app_version": "2.1.0",
+      "local_ip": "127.0.0.1",
+      "public_ip": "14.160.33.94",
+      "status": "Approved",
+      "assigned_license_id": "f1cab737-566d-4f51-a704-6745c0020b65",
+      "signed_package": "{\"payload\":{\"licenseId\":\"f1cab737-566d-4f51-a704-6745c0020b65\",\"licenseKey\":\"V26-ENT-6QW7-45DN-6GCJ\",\"customerName\":\"Nhà Máy (DESKTOP-NIQVQIR)\",\"edition\":\"Enterprise\",\"machineFingerprint\":\"B3EAF3AB3481DB84C53AC7E76CA58B1AE1733CA0AA505853FCBAD5FA39289EC7\",\"machineName\":\"DESKTOP-NIQVQIR\",\"licenseType\":\"Perpetual\",\"issuedDateUtc\":\"2026-11-06T02:34:39.219Z\",\"expirationDateUtc\":null,\"allowedFeatures\":[\"InspectionEngine\",\"HighSpeedCamera\",\"PlcBridge\",\"OqcScanner\",\"AI_OCR_Industrial\",\"LightingController\",\"DatabaseIntegration\",\"MultiCameraSupport\",\"SurfaceCompare\",\"ContourCompare\"],\"maxCameraCount\":4,\"heartbeatIntervalHours\":1,\"gracePeriodDays\":1},\"signature\":\"JQ4gxPTzMgU8ecCdMUXOO6ORBH8vxaj5aqqOfjxhRaLpIVRPF+am9sawFrAG/9vLo63CYCuebu2JcFCt0w5icPjXaJCpdhOvbqfHV66qQZfykFvWV7H5ZZw7BcwmrKSUY32p6HRxJ23I6yc9UgOEGZRTk3+mbCvVqsu42hd9R0tldTkt8E+g+htLFvwQV4bGkGk21cgWMnDDW5en/2WyzQGnE6pnOf0gqJitITjhygoOCgAFdJvsLLADgV80C6xci59XFvNiBanR6+CULoJiJYmaqteEWxXHDIT+H4fcHx2xUjGRE/ww7xGMUm4tv/WpYLJooZHC3ExI1AwMONeQpw==\"}",
+      "registered_at": "2026-10-28T09:43:49.532Z",
+      "last_seen_at": "2026-10-28T09:44:09.451Z",
+      "approved_at": "2026-11-06T02:34:39.219Z",
+      "notes": null
+    }
+  ],
+  "auditLogs": [
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": "V26-ENT-DEMO-2026-8888",
+      "action": "ACTIVATE_SUCCESS",
+      "ip_address": "::1",
+      "details": "{\"machineName\":\"DESKTOP-9QHRR0U\"}",
+      "created_at": "2026-09-14T12:58:39.925Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": null,
+      "action": "ADMIN_REVOKE_MACHINE",
+      "ip_address": null,
+      "details": "{\"reason\":\"Hết hạn hợp đồng hoặc thanh lý máy\"}",
+      "created_at": "2026-09-14T13:10:06.559Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": "tkjytdkjdytk",
+      "action": "ACTIVATE_FAILED_KEY_NOT_FOUND",
+      "ip_address": "::1",
+      "details": null,
+      "created_at": "2026-09-14T13:13:43.360Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": "V26-ENT-DEMO-2026-8888",
+      "action": "ACTIVATE_SUCCESS",
+      "ip_address": "::1",
+      "details": "{\"machineName\":\"DESKTOP-9QHRR0U\"}",
+      "created_at": "2026-09-14T13:14:13.764Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": null,
+      "action": "ADMIN_REVOKE_MACHINE",
+      "ip_address": null,
+      "details": "{\"reason\":\"Hết hạn hợp đồng hoặc thanh lý máy\"}",
+      "created_at": "2026-09-14T13:14:27.881Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": "V26-ENT-DEMO-2026-8888",
+      "action": "ACTIVATE_SUCCESS",
+      "ip_address": "::1",
+      "details": "{\"machineName\":\"DESKTOP-9QHRR0U\"}",
+      "created_at": "2026-09-14T13:17:13.220Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": "V26-ENT-DEMO-2026-8888",
+      "action": "ACTIVATE_SUCCESS",
+      "ip_address": "::1",
+      "details": "{\"machineName\":\"DESKTOP-9QHRR0U\"}",
+      "created_at": "2026-09-14T13:36:27.786Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": "V26-ENT-DEMO-2026-8888",
+      "action": "ACTIVATE_SUCCESS",
+      "ip_address": "::1",
+      "details": "{\"machineName\":\"DESKTOP-9QHRR0U\"}",
+      "created_at": "2026-09-14T13:38:01.169Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": null,
+      "action": "CLIENT_AUTO_REGISTERED",
+      "ip_address": "::1",
+      "details": "{\"machine_name\":\"DESKTOP-9QHRR0U\",\"formatted_code\":\"V26-B629-B589-A317-229E\"}",
+      "created_at": "2026-09-14T13:38:01.444Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": "V26-ENT-DEMO-2026-8888",
+      "action": "ACTIVATE_SUCCESS",
+      "ip_address": "::1",
+      "details": "{\"machineName\":\"DESKTOP-9QHRR0U\"}",
+      "created_at": "2026-09-14T13:38:54.130Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": "V26-ENT-DEMO-2026-8888",
+      "action": "ACTIVATE_SUCCESS",
+      "ip_address": "::1",
+      "details": "{\"machineName\":\"DESKTOP-9QHRR0U\"}",
+      "created_at": "2026-09-14T13:40:29.978Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": "V26-ENT-ZB77-TMS2-ZBER",
+      "action": "REGISTRATION_APPROVED",
+      "ip_address": null,
+      "details": "{\"customerName\":\"Automated Test Factory Line 1\",\"edition\":\"Enterprise\",\"licenseType\":\"Perpetual\",\"expiresAt\":null}",
+      "created_at": "2026-09-14T13:40:30.554Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": "V26-ENT-ZB77-TMS2-ZBER",
+      "action": "ACTIVATE_SUCCESS",
+      "ip_address": "::1",
+      "details": "{\"machineName\":\"DESKTOP-9QHRR0U\"}",
+      "created_at": "2026-09-14T13:51:13.495Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": null,
+      "action": "ADMIN_REVOKE_MACHINE",
+      "ip_address": null,
+      "details": "{\"reason\":\"Hết hạn hợp đồng hoặc thanh lý máy\"}",
+      "created_at": "2026-09-14T13:51:25.788Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": "V26-ENT-DEMO-2026-8888",
+      "action": "ACTIVATE_SUCCESS",
+      "ip_address": "::1",
+      "details": "{\"machineName\":\"DESKTOP-9QHRR0U\"}",
+      "created_at": "2026-09-14T14:09:39.508Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": "V26-ENT-DEMO-2026-8888",
+      "action": "ACTIVATE_SUCCESS",
+      "ip_address": "::1",
+      "details": "{\"machineName\":\"DESKTOP-9QHRR0U\"}",
+      "created_at": "2026-09-14T14:11:39.525Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": null,
+      "action": "CLIENT_AUTO_REGISTERED",
+      "ip_address": "::1",
+      "details": "{\"machine_name\":\"DESKTOP-9QHRR0U\",\"formatted_code\":\"V26-B629-B589-A317-229E\"}",
+      "created_at": "2026-09-14T14:11:39.901Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": "V26-ENT-PXF6-G6XM-R9JX",
+      "action": "REGISTRATION_APPROVED",
+      "ip_address": null,
+      "details": "{\"customerName\":\"Automated Test Factory Line 1\",\"edition\":\"Enterprise\",\"licenseType\":\"Perpetual\",\"expiresAt\":null}",
+      "created_at": "2026-09-14T14:11:40.386Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": null,
+      "action": "ADMIN_REVOKE_MACHINE",
+      "ip_address": null,
+      "details": "{\"reason\":\"Kiểm tra bảo mật thu hồi license từ xa\"}",
+      "created_at": "2026-09-14T14:11:40.870Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": "V26-ENT-DEMO-2026-8888",
+      "action": "ADMIN_CHANGE_MACHINE_PLAN",
+      "ip_address": null,
+      "details": "{\"edition\":\"Basic\",\"licenseType\":\"Trial\",\"expiresAt\":\"2026-09-21T14:11:41.389Z\"}",
+      "created_at": "2026-09-14T14:11:41.699Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": "V26-ENT-DEMO-2026-8888",
+      "action": "ADMIN_CHANGE_MACHINE_PLAN",
+      "ip_address": null,
+      "details": "{\"edition\":\"Enterprise\",\"licenseType\":\"Perpetual\",\"expiresAt\":null}",
+      "created_at": "2026-09-14T14:11:42.185Z"
+    },
+    {
+      "machine_fingerprint": null,
+      "license_key": "V26-TEST-DEL-56C47110",
+      "action": "ADMIN_CREATE_LICENSE",
+      "ip_address": null,
+      "details": "{\"customerName\":\"Cascade Delete Test Customer\",\"edition\":\"Pro\"}",
+      "created_at": "2026-09-14T14:11:42.567Z"
+    },
+    {
+      "machine_fingerprint": null,
+      "license_key": "V26-TEST-DEL-56C47110",
+      "action": "ADMIN_DELETE_LICENSE",
+      "ip_address": null,
+      "details": "{\"customerName\":\"Cascade Delete Test Customer\",\"edition\":\"Pro\"}",
+      "created_at": "2026-09-14T14:11:42.853Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": null,
+      "action": "ADMIN_TRANSFER_DELETED_OLD_MACHINE",
+      "ip_address": null,
+      "details": null,
+      "created_at": "2026-09-14T14:12:03.299Z"
+    },
+    {
+      "machine_fingerprint": null,
+      "license_key": "V26-ENT-PXF6-G6XM-R9JX",
+      "action": "ADMIN_DELETE_LICENSE",
+      "ip_address": null,
+      "details": "{\"customerName\":\"Automated Test Factory Line 1\",\"edition\":\"Enterprise\"}",
+      "created_at": "2026-09-14T14:12:42.781Z"
+    },
+    {
+      "machine_fingerprint": null,
+      "license_key": "V26-ENT-ZB77-TMS2-ZBER",
+      "action": "ADMIN_DELETE_LICENSE",
+      "ip_address": null,
+      "details": "{\"customerName\":\"Automated Test Factory Line 1\",\"edition\":\"Enterprise\"}",
+      "created_at": "2026-09-14T14:12:47.887Z"
+    },
+    {
+      "machine_fingerprint": null,
+      "license_key": "V26-ENT-DEMO-2026-8888",
+      "action": "ADMIN_DELETE_LICENSE",
+      "ip_address": null,
+      "details": "{\"customerName\":\"Industrial Demo Customer\",\"edition\":\"Enterprise\"}",
+      "created_at": "2026-09-14T14:12:52.277Z"
+    },
+    {
+      "machine_fingerprint": null,
+      "license_key": "V26-ENT-P27N-XGLB-H45B",
+      "action": "ADMIN_CREATE_LICENSE",
+      "ip_address": null,
+      "details": "{\"customerName\":\"OQC CMS\",\"edition\":\"Enterprise\"}",
+      "created_at": "2026-09-14T14:13:34.869Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": "V26-ENT-P27N-XGLB-H45B",
+      "action": "ACTIVATE_SUCCESS",
+      "ip_address": "::1",
+      "details": "{\"machineName\":\"DESKTOP-9QHRR0U\"}",
+      "created_at": "2026-09-14T14:16:28.843Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": "V26-ENT-P27N-XGLB-H45B",
+      "action": "ACTIVATE_SUCCESS",
+      "ip_address": "::1",
+      "details": "{\"machineName\":\"DESKTOP-9QHRR0U\"}",
+      "created_at": "2026-09-14T14:17:16.334Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": null,
+      "action": "ADMIN_REVOKE_MACHINE",
+      "ip_address": null,
+      "details": "{\"reason\":\"Hết hạn hợp đồng hoặc thanh lý máy\"}",
+      "created_at": "2026-09-14T14:18:03.022Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": null,
+      "action": "ADMIN_TRANSFER_DELETED_OLD_MACHINE",
+      "ip_address": null,
+      "details": null,
+      "created_at": "2026-09-14T14:18:08.537Z"
+    },
+    {
+      "machine_fingerprint": null,
+      "license_key": "V26-ENT-P27N-XGLB-H45B",
+      "action": "ADMIN_DELETE_LICENSE",
+      "ip_address": null,
+      "details": "{\"customerName\":\"OQC CMS\",\"edition\":\"Enterprise\"}",
+      "created_at": "2026-09-14T14:18:18.845Z"
+    },
+    {
+      "machine_fingerprint": null,
+      "license_key": "V26-ENT-HAYG-HDMN-WJNH",
+      "action": "ADMIN_CREATE_LICENSE",
+      "ip_address": null,
+      "details": "{\"customerName\":\"CMS OQC\",\"edition\":\"Enterprise\"}",
+      "created_at": "2026-09-14T14:18:47.426Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": "V26-ENT-DEMO-2026-8888",
+      "action": "ACTIVATE_FAILED_KEY_NOT_FOUND",
+      "ip_address": "::1",
+      "details": null,
+      "created_at": "2026-09-14T14:26:33.704Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": "V26-ENT-HAYG-HDMN-WJNH",
+      "action": "ACTIVATE_SUCCESS",
+      "ip_address": "::1",
+      "details": "{\"machineName\":\"DESKTOP-9QHRR0U\"}",
+      "created_at": "2026-09-14T14:27:34.398Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": null,
+      "action": "CLIENT_AUTO_REGISTERED",
+      "ip_address": "::1",
+      "details": "{\"machine_name\":\"DESKTOP-9QHRR0U\",\"formatted_code\":\"V26-B629-B589-A317-229E\"}",
+      "created_at": "2026-09-14T14:27:34.805Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": "V26-ENT-X2E2-R952-79TM",
+      "action": "REGISTRATION_APPROVED",
+      "ip_address": null,
+      "details": "{\"customerName\":\"Automated Test Factory Line 1\",\"edition\":\"Enterprise\",\"licenseType\":\"Perpetual\",\"expiresAt\":null}",
+      "created_at": "2026-09-14T14:27:35.259Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": null,
+      "action": "ADMIN_REVOKE_MACHINE",
+      "ip_address": null,
+      "details": "{\"reason\":\"Kiểm tra bảo mật thu hồi license từ xa\"}",
+      "created_at": "2026-09-14T14:27:35.685Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": "V26-ENT-HAYG-HDMN-WJNH",
+      "action": "ADMIN_CHANGE_MACHINE_PLAN",
+      "ip_address": null,
+      "details": "{\"edition\":\"Basic\",\"licenseType\":\"Trial\",\"expiresAt\":\"2026-09-21T14:27:36.155Z\"}",
+      "created_at": "2026-09-14T14:27:36.721Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": "V26-ENT-HAYG-HDMN-WJNH",
+      "action": "ADMIN_CHANGE_MACHINE_PLAN",
+      "ip_address": null,
+      "details": "{\"edition\":\"Enterprise\",\"licenseType\":\"Perpetual\",\"expiresAt\":null}",
+      "created_at": "2026-09-14T14:27:37.167Z"
+    },
+    {
+      "machine_fingerprint": null,
+      "license_key": "V26-TEST-DEL-383B3C20",
+      "action": "ADMIN_CREATE_LICENSE",
+      "ip_address": null,
+      "details": "{\"customerName\":\"Cascade Delete Test Customer\",\"edition\":\"Pro\"}",
+      "created_at": "2026-09-14T14:27:37.546Z"
+    },
+    {
+      "machine_fingerprint": null,
+      "license_key": "V26-TEST-DEL-383B3C20",
+      "action": "ADMIN_DELETE_LICENSE",
+      "ip_address": null,
+      "details": "{\"customerName\":\"Cascade Delete Test Customer\",\"edition\":\"Pro\"}",
+      "created_at": "2026-09-14T14:27:37.788Z"
+    },
+    {
+      "machine_fingerprint": "TEST-NEW-MACHINE-FP",
+      "license_key": null,
+      "action": "CLIENT_AUTO_REGISTERED",
+      "ip_address": "::1",
+      "details": "{\"machine_name\":\"WORKSTATION-01\",\"formatted_code\":\"V26-TEST-NEW1-MACH\"}",
+      "created_at": "2026-09-14T14:29:22.043Z"
+    },
+    {
+      "machine_fingerprint": "TEST-NEW-MACHINE-FP",
+      "license_key": "V26-ENT-HAYG-HDMN-WJNH",
+      "action": "REGISTRATION_APPROVED",
+      "ip_address": null,
+      "details": "{\"customerName\":\"CMS OQC\",\"edition\":\"Enterprise\",\"licenseType\":\"Perpetual\",\"expiresAt\":null}",
+      "created_at": "2026-09-14T14:29:44.045Z"
+    },
+    {
+      "machine_fingerprint": "REAL-DESKTOP-FINGERPRINT-12345",
+      "license_key": null,
+      "action": "CLIENT_AUTO_REGISTERED",
+      "ip_address": "::1",
+      "details": "{\"machine_name\":\"CMS-OPERATOR-PC\",\"formatted_code\":\"V26-REAL-DESK-1234\"}",
+      "created_at": "2026-09-14T14:30:56.377Z"
+    },
+    {
+      "machine_fingerprint": "REAL-DESKTOP-FINGERPRINT-12345",
+      "license_key": "V26-ENT-HAYG-HDMN-WJNH",
+      "action": "REGISTRATION_APPROVED",
+      "ip_address": null,
+      "details": "{\"customerName\":\"CMS OQC\",\"edition\":\"Enterprise\",\"licenseType\":\"Perpetual\",\"expiresAt\":null}",
+      "created_at": "2026-09-14T14:31:04.038Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": null,
+      "action": "CLIENT_AUTO_REGISTERED",
+      "ip_address": "::1",
+      "details": "{\"machine_name\":\"DESKTOP-9QHRR0U\",\"formatted_code\":\"V26-B629-B589-A317-229E\"}",
+      "created_at": "2026-09-14T14:33:47.168Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": "V26-ENT-HAYG-HDMN-WJNH",
+      "action": "REGISTRATION_APPROVED",
+      "ip_address": null,
+      "details": "{\"customerName\":\"CMS OQC\",\"edition\":\"Enterprise\",\"licenseType\":\"Perpetual\",\"expiresAt\":null}",
+      "created_at": "2026-09-14T14:34:11.680Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": null,
+      "action": "CLIENT_AUTO_REGISTERED",
+      "ip_address": "::1",
+      "details": "{\"machine_name\":\"DESKTOP-9QHRR0U\",\"formatted_code\":\"V26-B629-B589-A317-229E\"}",
+      "created_at": "2026-09-14T14:36:28.229Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": null,
+      "action": "REGISTRATION_REJECTED",
+      "ip_address": null,
+      "details": "{\"reason\":\"Yêu cầu không được phê duyệt từ quản trị viên\"}",
+      "created_at": "2026-09-14T14:36:45.938Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": "V26-ENT-HAYG-HDMN-WJNH",
+      "action": "ACTIVATE_SUCCESS",
+      "ip_address": "::1",
+      "details": "{\"machineName\":\"DESKTOP-9QHRR0U\"}",
+      "created_at": "2026-09-14T14:45:17.898Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": null,
+      "action": "CLIENT_AUTO_REGISTERED",
+      "ip_address": "::1",
+      "details": "{\"machine_name\":\"DESKTOP-9QHRR0U\",\"formatted_code\":\"V26-B629-B589-A317-229E\"}",
+      "created_at": "2026-09-14T14:45:18.283Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": "V26-ENT-UC6C-5HTJ-TFDM",
+      "action": "REGISTRATION_APPROVED",
+      "ip_address": null,
+      "details": "{\"customerName\":\"Automated Test Factory Line 1\",\"edition\":\"Enterprise\",\"licenseType\":\"Perpetual\",\"expiresAt\":null}",
+      "created_at": "2026-09-14T14:45:18.682Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": null,
+      "action": "ADMIN_REVOKE_MACHINE",
+      "ip_address": null,
+      "details": "{\"reason\":\"Kiểm tra bảo mật thu hồi license từ xa\"}",
+      "created_at": "2026-09-14T14:45:19.374Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": "V26-ENT-HAYG-HDMN-WJNH",
+      "action": "ADMIN_CHANGE_MACHINE_PLAN",
+      "ip_address": null,
+      "details": "{\"edition\":\"Basic\",\"licenseType\":\"Trial\",\"expiresAt\":\"2026-09-21T14:45:19.819Z\"}",
+      "created_at": "2026-09-14T14:45:20.004Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": "V26-ENT-HAYG-HDMN-WJNH",
+      "action": "ADMIN_CHANGE_MACHINE_PLAN",
+      "ip_address": null,
+      "details": "{\"edition\":\"Enterprise\",\"licenseType\":\"Perpetual\",\"expiresAt\":null}",
+      "created_at": "2026-09-14T14:45:20.573Z"
+    },
+    {
+      "machine_fingerprint": null,
+      "license_key": "V26-TEST-DEL-3456DE02",
+      "action": "ADMIN_CREATE_LICENSE",
+      "ip_address": null,
+      "details": "{\"customerName\":\"Cascade Delete Test Customer\",\"edition\":\"Pro\"}",
+      "created_at": "2026-09-14T14:45:20.968Z"
+    },
+    {
+      "machine_fingerprint": null,
+      "license_key": "V26-TEST-DEL-3456DE02",
+      "action": "ADMIN_DELETE_LICENSE",
+      "ip_address": null,
+      "details": "{\"customerName\":\"Cascade Delete Test Customer\",\"edition\":\"Pro\"}",
+      "created_at": "2026-09-14T14:45:21.214Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": "V26-ENT-UC6C-5HTJ-TFDM",
+      "action": "ACTIVATE_SUCCESS",
+      "ip_address": "::1",
+      "details": "{\"machineName\":\"DESKTOP-9QHRR0U\"}",
+      "created_at": "2026-09-14T14:46:11.531Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": null,
+      "action": "CLIENT_AUTO_REGISTERED",
+      "ip_address": "::1",
+      "details": "{\"machine_name\":\"DESKTOP-9QHRR0U\",\"formatted_code\":\"V26-B629-B589-A317-229E\"}",
+      "created_at": "2026-09-14T14:46:11.907Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": "V26-ENT-FNJ9-Z5A7-VUAU",
+      "action": "REGISTRATION_APPROVED",
+      "ip_address": null,
+      "details": "{\"customerName\":\"Automated Test Factory Line 1\",\"edition\":\"Enterprise\",\"licenseType\":\"Perpetual\",\"expiresAt\":null}",
+      "created_at": "2026-09-14T14:46:12.306Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": null,
+      "action": "ADMIN_REVOKE_MACHINE",
+      "ip_address": null,
+      "details": "{\"reason\":\"Kiểm tra bảo mật thu hồi license từ xa\"}",
+      "created_at": "2026-09-14T14:46:12.860Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": "V26-ENT-HAYG-HDMN-WJNH",
+      "action": "ADMIN_CHANGE_MACHINE_PLAN",
+      "ip_address": null,
+      "details": "{\"edition\":\"Basic\",\"licenseType\":\"Trial\",\"expiresAt\":\"2026-09-21T14:46:13.413Z\"}",
+      "created_at": "2026-09-14T14:46:13.596Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": "V26-ENT-HAYG-HDMN-WJNH",
+      "action": "ADMIN_CHANGE_MACHINE_PLAN",
+      "ip_address": null,
+      "details": "{\"edition\":\"Enterprise\",\"licenseType\":\"Perpetual\",\"expiresAt\":null}",
+      "created_at": "2026-09-14T14:46:14.042Z"
+    },
+    {
+      "machine_fingerprint": null,
+      "license_key": "V26-TEST-DEL-2F5C3EBB",
+      "action": "ADMIN_CREATE_LICENSE",
+      "ip_address": null,
+      "details": "{\"customerName\":\"Cascade Delete Test Customer\",\"edition\":\"Pro\"}",
+      "created_at": "2026-09-14T14:46:14.393Z"
+    },
+    {
+      "machine_fingerprint": null,
+      "license_key": "V26-TEST-DEL-2F5C3EBB",
+      "action": "ADMIN_DELETE_LICENSE",
+      "ip_address": null,
+      "details": "{\"customerName\":\"Cascade Delete Test Customer\",\"edition\":\"Pro\"}",
+      "created_at": "2026-09-14T14:46:14.639Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": null,
+      "action": "CLIENT_AUTO_REGISTERED",
+      "ip_address": "::1",
+      "details": "{\"machine_name\":\"DESKTOP-9QHRR0U\",\"formatted_code\":\"V26-B629-B589-A317-229E\"}",
+      "created_at": "2026-09-14T14:46:15.083Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": "V26-ENT-8DYW-4S9Y-75EW",
+      "action": "REGISTRATION_APPROVED",
+      "ip_address": null,
+      "details": "{\"customerName\":\"Delete Machine Test Line\",\"edition\":\"Enterprise\",\"licenseType\":\"Perpetual\",\"expiresAt\":null}",
+      "created_at": "2026-09-14T14:46:15.500Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": null,
+      "action": "CLIENT_AUTO_REGISTERED",
+      "ip_address": "::1",
+      "details": "{\"machine_name\":\"DESKTOP-9QHRR0U\",\"formatted_code\":\"V26-B629-B589-A317-229E\"}",
+      "created_at": "2026-09-14T14:46:16.087Z"
+    },
+    {
+      "machine_fingerprint": null,
+      "license_key": "V26-ENT-8DYW-4S9Y-75EW",
+      "action": "ADMIN_DELETE_LICENSE",
+      "ip_address": null,
+      "details": "{\"customerName\":\"Delete Machine Test Line\",\"edition\":\"Enterprise\"}",
+      "created_at": "2026-09-14T14:46:26.315Z"
+    },
+    {
+      "machine_fingerprint": null,
+      "license_key": "V26-ENT-FNJ9-Z5A7-VUAU",
+      "action": "ADMIN_DELETE_LICENSE",
+      "ip_address": null,
+      "details": "{\"customerName\":\"Automated Test Factory Line 1\",\"edition\":\"Enterprise\"}",
+      "created_at": "2026-09-14T14:46:26.537Z"
+    },
+    {
+      "machine_fingerprint": null,
+      "license_key": "V26-ENT-UC6C-5HTJ-TFDM",
+      "action": "ADMIN_DELETE_LICENSE",
+      "ip_address": null,
+      "details": "{\"customerName\":\"Automated Test Factory Line 1\",\"edition\":\"Enterprise\"}",
+      "created_at": "2026-09-14T14:46:26.758Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": null,
+      "action": "CLIENT_AUTO_REGISTERED",
+      "ip_address": "::1",
+      "details": "{\"machine_name\":\"DESKTOP-9QHRR0U\",\"formatted_code\":\"V26-B629-B589-A317-229E\"}",
+      "created_at": "2026-09-14T14:48:43.894Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": "V26-ENT-HAYG-HDMN-WJNH",
+      "action": "REGISTRATION_APPROVED",
+      "ip_address": null,
+      "details": "{\"customerName\":\"CMS OQC\",\"edition\":\"Enterprise\",\"licenseType\":\"Perpetual\",\"expiresAt\":null}",
+      "created_at": "2026-09-14T14:49:54.113Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": null,
+      "action": "CLIENT_AUTO_REGISTERED",
+      "ip_address": "::1",
+      "details": "{\"machine_name\":\"DESKTOP-9QHRR0U\",\"formatted_code\":\"V26-B629-B589-A317-229E\"}",
+      "created_at": "2026-09-14T14:50:27.349Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": "V26-ENT-HAYG-HDMN-WJNH",
+      "action": "REGISTRATION_APPROVED",
+      "ip_address": null,
+      "details": "{\"customerName\":\"CMS OQC\",\"edition\":\"Enterprise\",\"licenseType\":\"Perpetual\",\"expiresAt\":null}",
+      "created_at": "2026-09-14T14:50:39.886Z"
+    },
+    {
+      "machine_fingerprint": "TEST-PASCAL-FINGERPRINT-12345",
+      "license_key": "V26-ENT-HAYG-HDMN-WJNH",
+      "action": "OFFLINE_SIGN_SUCCESS",
+      "ip_address": null,
+      "details": "{\"customerName\":\"CMS OQC\"}",
+      "created_at": "2026-09-14T14:58:15.776Z"
+    },
+    {
+      "machine_fingerprint": "TEST-CAMEL-FINGERPRINT-67890",
+      "license_key": "V26-ENT-HAYG-HDMN-WJNH",
+      "action": "OFFLINE_SIGN_SUCCESS",
+      "ip_address": null,
+      "details": "{\"customerName\":\"CMS OQC\"}",
+      "created_at": "2026-09-14T14:58:15.981Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": "V26-ENT-HAYG-HDMN-WJNH",
+      "action": "OFFLINE_SIGN_SUCCESS",
+      "ip_address": null,
+      "details": "{\"customerName\":\"CMS OQC\"}",
+      "created_at": "2026-09-14T15:07:46.683Z"
+    },
+    {
+      "machine_fingerprint": "3D4036C61559B5008D785696B944515946A3C82237CDED733A40C57DA1237C66",
+      "license_key": "okema",
+      "action": "OFFLINE_SIGN_SUCCESS",
+      "ip_address": null,
+      "details": "{\"customerName\":\"hung nguyen\"}",
+      "created_at": "2026-09-14T15:22:19.510Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": "V26-ENT-HAYG-HDMN-WJNH",
+      "action": "ACTIVATE_SUCCESS",
+      "ip_address": "::ffff:14.160.33.94",
+      "details": "{\"machineName\":\"DESKTOP-9QHRR0U\"}",
+      "created_at": "2026-09-15T01:04:23.115Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": "okema",
+      "action": "ACTIVATE_SUCCESS",
+      "ip_address": "::1",
+      "details": "{\"machineName\":\"DESKTOP-9QHRR0U\"}",
+      "created_at": "2026-09-15T01:14:26.273Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": null,
+      "action": "CLIENT_AUTO_REGISTERED",
+      "ip_address": "::1",
+      "details": "{\"machine_name\":\"DESKTOP-9QHRR0U\",\"formatted_code\":\"V26-B629-B589-A317-229E\"}",
+      "created_at": "2026-09-15T01:14:26.572Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": "V26-ENT-WVK2-KYYC-QU44",
+      "action": "REGISTRATION_APPROVED",
+      "ip_address": null,
+      "details": "{\"customerName\":\"Automated Test Factory Line 1\",\"edition\":\"Enterprise\",\"licenseType\":\"Perpetual\",\"expiresAt\":null}",
+      "created_at": "2026-09-15T01:14:27.078Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": null,
+      "action": "ADMIN_REVOKE_MACHINE",
+      "ip_address": null,
+      "details": "{\"reason\":\"Kiểm tra bảo mật thu hồi license từ xa\"}",
+      "created_at": "2026-09-15T01:14:27.728Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": "V26-ENT-HAYG-HDMN-WJNH",
+      "action": "ADMIN_CHANGE_MACHINE_PLAN",
+      "ip_address": null,
+      "details": "{\"edition\":\"Basic\",\"licenseType\":\"Trial\",\"expiresAt\":\"2026-09-22T01:14:28.181Z\"}",
+      "created_at": "2026-09-15T01:14:28.385Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": "V26-ENT-HAYG-HDMN-WJNH",
+      "action": "ADMIN_CHANGE_MACHINE_PLAN",
+      "ip_address": null,
+      "details": "{\"edition\":\"Enterprise\",\"licenseType\":\"Perpetual\",\"expiresAt\":null}",
+      "created_at": "2026-09-15T01:14:28.866Z"
+    },
+    {
+      "machine_fingerprint": null,
+      "license_key": "V26-TEST-DEL-1C6FE452",
+      "action": "ADMIN_CREATE_LICENSE",
+      "ip_address": null,
+      "details": "{\"customerName\":\"Cascade Delete Test Customer\",\"edition\":\"Pro\"}",
+      "created_at": "2026-09-15T01:14:29.247Z"
+    },
+    {
+      "machine_fingerprint": null,
+      "license_key": "V26-TEST-DEL-1C6FE452",
+      "action": "ADMIN_DELETE_LICENSE",
+      "ip_address": null,
+      "details": "{\"customerName\":\"Cascade Delete Test Customer\",\"edition\":\"Pro\"}",
+      "created_at": "2026-09-15T01:14:29.510Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": null,
+      "action": "CLIENT_AUTO_REGISTERED",
+      "ip_address": "::1",
+      "details": "{\"machine_name\":\"DESKTOP-9QHRR0U\",\"formatted_code\":\"V26-B629-B589-A317-229E\"}",
+      "created_at": "2026-09-15T01:14:30.075Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": "V26-ENT-HB9K-LCJ5-46U3",
+      "action": "REGISTRATION_APPROVED",
+      "ip_address": null,
+      "details": "{\"customerName\":\"Delete Machine Test Line\",\"edition\":\"Enterprise\",\"licenseType\":\"Perpetual\",\"expiresAt\":null}",
+      "created_at": "2026-09-15T01:14:30.627Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": null,
+      "action": "CLIENT_AUTO_REGISTERED",
+      "ip_address": "::1",
+      "details": "{\"machine_name\":\"DESKTOP-9QHRR0U\",\"formatted_code\":\"V26-B629-B589-A317-229E\"}",
+      "created_at": "2026-09-15T01:14:31.228Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": "V26-ENT-HB9K-LCJ5-46U3",
+      "action": "REGISTRATION_APPROVED",
+      "ip_address": null,
+      "details": "{\"customerName\":\"Delete Machine Test Line\",\"edition\":\"Enterprise\",\"licenseType\":\"Perpetual\",\"expiresAt\":null}",
+      "created_at": "2026-09-15T01:19:55.806Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": "V26-ENT-TEST-EXEC",
+      "action": "ACTIVATE_FAILED_KEY_NOT_FOUND",
+      "ip_address": "14.160.33.94",
+      "details": null,
+      "created_at": "2026-09-15T01:32:56.351Z"
+    },
+    {
+      "machine_fingerprint": "B6015E66CD8E370C9C975804ECB51FCF669FF5755A6BDB17E3084CDFEA015356",
+      "license_key": null,
+      "action": "CLIENT_AUTO_REGISTERED",
+      "ip_address": "14.160.33.94",
+      "details": "{\"machine_name\":\"DESKTOP-NIQVQIR\",\"formatted_code\":\"V26-B601-5E66-CD8E-370C\"}",
+      "created_at": "2026-09-15T01:45:15.543Z"
+    },
+    {
+      "machine_fingerprint": null,
+      "license_key": "V26-ENT-YR4P-XSBG-LSE8",
+      "action": "ADMIN_CREATE_LICENSE",
+      "ip_address": null,
+      "details": "{\"customerName\":\"OQC VISION\",\"edition\":\"Enterprise\"}",
+      "created_at": "2026-09-15T01:46:08.807Z"
+    },
+    {
+      "machine_fingerprint": "B6015E66CD8E370C9C975804ECB51FCF669FF5755A6BDB17E3084CDFEA015356",
+      "license_key": "V26-ENT-YR4P-XSBG-LSE8",
+      "action": "REGISTRATION_APPROVED",
+      "ip_address": null,
+      "details": "{\"customerName\":\"OQC VISION\",\"edition\":\"Enterprise\",\"licenseType\":\"Perpetual\",\"expiresAt\":null}",
+      "created_at": "2026-09-15T01:46:24.051Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": null,
+      "action": "CLIENT_AUTO_REGISTERED",
+      "ip_address": "14.160.33.94",
+      "details": "{\"machine_name\":\"DESKTOP-9QHRR0U\",\"formatted_code\":\"V26-B629-B589-A317-229E\"}",
+      "created_at": "2026-09-15T04:30:10.809Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": "okema",
+      "action": "REGISTRATION_APPROVED",
+      "ip_address": null,
+      "details": "{\"customerName\":\"hung nguyen\",\"edition\":\"Enterprise\",\"licenseType\":\"Perpetual\",\"expiresAt\":null}",
+      "created_at": "2026-09-15T04:30:43.458Z"
+    },
+    {
+      "machine_fingerprint": null,
+      "license_key": "V26-ENT-HAYG-HDMN-WJNH",
+      "action": "ADMIN_DELETE_LICENSE",
+      "ip_address": null,
+      "details": "{\"customerName\":\"CMS OQC\",\"edition\":\"Enterprise\"}",
+      "created_at": "2026-09-15T04:31:28.933Z"
+    },
+    {
+      "machine_fingerprint": null,
+      "license_key": "V26-ENT-HB9K-LCJ5-46U3",
+      "action": "ADMIN_DELETE_LICENSE",
+      "ip_address": null,
+      "details": "{\"customerName\":\"Delete Machine Test Line\",\"edition\":\"Enterprise\"}",
+      "created_at": "2026-09-15T04:31:33.307Z"
+    },
+    {
+      "machine_fingerprint": null,
+      "license_key": "V26-ENT-WVK2-KYYC-QU44",
+      "action": "ADMIN_DELETE_LICENSE",
+      "ip_address": null,
+      "details": "{\"customerName\":\"Automated Test Factory Line 1\",\"edition\":\"Enterprise\"}",
+      "created_at": "2026-09-15T04:31:36.543Z"
+    },
+    {
+      "machine_fingerprint": "B08BB13F5203A5AA4CBABA62733F89D34C0BC935ABE716D96FBB9BB48086CC0A",
+      "license_key": null,
+      "action": "CLIENT_AUTO_REGISTERED",
+      "ip_address": "192.168.1.124",
+      "details": "{\"machine_name\":\"HUEQC\",\"formatted_code\":\"V26-B08B-B13F-5203-A5AA\"}",
+      "created_at": "2026-09-19T02:46:53.958Z"
+    },
+    {
+      "machine_fingerprint": "B08BB13F5203A5AA4CBABA62733F89D34C0BC935ABE716D96FBB9BB48086CC0A",
+      "license_key": "V26-ENT-6M7J-M2DE-BWH2",
+      "action": "REGISTRATION_APPROVED",
+      "ip_address": null,
+      "details": "{\"customerName\":\"Nhà Máy (HUEQC)\",\"edition\":\"Enterprise\",\"licenseType\":\"Perpetual\",\"expiresAt\":null}",
+      "created_at": "2026-09-19T02:47:37.715Z"
+    },
+    {
+      "machine_fingerprint": "0182492F3087D222590D391902DD61862884CB0ADE282C08ED002ACDEC62C7DE",
+      "license_key": null,
+      "action": "CLIENT_AUTO_REGISTERED",
+      "ip_address": "192.168.1.42",
+      "details": "{\"machine_name\":\"THANH-HA\",\"formatted_code\":\"V26-0182-492F-3087-D222\"}",
+      "created_at": "2026-09-22T07:44:37.559Z"
+    },
+    {
+      "machine_fingerprint": "0182492F3087D222590D391902DD61862884CB0ADE282C08ED002ACDEC62C7DE",
+      "license_key": "V26-ENT-Q2Q4-AVE7-2VFD",
+      "action": "REGISTRATION_APPROVED",
+      "ip_address": null,
+      "details": "{\"customerName\":\"Nhà Máy (THANH-HA)\",\"edition\":\"Enterprise\",\"licenseType\":\"Perpetual\",\"expiresAt\":null}",
+      "created_at": "2026-09-22T07:45:03.884Z"
+    },
+    {
+      "machine_fingerprint": null,
+      "license_key": "V26-ENT-9Y7Q-4DQQ-Q4EB",
+      "action": "ADMIN_CREATE_LICENSE",
+      "ip_address": null,
+      "details": "{\"customerName\":\"Qua tang cuoc song\",\"edition\":\"Enterprise\"}",
+      "created_at": "2026-09-22T07:53:48.022Z"
+    },
+    {
+      "machine_fingerprint": null,
+      "license_key": null,
+      "action": "ADMIN_EXPORT_DATA",
+      "ip_address": "127.0.0.1",
+      "details": "{\"licenses\":5,\"machines\":5,\"clientRegistrations\":4,\"auditLogs\":108}",
+      "created_at": "2026-09-29T05:52:24.295Z"
+    },
+    {
+      "machine_fingerprint": "B629B589A317229E1669418164B5DC5E60DF0CC023F6D4795D93BDC81EDE7DB0",
+      "license_key": "okema",
+      "action": "ACTIVATE_SUCCESS",
+      "ip_address": "14.160.33.94",
+      "details": "{\"machineName\":\"DESKTOP-9QHRR0U\"}",
+      "created_at": "2026-09-29T06:11:40.042Z"
+    },
+    {
+      "machine_fingerprint": "B08BB13F5203A5AA4CBABA62733F89D34C0BC935ABE716D96FBB9BB48086CC0A",
+      "license_key": "V26-ENT-6M7J-M2DE-BWH2",
+      "action": "ACTIVATE_SUCCESS",
+      "ip_address": "14.160.33.94",
+      "details": "{\"machineName\":\"HUEQC\"}",
+      "created_at": "2026-09-29T06:19:50.553Z"
+    },
+    {
+      "machine_fingerprint": "B6015E66CD8E370C9C975804ECB51FCF669FF5755A6BDB17E3084CDFEA015356",
+      "license_key": "V26-ENT-YR4P-XSBG-LSE8",
+      "action": "ACTIVATE_SUCCESS",
+      "ip_address": "14.231.116.0",
+      "details": "{\"machineName\":\"DESKTOP-NIQVQIR\"}",
+      "created_at": "2026-09-29T06:23:20.473Z"
+    },
+    {
+      "machine_fingerprint": "E0807EF0A03224816B943D63460699F32FEAD72D84E6088A231E51E4C5D1C144",
+      "license_key": null,
+      "action": "CLIENT_AUTO_REGISTERED",
+      "ip_address": "14.231.116.0",
+      "details": "{\"machine_name\":\"THIENTHAI\",\"formatted_code\":\"V26-E080-7EF0-A032-2481\"}",
+      "created_at": "2026-10-01T01:31:08.421Z"
+    },
+    {
+      "machine_fingerprint": "E0807EF0A03224816B943D63460699F32FEAD72D84E6088A231E51E4C5D1C144",
+      "license_key": "V26-ENT-J38Y-JU6C-LD83",
+      "action": "REGISTRATION_APPROVED",
+      "ip_address": null,
+      "details": "{\"customerName\":\"Nhà Máy (THIENTHAI)\",\"edition\":\"Enterprise\",\"licenseType\":\"Perpetual\",\"expiresAt\":null}",
+      "created_at": "2026-10-01T01:31:35.681Z"
+    },
+    {
+      "machine_fingerprint": "B3EAF3AB3481DB84C53AC7E76CA58B1AE1733CA0AA505853FCBAD5FA39289EC7",
+      "license_key": null,
+      "action": "CLIENT_AUTO_REGISTERED",
+      "ip_address": "14.160.33.94",
+      "details": "{\"machine_name\":\"DESKTOP-NIQVQIR\",\"formatted_code\":\"V26-B3EA-F3AB-3481-DB84\"}",
+      "created_at": "2026-10-28T09:43:49.908Z"
+    },
+    {
+      "machine_fingerprint": null,
+      "license_key": null,
+      "action": "ADMIN_EXPORT_DATA",
+      "ip_address": "123.24.76.81",
+      "details": "{\"licenses\":6,\"machines\":6,\"clientRegistrations\":6,\"auditLogs\":115}",
+      "created_at": "2026-10-31T09:05:10.762Z"
+    },
+    {
+      "machine_fingerprint": "B3EAF3AB3481DB84C53AC7E76CA58B1AE1733CA0AA505853FCBAD5FA39289EC7",
+      "license_key": "V26-ENT-6QW7-45DN-6GCJ",
+      "action": "REGISTRATION_APPROVED",
+      "ip_address": null,
+      "details": "{\"customerName\":\"Nhà Máy (DESKTOP-NIQVQIR)\",\"edition\":\"Enterprise\",\"licenseType\":\"Perpetual\",\"expiresAt\":null}",
+      "created_at": "2026-11-06T02:34:39.893Z"
+    }
+  ],
+  "keys": {
+    "privateKey": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCqbzz77zJyqeUT\nu6NUvkUx8yJMHfKWknjM+n1dmTn6a3Zzwtb+gp1YSdquBQ+pZYEoeFwm9QKOJnlu\n71MpXCxsqPcc71yyLSqPaeaaYDspsGe5YbBXSdLWKKyA86o0QSHkPDXsmvs8H359\nOJ1MmPJv+NVJZsSc1TRqdnDfdHFvnW/oZLsdJPm43WU4W9UdbRF4QzTW5ln8NYnO\n0naL99Kx9r8z5WmYhsq5UdEvzRatDrTkv0aTQli3Jb3EfellPKvAz8bZK3o42mo4\nC4WMICIYcBzGcRZ2yk5Ot37SRHQYw9xUvWz7laqsLCrGyfmPOCDQU42DvaoOKn2g\n3FF6O0irAgMBAAECggEABQVzo60yQcw9RQhlW/+iaex9XrEP2XLQSfhj+CglsU84\nNVnmBqfneyyV25mnkqM8cRT2thPIMv2cMfICyQ2qULs7qJJpcJBsbWmT0zQxmgf/\nTlK7+h5hLqZnyqwjIBipJyBvqvG3+YH+B9zCpE6UmfWX/Gp23B4F8NBeK/SHdl/T\nQhlqfteR11MZ60Q5Qu22hFrmLUk38SitDPWqhxYS/c3KLTG8qlhAwlYr6OOvuMWI\nmcHEKn66Czh4zxkcMge7jgdeLcrDA0rSsQbVHzxqViMzV6LZU3TpcZUnEeuUBK5k\nk+7OLKPEMtrxDQw77k0Vtej5q7bfWpdPnyBpRONZxQKBgQDSLaYsfMQwW/YPolNs\nMosyD1A7AKIVg4cw6UkYWKxPPeqeuNrVZwk0hzFTgM3uRPTbtoAIOD1ZX8hSfcN4\n+g3frYNiiaoHnO/YX03+yg0WzTgbZtB31r0w71mZb+8iaiIRLCv7XrKgQ2M+TKMS\nAWX4UPtPeg6u7ThpUxArxzUBHwKBgQDPl252jNXQHd30ayqzlkYz5uTlQwAcStAg\n8yRcnr3m893QItbjpS6YqKrVRSiqFKB2H4Dn1MTjJtvVzJscL7SsxdAFfazfhUm+\n97fIjjTdp8fL9p3cygyY/KTxBRWIGJn7HHO7AYyM22iGTK5/cqONjNf/5YENoRFA\numyzIMoK9QKBgQDIBY2Z1PtZEouwAUnnNIroD07JeCbI1q24TKu1sd36Y/B/MWmB\noldOWEMHNxPEaHenCZ37NJqeDdu1Nd7rqP2/G4BoLJ9WM3LGtpyhmGSwiImW+lf3\nVLQkeAULU01/sQXO1fzdcxgIEVnHlmOy5QXINjmVP5Htw/Dlu5kuMJ0u/QKBgFH9\n8L5YP/cUZN8uGM6X0yCa2NuIjBmgnvX0su72L/FxbrHPoOqHCpF3RQo5Z6dNwFcH\neGWYzy8c4QVf6//FA+qdst0IV2htf8QymV9Yc578rthrjsxu7WzblNYxeOCpPuBE\ny50YLohP/MfWr7Fc+SZmc8X5wvA8JtFXEKnrkIGlAoGADtZjQvWh6N1QdcfRUQhq\nYIN3KN8+7YSbGc2R3DlVar7sVSRBI8AwiT4pqYFsXmQfdvLqa1mOioEB1HCb+q74\nCXHaZZurRVGX356/sxnhBHOf/51FCPI+QBbqBYIbJueeh3ATyCcKRPHExnh4+zyg\n57qYJ8lS7lKejmIof6lcK7U=\n-----END PRIVATE KEY-----\n",
+    "publicKey": "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAqm88++8ycqnlE7ujVL5F\nMfMiTB3ylpJ4zPp9XZk5+mt2c8LW/oKdWEnargUPqWWBKHhcJvUCjiZ5bu9TKVws\nbKj3HO9csi0qj2nmmmA7KbBnuWGwV0nS1iisgPOqNEEh5Dw17Jr7PB9+fTidTJjy\nb/jVSWbEnNU0anZw33Rxb51v6GS7HST5uN1lOFvVHW0ReEM01uZZ/DWJztJ2i/fS\nsfa/M+VpmIbKuVHRL80WrQ605L9Gk0JYtyW9xH3pZTyrwM/G2St6ONpqOAuFjCAi\nGHAcxnEWdspOTrd+0kR0GMPcVL1s+5WqrCwqxsn5jzgg0FONg72qDip9oNxRejtI\nqwIDAQAB\n-----END PUBLIC KEY-----\n"
+  }
+}
