@@ -745,6 +745,7 @@ public static class ToolEditorContinuousSlotPreviewTests
         Assert(rawXaml.Contains("ProcessedImageCount"), "XAML phải bind ProcessedImageCount (Tổng kiểm)");
         Assert(rawXaml.Contains("ContinuousOkCount"), "XAML phải bind ContinuousOkCount (Tổng OK)");
         Assert(rawXaml.Contains("ContinuousNgCount"), "XAML phải bind ContinuousNgCount (Tổng NG)");
+        Assert(rawXaml.Contains("ContinuousNgRateText"), "XAML phải bind ContinuousNgRateText (Tỷ lệ NG)");
         Assert(rawXaml.Contains("InstantaneousSpeedText"), "XAML phải bind InstantaneousSpeedText (Tốc độ tức thời)");
         Assert(rawXaml.Contains("LatestContinuousTotalTimeMsText"), "XAML phải bind LatestContinuousTotalTimeMsText (Thời gian ms)");
 
@@ -753,11 +754,13 @@ public static class ToolEditorContinuousSlotPreviewTests
         Assert(statusTxtEl is not null && double.TryParse((string?)statusTxtEl.Attribute("FontSize"), out double statusFs) && statusFs >= 30,
             "TxtContinuousSlotStatus phải hiển thị thật to (FontSize >= 30)");
 
-        // 2. Kiểm tra runtime ViewModel: OK/NG của nấc chọn + bộ đếm Tổng kiểm / Tổng OK / Tổng NG + thời gian ms gần nhất + tốc độ
+        // 2. Kiểm tra runtime ViewModel: OK/NG của nấc chọn + bộ đếm Tổng kiểm / Tổng OK / Tổng NG / Tỷ lệ NG + thời gian ms gần nhất + tốc độ
         var vm = new ToolEditorViewModel { IsRunningFolderFlow = true };
         Assert(vm.RecentSlotSummaryStatusText == "--", $"Ban đầu chưa chọn nấc phải là '--', thực tế: '{vm.RecentSlotSummaryStatusText}'");
         Assert(vm.ProcessedImageCount == 0 && vm.ContinuousOkCount == 0 && vm.ContinuousNgCount == 0,
             "Ban đầu bộ đếm Tổng kiểm / OK / NG phải bằng 0");
+        Assert(vm.ContinuousNgRateText == "0.0%",
+            $"Ban đầu ContinuousNgRateText phải là '0.0%', thực tế: '{vm.ContinuousNgRateText}'");
         Assert(vm.LatestContinuousTotalTimeMsText == "0.0",
             $"Ban đầu LatestContinuousTotalTimeMsText phải là '0.0', thực tế: '{vm.LatestContinuousTotalTimeMsText}'");
 
@@ -787,6 +790,8 @@ public static class ToolEditorContinuousSlotPreviewTests
         Assert(vm.ProcessedImageCount == 5, $"Tổng kiểm phải bằng 5, thực tế: {vm.ProcessedImageCount}");
         Assert(vm.ContinuousOkCount == 3, $"Tổng OK phải bằng 3, thực tế: {vm.ContinuousOkCount}");
         Assert(vm.ContinuousNgCount == 2, $"Tổng NG phải bằng 2, thực tế: {vm.ContinuousNgCount}");
+        Assert(vm.ContinuousNgRateText == "40.0%",
+            $"Tỷ lệ NG (2/5) phải là '40.0%', thực tế: '{vm.ContinuousNgRateText}'");
         Assert(vm.LatestContinuousTotalTimeMsText == "31.0",
             $"Thời gian kiểm tra tổng của con hàng gần nhất phải là '31.0', thực tế: '{vm.LatestContinuousTotalTimeMsText}'");
         Assert(vm.InstantaneousSpeedText != "0.0",
@@ -813,6 +818,8 @@ public static class ToolEditorContinuousSlotPreviewTests
         vm.ResetQueueAndCounters();
         Assert(vm.ProcessedImageCount == 0 && vm.ContinuousOkCount == 0 && vm.ContinuousNgCount == 0,
             "ResetQueueAndCounters phải đưa Tổng kiểm / OK / NG về 0");
+        Assert(vm.ContinuousNgRateText == "0.0%",
+            "ResetQueueAndCounters phải đưa ContinuousNgRateText về '0.0%'");
         Assert(vm.LatestContinuousTotalTimeMsText == "0.0",
             "ResetQueueAndCounters phải đưa LatestContinuousTotalTimeMsText về '0.0'");
         Assert(vm.RecentSlotSummaryStatusText == "--",

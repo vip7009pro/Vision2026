@@ -142,6 +142,23 @@ public sealed class PlcInputSignalDetector : IDisposable
         return ProcessSample(boolVal, timestamp);
     }
 
+    /// <summary>
+    /// Đồng bộ trạng thái logic hiện tại mà KHÔNG kích hoạt sự kiện OnTriggered
+    /// (dùng để triệt tiêu self-echo khi phần mềm tự phát xung trên cùng tag 2 chiều).
+    /// </summary>
+    public void ProcessSampleSilently(object? rawValue, DateTime? timestamp = null)
+    {
+        bool boolVal = ConvertToBool(rawValue);
+        lock (_lock)
+        {
+            _hasReceivedFirstSample = true;
+            _lastState = boolVal;
+            _pressStartTime = DateTime.MinValue;
+            _longPressTriggered = false;
+            CancelLongPressTimer();
+        }
+    }
+
     private void ScheduleLongPressTimer()
     {
         CancelLongPressTimer();

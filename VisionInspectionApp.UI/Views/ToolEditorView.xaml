@@ -533,7 +533,7 @@
                     Margin="6,0,0,0" Padding="9,4" Height="26"
                     Background="#B23A48" Foreground="White" BorderThickness="0"
                     VerticalAlignment="Center" FontWeight="SemiBold"
-                    ToolTip="Reset phiên làm việc: xả sạch hàng đợi (Queue), đưa Count &amp; thanh 20 con hàng gần nhất về 0, chốt phiên 'Lịch sử kiểm tra' hiện tại và mở phiên MỚI.">
+                    ToolTip="Reset phiên làm việc: xả sạch hàng đợi (Queue), đưa Count &amp; thanh 20 con hàng gần nhất về 0, gửi xung Reset Queue qua tag PLC Handshake đã cấu hình và mở phiên 'Lịch sử kiểm tra' MỚI.">
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock Text="🔄" FontSize="12" VerticalAlignment="Center" Margin="0,0,4,0" />
                     <TextBlock Text="Reset" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
@@ -6287,9 +6287,9 @@
                                                    TextTrimming="CharacterEllipsis" MaxWidth="175" />
                                     </Grid>
 
-                                    <!-- 5 ô chỉ số: Tổng kiểm, Tổng OK, Tổng NG, Tốc độ tức thời, Thời gian tổng (ms) -->
-                                    <UniformGrid Grid.Column="1" Columns="5" VerticalAlignment="Center">
-                                        <Border Margin="2,0" Padding="6,4" CornerRadius="4"
+                                    <!-- 6 ô chỉ số: Tổng kiểm, Tổng OK, Tổng NG, Tỷ lệ NG, Tốc độ tức thời, Thời gian tổng (ms) -->
+                                    <UniformGrid Grid.Column="1" Columns="6" VerticalAlignment="Center">
+                                        <Border Margin="2,0" Padding="5,4" CornerRadius="4"
                                                 Background="{DynamicResource PanelBackgroundBrush}"
                                                 BorderBrush="{DynamicResource AccentBrush}" BorderThickness="1"
                                                 ToolTip="Tổng số sản phẩm đã kiểm tra trong phiên chạy liên tục hiện tại.">
@@ -6300,7 +6300,7 @@
                                                            Foreground="{DynamicResource TextBrush}" />
                                             </StackPanel>
                                         </Border>
-                                        <Border Margin="2,0" Padding="6,4" CornerRadius="4"
+                                        <Border Margin="2,0" Padding="5,4" CornerRadius="4"
                                                 Background="{DynamicResource PanelBackgroundBrush}"
                                                 BorderBrush="#10B981" BorderThickness="1"
                                                 ToolTip="Tổng số sản phẩm đạt (OK) trong phiên chạy liên tục hiện tại.">
@@ -6311,7 +6311,7 @@
                                                            Foreground="#10B981" />
                                             </StackPanel>
                                         </Border>
-                                        <Border Margin="2,0" Padding="6,4" CornerRadius="4"
+                                        <Border Margin="2,0" Padding="5,4" CornerRadius="4"
                                                 Background="{DynamicResource PanelBackgroundBrush}"
                                                 BorderBrush="#EF4444" BorderThickness="1"
                                                 ToolTip="Tổng số sản phẩm lỗi (NG) trong phiên chạy liên tục hiện tại.">
@@ -6322,7 +6322,18 @@
                                                            Foreground="#EF4444" />
                                             </StackPanel>
                                         </Border>
-                                        <Border Margin="2,0" Padding="6,4" CornerRadius="4"
+                                        <Border Margin="2,0" Padding="5,4" CornerRadius="4"
+                                                Background="{DynamicResource PanelBackgroundBrush}"
+                                                BorderBrush="#F97316" BorderThickness="1"
+                                                ToolTip="Tỷ lệ sản phẩm lỗi (Tổng NG / Tổng kiểm × 100%) trong phiên chạy liên tục hiện tại.">
+                                            <StackPanel>
+                                                <TextBlock Text="TỶ LỆ NG" Style="{StaticResource DashChipLabelStyle}" TextTrimming="CharacterEllipsis" />
+                                                <TextBlock Text="{Binding ContinuousNgRateText}"
+                                                           Style="{StaticResource DashChipValueStyle}" FontSize="14"
+                                                           Foreground="#F97316" />
+                                            </StackPanel>
+                                        </Border>
+                                        <Border Margin="2,0" Padding="5,4" CornerRadius="4"
                                                 Background="{DynamicResource PanelBackgroundBrush}"
                                                 BorderBrush="#0284C7" BorderThickness="1"
                                                 ToolTip="Tốc độ kiểm tra tức thời (pcs/s) đo theo chu kỳ giữa các con hàng gần nhất (Rolling Window). Tự động về 0 khi máy dừng.">
@@ -6333,7 +6344,7 @@
                                                            Foreground="#0284C7" />
                                             </StackPanel>
                                         </Border>
-                                        <Border Margin="2,0" Padding="6,4" CornerRadius="4"
+                                        <Border Margin="2,0" Padding="5,4" CornerRadius="4"
                                                 Background="{DynamicResource PanelBackgroundBrush}"
                                                 BorderBrush="#4CAF50" BorderThickness="1"
                                                 ToolTip="Thời gian kiểm tra tổng (ms) của con hàng gần nhất.">

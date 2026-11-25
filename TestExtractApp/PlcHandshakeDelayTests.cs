@@ -42,9 +42,10 @@ public static class PlcHandshakeDelayTests
         await Test6_DisabledOrOffline_BypassesDelayImmediatelyAsync();
         Test7_PlcManagerService_SaveGlobalConfig_PersistsAndPropagatesDelayTime();
         await Test8_ToolEditorContinuousPipeline_SavesRealTime_WhileDelayingPlcAsync();
+        await Test9_EnableHandshakeOnRunOnce_ToggleConfigUiAndExecutionAsync();
 
         Console.WriteLine("==================================================================");
-        Console.WriteLine("TẤT CẢ 8/8 TEST HANDSHAKE DELAY TIME ĐÃ VƯỢT QUA (PASSED 100%)!");
+        Console.WriteLine("TẤT CẢ 9/9 TEST HANDSHAKE DELAY TIME & RUN ONCE TOGGLE ĐÃ VƯỢT QUA (PASSED 100%)!");
         Console.WriteLine("==================================================================\n");
     }
 
@@ -620,6 +621,179 @@ public static class PlcHandshakeDelayTests
         {
             CleanupConfigFiles(configPath);
         }
+    }
+
+    private static async Task Test9_EnableHandshakeOnRunOnce_ToggleConfigUiAndExecutionAsync()
+    {
+        Console.WriteLine("--> Test 9: Tùy chọn bật/tắt Handshake khi bấm 'Chạy 1 lần' (Run Once) trong cấu hình & thực thi");
+
+        // 1. Kiểm tra mặc định, JSON serialization, CopyFrom và ApplyDefaults
+        var cfg = new IndustrialHandshakeConfig();
+        Assert(!cfg.EnableHandshakeOnRunOnce, "Mặc định EnableHandshakeOnRunOnce phải là false (Chạy 1 lần không gửi PLC)");
+
+        cfg.EnableHandshakeOnRunOnce = true;
+        string json = JsonSerializer.Serialize(cfg, new JsonSerializerOptions { WriteIndented = true });
+        var restored = JsonSerializer.Deserialize<IndustrialHandshakeConfig>(json);
+        Assert(restored != null && restored.EnableHandshakeOnRunOnce, "JSON Deserialize phải bảo toàn EnableHandshakeOnRunOnce = true");
+
+        var copy = new IndustrialHandshakeConfig();
+        copy.CopyFrom(cfg);
+        Assert(copy.EnableHandshakeOnRunOnce, "CopyFrom phải sao chép EnableHandshakeOnRunOnce = true");
+
+        cfg.ApplyFx5uDefaults("PLC1");
+        Assert(!cfg.EnableHandshakeOnRunOnce, "ApplyFx5uDefaults phải đưa EnableHandshakeOnRunOnce về false");
+        cfg.EnableHandshakeOnRunOnce = true;
+        cfg.ApplyStandardIoDefaults("PLC1");
+        Assert(!cfg.EnableHandshakeOnRunOnce, "ApplyStandardIoDefaults phải đưa EnableHandshakeOnRunOnce về false");
+
+        // 2. Kiểm tra XAML cửa sổ cài đặt Handshake 24/7 có binding tùy chọn
+        string plcWinXamlPath = FindRepoFile("VisionInspectionApp.UI", "Views", "PLC", "PlcManagerWindow.xaml");
+        string plcWinXaml = File.ReadAllText(plcWinXamlPath);
+        Assert(plcWinXaml.Contains("Handshake.EnableHandshakeOnRunOnce"),
+            "PlcManagerWindow.xaml phải có checkbox bind Handshake.EnableHandshakeOnRunOnce trong Tab Bắt tay 24/7");
+
+        // 3. Kiểm tra lưu/nạp qua PlcManagerService + PlcManagerViewModel & thực thi Chạy 1 lần vs Chạy liên tục trên ToolEditorViewModel
+        using var plcManager = CreateConnectedSimulationPlcManager(out var configPath);
+        string tempImgPath = Path.Combine(Path.GetTempPath(), $"vision_runonce_hs_test_{Guid.NewGuid():N}.png");
+        try
+        {
+            using (var mat = new Mat(40, 40, MatType.CV_8UC3, Scalar.All(120)))
+            {
+                Cv2.ImWrite(tempImgPath, mat);
+            }
+
+            var plcVm = new PlcManagerViewModel(plcManager);
+            plcVm.Handshake.PlcId = "PLC1";
+            plcVm.Handshake.ReadyTagName = "M101";
+            plcVm.Handshake.BusyTagName = "M102";
+            plcVm.Handshake.DoneTagName = "M103";
+            plcVm.Handshake.PassTagName = "M104";
+            plcVm.Handshake.NgTagName = "M105";
+            plcVm.Handshake.ResultWordTagName = "D100";
+            plcVm.Handshake.ResultOutputMode = PlcResultOutputMode.Both;
+            plcVm.Handshake.PassNumericValue = 2;
+            plcVm.Handshake.NgNumericValue = 3;
+            plcVm.Handshake.PlcAckTagName = "";
+            plcVm.Handshake.NonBlockingMode = true;
+            plcVm.Handshake.DelayTimeMs = 0;
+            plcVm.Handshake.IsEnabled = true;
+            plcVm.Handshake.EnableHandshakeOnRunOnce = false;
+            plcManager.SaveGlobalConfig();
+
+            using (var reloadedService = new PlcManagerService(configPath))
+            {
+                Assert(!reloadedService.IndustrialConfig.Handshake.EnableHandshakeOnRunOnce,
+                    "SaveGlobalConfig/LoadGlobalConfig phải giữ EnableHandshakeOnRunOnce = false");
+            }
+
+            var vm = new ToolEditorViewModel();
+            var inspectionService = new InspectionService(
+                new ImagePreprocessor(),
+                new PatternMatcher(),
+                new DistanceCalculator(),
+                new LineDetector(),
+                new DefectDetector());
+
+            InjectField(vm, "_inspectionService", inspectionService);
+            InjectField(vm, "_plcManagerService", plcManager);
+
+            using var sm = new IndustrialHandshakeStateMachine(plcManager, "PLC1");
+            sm.ApplyConfig(plcManager.IndustrialConfig.Handshake);
+            InjectField(vm, "_handshakeStateMachine", sm);
+            plcManager.OnIndustrialConfigChanged += (_, indCfg) => sm.ApplyConfig(indCfg.Handshake);
+
+            var sentWords = new List<short>();
+            plcManager.OnTagChanged += (_, e) =>
+            {
+                if (e.TagName == "D100" && e.NewValue is short s && (s == 2 || s == 3))
+                {
+                    lock (sentWords) sentWords.Add(s);
+                }
+            };
+
+            var sharedImage = (SharedImageContext)GetField(vm, "_sharedImage")!;
+            using (var seedMat = new Mat(40, 40, MatType.CV_8UC3, Scalar.All(128)))
+            {
+                sharedImage.SetImage(seedMat);
+            }
+
+            var config = new VisionConfig
+            {
+                ProductCode = "TEST_RUN_ONCE_HS",
+                ProductName = "TEST_RUN_ONCE_HS",
+                ToolGraph = new ToolGraph()
+            };
+            vm.InitializeWithConfig(config);
+            await sm.SetReadyAsync();
+
+            var runFlowMethod = typeof(ToolEditorViewModel).GetMethod("RunFlowAsync", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new Exception("Không tìm thấy RunFlowAsync");
+            var runSingleFileMethod = typeof(ToolEditorViewModel).GetMethod("RunSingleFlowFromImageFileAsync", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new Exception("Không tìm thấy RunSingleFlowFromImageFileAsync");
+
+            // A) TẮT Handshake khi Chạy 1 lần (mặc định):
+            Assert(!vm.ShouldSendHandshakeForCurrentRun(), "Khi RunOnce và EnableHandshakeOnRunOnce=false phải trả về false");
+            await (Task)runFlowMethod.Invoke(vm, null)!;
+            await (Task)runSingleFileMethod.Invoke(vm, new object[] { tempImgPath, "SRC1" })!;
+            await Task.Delay(60);
+
+            lock (sentWords)
+            {
+                Assert(sentWords.Count == 0,
+                    $"Khi tắt EnableHandshakeOnRunOnce, Chạy 1 lần không được gửi tín hiệu về PLC, nhưng đã gửi {sentWords.Count} lần!");
+            }
+
+            // B) Khi đang Chạy liên tục (IsRunningFolderFlow=true) dù EnableHandshakeOnRunOnce=false -> VẪN phải gửi PLC:
+            InjectField(vm, "_isRunningFolderFlow", true);
+            Assert(vm.ShouldSendHandshakeForCurrentRun(),
+                "Khi đang Chạy liên tục (IsRunningFolderFlow=true), vẫn phải gửi PLC bất kể EnableHandshakeOnRunOnce=false");
+            InjectField(vm, "_isRunningFolderFlow", false);
+
+            // C) BẬT Handshake khi Chạy 1 lần và SaveGlobalConfig:
+            plcVm.Handshake.EnableHandshakeOnRunOnce = true;
+            plcManager.SaveGlobalConfig();
+            Assert(sm.EnableHandshakeOnRunOnce, "OnIndustrialConfigChanged phải đồng bộ EnableHandshakeOnRunOnce=true vào state machine");
+            Assert(vm.ShouldSendHandshakeForCurrentRun(), "Khi EnableHandshakeOnRunOnce=true, RunOnce phải cho phép gửi PLC");
+
+            await (Task)runFlowMethod.Invoke(vm, null)!;
+            await (Task)runSingleFileMethod.Invoke(vm, new object[] { tempImgPath, "SRC1" })!;
+            var waitSw = Stopwatch.StartNew();
+            while (waitSw.ElapsedMilliseconds < 1500)
+            {
+                lock (sentWords)
+                {
+                    if (sentWords.Count >= 2) break;
+                }
+                await Task.Delay(15);
+            }
+
+            lock (sentWords)
+            {
+                Assert(sentWords.Count == 2 && sentWords.All(x => x == 2),
+                    $"Khi bật EnableHandshakeOnRunOnce, 2 lượt Chạy 1 lần phải gửi đủ 2 tín hiệu OK (2) về PLC, thực tế: {sentWords.Count}");
+            }
+
+            await sm.SetIdleAsync();
+            Console.WriteLine("    [OK] Tùy chọn EnableHandshakeOnRunOnce (tắt/bật & lưu config & chạy thực tế) hoạt động chuẩn 100%.");
+        }
+        finally
+        {
+            try { if (File.Exists(tempImgPath)) File.Delete(tempImgPath); } catch { }
+            CleanupConfigFiles(configPath);
+        }
+    }
+
+    private static string FindRepoFile(params string[] relativeParts)
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null)
+        {
+            var candidate = Path.Combine(new[] { dir.FullName }.Concat(relativeParts).ToArray());
+            if (File.Exists(candidate))
+                return candidate;
+            dir = dir.Parent;
+        }
+        throw new FileNotFoundException($"Không tìm thấy file {Path.Combine(relativeParts)} từ {AppContext.BaseDirectory}");
     }
 
     private static void InjectField(object target, string fieldName, object? value)

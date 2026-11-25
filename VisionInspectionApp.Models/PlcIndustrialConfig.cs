@@ -150,6 +150,17 @@ public sealed class IndustrialHandshakeConfig : INotifyPropertyChanged
     }
 
     /// <summary>
+    /// Cho phép gửi tín hiệu Bắt tay (Handshake) về PLC khi bấm "Chạy 1 lần" (Run Once).
+    /// Mặc định: false (khi chạy thử 1 lần thì không gửi tín hiệu kết quả về PLC; chỉ gửi khi Chạy liên tục).
+    /// </summary>
+    private bool _enableHandshakeOnRunOnce = false;
+    public bool EnableHandshakeOnRunOnce
+    {
+        get => _enableHandshakeOnRunOnce;
+        set { if (_enableHandshakeOnRunOnce != value) { _enableHandshakeOnRunOnce = value; OnPropertyChanged(); } }
+    }
+
+    /// <summary>
     /// Phương thức xuất kết quả kiểm tra sang PLC: Bit (Bool), Dạng Số (Int16) hoặc Song Hành Cả Hai
     /// </summary>
     private PlcResultOutputMode _resultOutputMode = PlcResultOutputMode.Bit;
@@ -380,6 +391,7 @@ public sealed class IndustrialHandshakeConfig : INotifyPropertyChanged
         ResetQueueDurationMs = 50;
         HandshakeTimeoutMs = 300;
         IsEnabled = true;
+        EnableHandshakeOnRunOnce = false;
         SimulatePlcAck = false;
         PassSignalType = PlcSignalType.RisingEdge;
         NgSignalType = PlcSignalType.RisingEdge;
@@ -414,6 +426,7 @@ public sealed class IndustrialHandshakeConfig : INotifyPropertyChanged
         ResetQueueDurationMs = 100;
         HandshakeTimeoutMs = 500;
         IsEnabled = true;
+        EnableHandshakeOnRunOnce = false;
         SimulatePlcAck = false;
         PassSignalType = PlcSignalType.Level;
         NgSignalType = PlcSignalType.Level;
@@ -449,6 +462,7 @@ public sealed class IndustrialHandshakeConfig : INotifyPropertyChanged
         ResetQueueDurationMs = other.ResetQueueDurationMs;
         HandshakeTimeoutMs = other.HandshakeTimeoutMs;
         IsEnabled = other.IsEnabled;
+        EnableHandshakeOnRunOnce = other.EnableHandshakeOnRunOnce;
         SimulatePlcAck = other.SimulatePlcAck;
         PassSignalType = other.PassSignalType;
         NgSignalType = other.NgSignalType;

@@ -366,11 +366,13 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             wordSignalText = $"• [D] Mã Kết Quả   ({wordTag}) : {wordVal} ({wordStatusDesc}) [OK={passVal}, NG={ngVal}]\n";
         }
 
+        bool enableOnRunOnce = _handshakeStateMachine?.EnableHandshakeOnRunOnce ?? false;
         HandshakeStatusToolTip =
             $"🤝 CHU TRÌNH BẮT TAY CÔNG NGHIỆP {(isNonBlocking ? "NON-BLOCKING HÀNG ĐỢI 20 NẤC" : "DETERMINISTIC 24/7")}\n" +
             $"──────────────────────────────────────────────────\n" +
             $"• PLC Mục Tiêu : {plcId} (Đã Kết Nối - Online)\n" +
             $"• Chế Độ Bắt Tay: {(isNonBlocking ? "⚡ Bất đồng bộ (Không chờ Ack - Băng tải chạy liên tục)" : (hasAckTag ? "Đồng bộ chờ Ack" : "Non-blocking (Bỏ Ack)"))}\n" +
+            $"• Chạy 1 Lần (Run Once): {(enableOnRunOnce ? "✅ BẬT (Gửi tín hiệu PLC)" : "🔕 TẮT (Không gửi PLC)")}\n" +
             $"• Phương Thức Xuất : {modeStr}\n" +
             $"• Trạng Thái   : {stateDesc}\n" +
             $"• Điểm Ra Chỉ Định: Nấc {_handshakeStateMachine?.TargetStopStationIndex ?? 10} / 20 (M200..M219)\n" +

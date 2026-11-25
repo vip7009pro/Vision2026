@@ -73,6 +73,9 @@ public sealed partial class ToolEditorViewModel
     private int _continuousNgCount;
 
     [ObservableProperty]
+    private string _continuousNgRateText = "0.0%";
+
+    [ObservableProperty]
     private string _latestContinuousTotalTimeMsText = "0.0";
 
     private int _continuousOkCountRaw;
@@ -109,10 +112,13 @@ public sealed partial class ToolEditorViewModel
     {
         int ok = Volatile.Read(ref _continuousOkCountRaw);
         int ng = Volatile.Read(ref _continuousNgCountRaw);
+        int total = ok + ng;
+        double ngRatePercent = total > 0 ? (ng * 100.0 / total) : 0.0;
         double totalMs = Volatile.Read(ref _latestContinuousTotalTimeMsRaw);
 
         ContinuousOkCount = ok;
         ContinuousNgCount = ng;
+        ContinuousNgRateText = $"{ngRatePercent:0.0}%";
         LatestContinuousTotalTimeMsText = $"{totalMs:0.0}";
     }
 
@@ -124,6 +130,7 @@ public sealed partial class ToolEditorViewModel
         Volatile.Write(ref _latestContinuousTotalTimeMsRaw, 0.0);
         ContinuousOkCount = 0;
         ContinuousNgCount = 0;
+        ContinuousNgRateText = "0.0%";
         LatestContinuousTotalTimeMsText = "0.0";
     }
 

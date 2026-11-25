@@ -4316,6 +4316,7 @@ namespace VisionInspectionApp.UI.ViewModels
         /// Nút "Reset Phiên &amp; Hàng Đợi" cạnh thanh Queue:
         ///  - Xả sạch các frame đang chờ trong hàng đợi (giải phóng Mat, không rò rỉ bộ nhớ).
         ///  - Đưa các bộ đếm về 0 (Count, frame rớt, thanh 20 con hàng gần nhất).
+        ///  - Gửi xung Reset Queue sang PLC qua tag ResetQueueTagName (nếu PLC đang kết nối &amp; bật Handshake).
         ///  - Chốt phiên trong "Lịch sử kiểm tra &amp; SPC/CPK" và mở PHIÊN MỚI để số liệu SPC/CPK bắt đầu lại.
         /// </summary>
         [RelayCommand]
@@ -4325,6 +4326,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 "Reset phiên làm việc hiện tại?\n\n" +
                 "  • Hàng đợi (Queue) sẽ được xả sạch.\n" +
                 "  • Count sản phẩm, số frame rớt và thanh 20 con hàng gần nhất về 0.\n" +
+                "  • Nếu đang kết nối PLC & cấu hình Tag Reset Queue, sẽ gửi xung Reset đồng bộ sang PLC.\n" +
                 "  • Phiên trong 'Lịch sử kiểm tra & SPC/CPK' sẽ được CHỐT và mở phiên MỚI (số liệu bắt đầu lại từ 0).",
                 "Xác Nhận Reset Phiên & Hàng Đợi",
                 MessageBoxButton.YesNo,
@@ -4332,10 +4334,30 @@ namespace VisionInspectionApp.UI.ViewModels
 
             if (confirm != MessageBoxResult.Yes) return;
 
+            _ = ExecuteResetSessionAndQueueCoreAsync();
+        }
+
+        /// <summary>
+        /// Thực thi reset hàng đợi khi người dùng bấm Reset trên giao diện Tool Editor (không hiện MessageBox):
+        /// xóa sạch hàng đợi/bộ đếm, mở phiên log mới và gửi xung Reset Queue sang PLC qua tag đã cấu hình.
+        /// </summary>
+        internal async Task<bool> ExecuteResetSessionAndQueueCoreAsync()
+        {
             ResetQueueAndCounters();
             _ = RestartInspectionLogSessionAsync();
 
+            if (_handshakeStateMachine != null && _handshakeStateMachine.CanSendResetQueuePulse())
+            {
+                string? resetTag = _handshakeStateMachine.GetEffectiveResetQueueTag();
+                bool sent = await _handshakeStateMachine.SendResetQueuePulseAsync();
+                StatusBarText = sent
+                    ? $"🔄 Đã reset phiên làm việc & gửi xung Reset Queue qua tag '{resetTag}' tới PLC."
+                    : "🔄 Đã reset phiên làm việc: hàng đợi đã xả sạch, phiên Lịch sử kiểm tra mới đã mở.";
+                return sent;
+            }
+
             StatusBarText = "🔄 Đã reset phiên làm việc: hàng đợi đã xả sạch, phiên Lịch sử kiểm tra mới đã mở.";
+            return false;
         }
 
         /// <summary>
@@ -5278,7 +5300,7 @@ namespace VisionInspectionApp.UI.ViewModels
             _lastRun = inspectionResult;
             // ✅ FIX: ghi vào Lịch sử kiểm tra + đẩy 1 nấc thanh 20 con hàng kèm ảnh snapshot
             PublishInspectionResult(inspectionResult, mat);
-            if (inspectionResult != null && _handshakeStateMachine != null && _handshakeStateMachine.IsEnabled)
+            if (inspectionResult != null && ShouldSendHandshakeForCurrentRun())
             {
                 _ = _handshakeStateMachine.CompleteHandshakeAsync(inspectionResult.Pass);
             }
@@ -5305,6 +5327,20 @@ namespace VisionInspectionApp.UI.ViewModels
         }
 
         private void RunSingleFlowFromImageFile(string filePath, string sourceNodeName) => _ = RunSingleFlowFromImageFileAsync(filePath, sourceNodeName);
+
+        /// <summary>
+        /// Xác định có gửi tín hiệu Handshake về PLC cho lượt chạy hiện tại hay không:
+        /// luôn gửi khi Chạy liên tục (nếu Handshake bật), còn khi Chạy 1 lần phụ thuộc EnableHandshakeOnRunOnce.
+        /// </summary>
+        internal bool ShouldSendHandshakeForCurrentRun()
+        {
+            if (_handshakeStateMachine == null || !_handshakeStateMachine.IsEnabled)
+            {
+                return false;
+            }
+
+            return IsRunningFolderFlow || _handshakeStateMachine.EnableHandshakeOnRunOnce;
+        }
     
         private void LoadPreviewImage()
         {
@@ -5592,7 +5628,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 _lastRun = inspectionResult;
                 // ✅ FIX: ghi Lịch sử kiểm tra + đẩy 1 nấc thanh 20 con hàng (Run Once / PLC Trigger) kèm ảnh snap
                 PublishInspectionResult(inspectionResult, snap);
-                if (inspectionResult != null && _handshakeStateMachine != null && _handshakeStateMachine.IsEnabled)
+                if (inspectionResult != null && ShouldSendHandshakeForCurrentRun())
                 {
                     _ = _handshakeStateMachine.CompleteHandshakeAsync(inspectionResult.Pass);
                 }

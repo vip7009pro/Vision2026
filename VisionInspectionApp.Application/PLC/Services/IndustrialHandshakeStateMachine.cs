@@ -89,6 +89,7 @@ public sealed class IndustrialHandshakeStateMachine : IDisposable
 
     public int HandshakeTimeoutMs { get; set; } = 500;
     public bool IsEnabled { get; set; } = true;
+    public bool EnableHandshakeOnRunOnce { get; set; } = false;
     public bool SimulatePlcAck { get; set; } = false;
 
     /// <summary>
@@ -219,6 +220,7 @@ public sealed class IndustrialHandshakeStateMachine : IDisposable
     {
         if (config == null) return;
         IsEnabled = config.IsEnabled;
+        EnableHandshakeOnRunOnce = config.EnableHandshakeOnRunOnce;
         PlcId = config.PlcId;
         ReadyTagName = config.ReadyTagName;
         BusyTagName = config.BusyTagName;
@@ -287,9 +289,76 @@ public sealed class IndustrialHandshakeStateMachine : IDisposable
         return false;
     }
 
+    private long _resetQueueEchoSuppressUntilUtcTicks;
+
+    private void ExtendResetQueueEchoSuppressWindow(int extraMs)
+    {
+        long candidateTicks = DateTime.UtcNow.AddMilliseconds(Math.Max(100, extraMs)).Ticks;
+        while (true)
+        {
+            long current = Volatile.Read(ref _resetQueueEchoSuppressUntilUtcTicks);
+            if (current >= candidateTicks) return;
+            if (Interlocked.CompareExchange(ref _resetQueueEchoSuppressUntilUtcTicks, candidateTicks, current) == current)
+                return;
+        }
+    }
+
     public bool HandleResetQueueTagSample(string tagName, object? value, DateTime? timestamp = null)
     {
+        if (DateTime.UtcNow.Ticks <= Volatile.Read(ref _resetQueueEchoSuppressUntilUtcTicks))
+        {
+            _resetQueueDetector.ProcessSampleSilently(value, timestamp);
+            return false;
+        }
+
         return _resetQueueDetector.ProcessSample(value, timestamp);
+    }
+
+    /// <summary>
+    /// Kiểm tra điều kiện hiện tại có thể gửi xung Reset Queue từ giao diện sang PLC hay không.
+    /// </summary>
+    public bool CanSendResetQueuePulse()
+    {
+        return !_disposed
+               && IsEnabled
+               && _plcManager != null
+               && _plcManager.IsPlcConnected(_plcId)
+               && !string.IsNullOrEmpty(GetEffectiveResetQueueTag());
+    }
+
+    /// <summary>
+    /// Phát xung Reset Queue từ Vision PC sang PLC qua chính tag ResetQueueTagName
+    /// để đồng bộ 2 chiều PLC ⇄ PC, có triệt tiêu self-echo tránh tự kích hoạt lại WPF.
+    /// </summary>
+    public async Task<bool> SendResetQueuePulseAsync(CancellationToken ct = default)
+    {
+        if (!CanSendResetQueuePulse() || _plcManager == null)
+        {
+            return false;
+        }
+
+        string? resetTag = GetEffectiveResetQueueTag();
+        if (string.IsNullOrEmpty(resetTag))
+        {
+            return false;
+        }
+
+        PlcSignalType outputWave = ResetQueueSignalType == PlcInputSignalType.FallingEdge
+            ? PlcSignalType.FallingEdge
+            : PlcSignalType.RisingEdge;
+        int pulseMs = Math.Max(20, Math.Max(PulseDurationMs, ResetQueueDurationMs));
+
+        // Bật cửa sổ triệt tiêu echo trong suốt độ rộng xung + đệm polling 400ms
+        ExtendResetQueueEchoSuppressWindow(pulseMs + 400);
+
+        return await EmitSignalCoreAsync(
+            resetTag,
+            outputWave,
+            isActive: true,
+            durationOverrideMs: pulseMs,
+            ignoreGlobalEpoch: true,
+            onBeforeAutoReset: () => ExtendResetQueueEchoSuppressWindow(400),
+            ct: ct);
     }
 
     private string? ResolveTag(string primaryTagName, params string[] fallbacks)
@@ -389,10 +458,10 @@ public sealed class IndustrialHandshakeStateMachine : IDisposable
         return (epoch, tagGen);
     }
 
-    private bool IsTagGenerationValid(string tagName, long expectedEpoch, long expectedTagGen)
+    private bool IsTagGenerationValid(string tagName, long expectedEpoch, long expectedTagGen, bool ignoreGlobalEpoch = false)
     {
         return !_disposed
-               && Volatile.Read(ref _globalSignalEpoch) == expectedEpoch
+               && (ignoreGlobalEpoch || Volatile.Read(ref _globalSignalEpoch) == expectedEpoch)
                && _tagSignalGenerations.TryGetValue(tagName, out long current)
                && current == expectedTagGen;
     }
@@ -402,69 +471,92 @@ public sealed class IndustrialHandshakeStateMachine : IDisposable
     /// </summary>
     public async Task EmitSignalAsync(string? tagName, PlcSignalType signalType, bool isActive, CancellationToken ct = default)
     {
-        if (string.IsNullOrWhiteSpace(tagName) || _plcManager == null || !_plcManager.IsPlcConnected(_plcId))
-            return;
+        await EmitSignalCoreAsync(tagName, signalType, isActive, durationOverrideMs: null, ignoreGlobalEpoch: false, onBeforeAutoReset: null, ct);
+    }
 
-        int duration = Math.Max(20, PulseDurationMs);
+    private async Task<bool> EmitSignalCoreAsync(
+        string? tagName,
+        PlcSignalType signalType,
+        bool isActive,
+        int? durationOverrideMs,
+        bool ignoreGlobalEpoch,
+        Action? onBeforeAutoReset,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(tagName) || _plcManager == null || !_plcManager.IsPlcConnected(_plcId))
+            return false;
+
+        int duration = Math.Max(20, durationOverrideMs ?? PulseDurationMs);
         var (epoch, gen) = CaptureNextTagGeneration(tagName);
+        bool writeOk = false;
 
         switch (signalType)
         {
             case PlcSignalType.Level:
                 // Level: Duy trì trực tiếp mức logic (Active = true, Inactive = false)
-                await _plcManager.WriteTagValueAsync(_plcId, tagName, isActive, ct);
+                writeOk = await _plcManager.WriteTagValueAsync(_plcId, tagName, isActive, ct);
                 break;
 
             case PlcSignalType.RisingEdge:
                 if (isActive)
                 {
-                    // Phát xung cạnh lên: 0 -> 1 -> giữ PulseDurationMs -> 0
-                    await _plcManager.WriteTagValueAsync(_plcId, tagName, true, ct);
-                    _ = Task.Run(async () =>
+                    // Phát xung cạnh lên: 0 -> 1 -> giữ duration -> 0
+                    writeOk = await _plcManager.WriteTagValueAsync(_plcId, tagName, true, ct);
+                    if (writeOk)
                     {
-                        try
-                        {
-                            await Task.Delay(duration);
-                            if (IsTagGenerationValid(tagName, epoch, gen) && _plcManager != null && _plcManager.IsPlcConnected(_plcId))
-                            {
-                                await _plcManager.WriteTagValueAsync(_plcId, tagName, false);
-                            }
-                        }
-                        catch { }
-                    });
+                        SchedulePulseReset(tagName, resetValue: false, duration, epoch, gen, ignoreGlobalEpoch, onBeforeAutoReset);
+                    }
                 }
                 else
                 {
                     // Trạng thái tĩnh cạnh lên là 0
-                    await _plcManager.WriteTagValueAsync(_plcId, tagName, false, ct);
+                    writeOk = await _plcManager.WriteTagValueAsync(_plcId, tagName, false, ct);
                 }
                 break;
 
             case PlcSignalType.FallingEdge:
                 if (isActive)
                 {
-                    // Phát xung cạnh xuống: 1 -> 0 -> giữ PulseDurationMs -> 1
-                    await _plcManager.WriteTagValueAsync(_plcId, tagName, false, ct);
-                    _ = Task.Run(async () =>
+                    // Phát xung cạnh xuống: 1 -> 0 -> giữ duration -> 1
+                    writeOk = await _plcManager.WriteTagValueAsync(_plcId, tagName, false, ct);
+                    if (writeOk)
                     {
-                        try
-                        {
-                            await Task.Delay(duration);
-                            if (IsTagGenerationValid(tagName, epoch, gen) && _plcManager != null && _plcManager.IsPlcConnected(_plcId))
-                            {
-                                await _plcManager.WriteTagValueAsync(_plcId, tagName, true);
-                            }
-                        }
-                        catch { }
-                    });
+                        SchedulePulseReset(tagName, resetValue: true, duration, epoch, gen, ignoreGlobalEpoch, onBeforeAutoReset);
+                    }
                 }
                 else
                 {
                     // Trạng thái tĩnh cạnh xuống là 1
-                    await _plcManager.WriteTagValueAsync(_plcId, tagName, true, ct);
+                    writeOk = await _plcManager.WriteTagValueAsync(_plcId, tagName, true, ct);
                 }
                 break;
         }
+
+        return writeOk;
+    }
+
+    private void SchedulePulseReset(
+        string tagName,
+        bool resetValue,
+        int durationMs,
+        long epoch,
+        long gen,
+        bool ignoreGlobalEpoch,
+        Action? onBeforeAutoReset)
+    {
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(durationMs);
+                if (IsTagGenerationValid(tagName, epoch, gen, ignoreGlobalEpoch) && _plcManager != null && _plcManager.IsPlcConnected(_plcId))
+                {
+                    onBeforeAutoReset?.Invoke();
+                    await _plcManager.WriteTagValueAsync(_plcId, tagName, resetValue);
+                }
+            }
+            catch { }
+        });
     }
 
     /// <summary>
