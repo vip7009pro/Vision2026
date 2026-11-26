@@ -14,8 +14,32 @@ namespace VisionInspectionApp.UI.ViewModels;
 
 public sealed partial class MainWindowViewModel : ObservableObject
 {
-    [ObservableProperty]
     private int _selectedTabIndex = 1; // Default to OQC Scanner tab (Index 1)
+
+    /// <summary>
+    /// Tab hiện tại (0: Tool Editor, 1: OQC Scanner, 2: Manual Inspection, 3: Camera Settings).
+    /// Bị khóa ở Tab 0 (Tool Editor) trong suốt thời gian Chạy liên tục để tránh chuyển nhầm sang Camera Settings làm đẩy frame liên tiếp vào queue.
+    /// </summary>
+    public int SelectedTabIndex
+    {
+        get => _selectedTabIndex;
+        set
+        {
+            if (IsTabSwitchingLocked && value != 0)
+            {
+                OnPropertyChanged(nameof(SelectedTabIndex));
+                return;
+            }
+
+            if (SetProperty(ref _selectedTabIndex, value))
+            {
+                OnSelectedTabIndexChanged(value);
+            }
+        }
+    }
+
+    public bool IsTabSwitchingLocked => ToolEditor?.IsRunningContinuous == true;
+    public bool IsMainTabBarVisible => !IsTabSwitchingLocked;
 
     [ObservableProperty]
     private string _globalStatusMessage = "Hệ thống sẵn sàng.";
@@ -65,8 +89,14 @@ public sealed partial class MainWindowViewModel : ObservableObject
         ManualInspection = manualInspection;
         Inspection = inspection;
         OqcScanner = oqcScanner;
-        OqcScanner.RequestSwitchTab = idx => SelectedTabIndex = idx;
-        ToolEditor.CheckShouldAutoRunOnJobLoad = () => SelectedTabIndex == 1 && OqcScanner.AutoRunJob;
+        if (OqcScanner != null)
+        {
+            OqcScanner.RequestSwitchTab = idx => SelectedTabIndex = idx;
+        }
+        if (ToolEditor != null && OqcScanner != null)
+        {
+            ToolEditor.CheckShouldAutoRunOnJobLoad = () => SelectedTabIndex == 1 && OqcScanner.AutoRunJob;
+        }
         CameraSettings = cameraSettings;
         _recentJobsService = recentJobsService;
         _lightingService = lightingService;
@@ -127,17 +157,24 @@ public sealed partial class MainWindowViewModel : ObservableObject
             ReloadRecentJobs();
         }
 
-        ToolEditor.PropertyChanged += (s, e) =>
+        if (ToolEditor != null)
         {
-            if (e.PropertyName is nameof(ToolEditor.CurrentJobFilePath) or nameof(ToolEditor.ProductCode) or nameof(ToolEditor.IsDirty))
+            ToolEditor.PropertyChanged += (s, e) =>
             {
-                OnPropertyChanged(nameof(HeaderJobTitle));
-                OnPropertyChanged(nameof(HeaderProductCodeTitle));
-            }
-        };
+                if (e.PropertyName is nameof(ToolEditor.CurrentJobFilePath) or nameof(ToolEditor.ProductCode) or nameof(ToolEditor.IsDirty))
+                {
+                    OnPropertyChanged(nameof(HeaderJobTitle));
+                    OnPropertyChanged(nameof(HeaderProductCodeTitle));
+                }
+                else if (e.PropertyName is nameof(ToolEditor.IsRunningContinuous) or nameof(ToolEditor.IsRunningFolderFlow))
+                {
+                    HandleContinuousRunningStateChanged();
+                }
+            };
+        }
 
         CloseJobCommand = new RelayCommand(CloseJob);
-        SwitchTabCommand = new RelayCommand<object>(ExecuteSwitchTab);
+        SwitchTabCommand = new RelayCommand<object>(ExecuteSwitchTab, CanExecuteSwitchTab);
         ExitCommand = new RelayCommand(ExecuteExit);
         AboutCommand = new RelayCommand(ExecuteAbout);
         OpenRecentJobCommand = new RelayCommand<string>(ExecuteOpenRecentJob);
@@ -151,7 +188,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
         if (_selectedTabIndex == 3)
         {
-            CameraSettings.OnViewActivated();
+            CameraSettings?.OnViewActivated();
         }
 
         if (_settingsService?.Settings.Ota.AutoCheckOnStartup == true && _otaService != null)
@@ -389,20 +426,48 @@ public sealed partial class MainWindowViewModel : ObservableObject
         catch { }
     }
 
-    partial void OnSelectedTabIndexChanged(int value)
+    private void HandleContinuousRunningStateChanged()
+    {
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher != null &&
+            !dispatcher.HasShutdownStarted &&
+            !dispatcher.HasShutdownFinished &&
+            dispatcher.Thread.IsAlive &&
+            !dispatcher.CheckAccess())
+        {
+            dispatcher.BeginInvoke(new Action(ApplyContinuousRunningTabLockState));
+            return;
+        }
+
+        ApplyContinuousRunningTabLockState();
+    }
+
+    private void ApplyContinuousRunningTabLockState()
+    {
+        if (ToolEditor?.IsRunningContinuous == true && SelectedTabIndex != 0)
+        {
+            SelectedTabIndex = 0;
+        }
+
+        OnPropertyChanged(nameof(IsTabSwitchingLocked));
+        OnPropertyChanged(nameof(IsMainTabBarVisible));
+        (SwitchTabCommand as IRelayCommand)?.NotifyCanExecuteChanged();
+    }
+
+    private void OnSelectedTabIndexChanged(int value)
     {
         if (value != 0)
         {
-            ToolEditor.ReleaseActiveHmiShortcutButtons();
+            ToolEditor?.ReleaseActiveHmiShortcutButtons();
         }
 
         if (value == 3)
         {
-            CameraSettings.OnViewActivated();
+            CameraSettings?.OnViewActivated();
         }
         else
         {
-            CameraSettings.OnViewDeactivated();
+            CameraSettings?.OnViewDeactivated();
         }
 
         Task.Run(() =>
@@ -419,10 +484,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
     {
         get
         {
-            var jobName = string.IsNullOrWhiteSpace(ToolEditor.CurrentJobFilePath)
+            var jobName = string.IsNullOrWhiteSpace(ToolEditor?.CurrentJobFilePath)
                 ? "[Chưa lưu]"
                 : Path.GetFileName(ToolEditor.CurrentJobFilePath);
-            var dirtyMark = ToolEditor.IsDirty ? " *" : "";
+            var dirtyMark = ToolEditor?.IsDirty == true ? " *" : "";
             return $"📁 Job: {jobName}{dirtyMark}";
         }
     }
@@ -431,10 +496,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
     {
         get
         {
-            var prodCode = string.IsNullOrWhiteSpace(ToolEditor.ProductCode)
+            var prodCode = string.IsNullOrWhiteSpace(ToolEditor?.ProductCode)
                 ? "--"
                 : ToolEditor.ProductCode;
-            var dirtyMark = ToolEditor.IsDirty ? " *" : "";
+            var dirtyMark = ToolEditor?.IsDirty == true ? " *" : "";
             return $"🏷️ SP: {prodCode}{dirtyMark}";
         }
     }
@@ -479,9 +544,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
         _recentJobsService?.ClearRecentJobs();
     }
 
+    private bool CanExecuteSwitchTab(object? parameter) => !IsTabSwitchingLocked;
+
     private void ExecuteSwitchTab(object? parameter)
     {
-        if (parameter is null) return;
+        if (IsTabSwitchingLocked || parameter is null) return;
         if (int.TryParse(parameter.ToString(), out var idx))
         {
             SelectedTabIndex = idx;
@@ -516,9 +583,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
         if (!ConfirmSaveChanges())
             return;
 
-        ToolEditor.CloseJob();
-        Calibration.CloseJob();
-        Inspection.CloseJob();
+        ToolEditor?.CloseJob();
+        Calibration?.CloseJob();
+        Inspection?.CloseJob();
         
         if (System.Windows.Application.Current?.MainWindow != null)
         {
@@ -528,8 +595,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     public bool ConfirmSaveChanges()
     {
-        bool toolEditorDirty = ToolEditor.IsDirty;
-        bool calibrationDirty = Calibration.IsDirty;
+        bool toolEditorDirty = ToolEditor?.IsDirty == true;
+        bool calibrationDirty = Calibration?.IsDirty == true;
         if (!toolEditorDirty && !calibrationDirty)
             return true;
 
@@ -544,17 +611,17 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
         if (result == MessageBoxResult.No)
         {
-            ToolEditor.DiscardPendingAutoSave();
+            ToolEditor?.DiscardPendingAutoSave();
             return true;
         }
 
-        if (toolEditorDirty)
+        if (toolEditorDirty && ToolEditor != null)
             ToolEditor.SaveJob();
 
-        if (calibrationDirty && Calibration.SaveJobCommand.CanExecute(null))
+        if (calibrationDirty && Calibration != null && Calibration.SaveJobCommand.CanExecute(null))
             Calibration.SaveJobCommand.Execute(null);
 
-        return !ToolEditor.IsDirty && !Calibration.IsDirty;
+        return ToolEditor?.IsDirty != true && Calibration?.IsDirty != true;
     }
 
     public ToolEditorViewModel ToolEditor { get; }

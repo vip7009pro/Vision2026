@@ -413,7 +413,7 @@ CXHaZZurRVGX356/sxnhBHOf/51FCPI+QBbqBYIbJueeh3ATyCcKRPHExnh4+zyg
 
     private static async Task<string?> GetLiveLicenseServerUrlAsync()
     {
-        string[] candidates = ["http://localhost:3006", "http://localhost:4000"];
+        string[] candidates = ["http://vision2026.ddns.net:3006","http://localhost:3006", "http://localhost:4000"];
         foreach (var url in candidates)
         {
             try
@@ -1054,7 +1054,7 @@ CXHaZZurRVGX356/sxnhBHOf/51FCPI+QBbqBYIbJueeh3ATyCcKRPHExnh4+zyg
                 }
 
                 // Người dùng thay đổi URL máy chủ trên giao diện sang địa chỉ khác
-                string customServer = "http://192.168.1.188:4000";
+                string customServer = "http://vision2026.ddns.net:3006";
                 service1.ServerUrl = customServer;
 
                 // Kiểm tra tệp server.cfg đã được tạo trên đĩa

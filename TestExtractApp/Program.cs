@@ -76,6 +76,12 @@ class Program
             return;
         }
 
+        if (args.Length > 0 && (args[0].Equals("tab-lock", StringComparison.OrdinalIgnoreCase) || args[0].Equals("continuous-tab", StringComparison.OrdinalIgnoreCase) || args[0].Equals("hide-tabbar", StringComparison.OrdinalIgnoreCase)))
+        {
+            MainWindowContinuousTabLockTests.RunAllTests();
+            return;
+        }
+
         if (args.Length > 0 && (args[0].Equals("plc-queue", StringComparison.OrdinalIgnoreCase) || args[0].Equals("continuous-queue", StringComparison.OrdinalIgnoreCase) || args[0].Equals("plc-continuous", StringComparison.OrdinalIgnoreCase)))
         {
             PlcContinuousQueueTests.RunAllTests();
@@ -297,6 +303,7 @@ class Program
         PlcHandshakeNumericModeTests.RunAllTestsAsync().GetAwaiter().GetResult();
         PlcHandshakeDelayTests.RunAllTestsAsync().GetAwaiter().GetResult();
         ToolEditorColumnResizeTests.RunAllTests();
+        MainWindowContinuousTabLockTests.RunAllTests();
         ToolEditorContinuousSlotPreviewTests.RunAllTests();
         SegmentLineDistanceSelectionTests.RunAllTests();
     }

@@ -10,30 +10,30 @@ namespace VisionInspectionApp.UI.ViewModels;
 public sealed partial class ToolEditorViewModel : ObservableObject
 {
     #region Static Reusable Brushes for Handshake UI
-    private static readonly Brush BrushMutedBg = new SolidColorBrush(Color.FromArgb(20, 128, 128, 128));
-    private static readonly Brush BrushMutedBorder = new SolidColorBrush(Color.FromArgb(60, 128, 128, 128));
-    private static readonly Brush BrushMutedText = new SolidColorBrush(Color.FromRgb(140, 140, 140));
+    private static readonly Brush BrushMutedBg = CreateFrozenBrush(Color.FromArgb(20, 128, 128, 128));
+    private static readonly Brush BrushMutedBorder = CreateFrozenBrush(Color.FromArgb(60, 128, 128, 128));
+    private static readonly Brush BrushMutedText = CreateFrozenBrush(Color.FromRgb(140, 140, 140));
 
-    private static readonly Brush BrushGreenBg = new SolidColorBrush(Color.FromArgb(30, 16, 185, 129));
-    private static readonly Brush BrushGreenBorder = new SolidColorBrush(Color.FromRgb(16, 185, 129));
-    private static readonly Brush BrushGreenText = new SolidColorBrush(Color.FromRgb(16, 185, 129));
+    private static readonly Brush BrushGreenBg = CreateFrozenBrush(Color.FromArgb(30, 16, 185, 129));
+    private static readonly Brush BrushGreenBorder = CreateFrozenBrush(Color.FromRgb(16, 185, 129));
+    private static readonly Brush BrushGreenText = CreateFrozenBrush(Color.FromRgb(16, 185, 129));
 
-    private static readonly Brush BrushBlueBg = new SolidColorBrush(Color.FromArgb(30, 2, 136, 209));
-    private static readonly Brush BrushBlueBorder = new SolidColorBrush(Color.FromRgb(2, 136, 209));
-    private static readonly Brush BrushBlueText = new SolidColorBrush(Color.FromRgb(2, 136, 209));
+    private static readonly Brush BrushBlueBg = CreateFrozenBrush(Color.FromArgb(30, 2, 136, 209));
+    private static readonly Brush BrushBlueBorder = CreateFrozenBrush(Color.FromRgb(2, 136, 209));
+    private static readonly Brush BrushBlueText = CreateFrozenBrush(Color.FromRgb(2, 136, 209));
 
-    private static readonly Brush BrushAmberBg = new SolidColorBrush(Color.FromArgb(30, 245, 158, 11));
-    private static readonly Brush BrushAmberBorder = new SolidColorBrush(Color.FromRgb(245, 158, 11));
-    private static readonly Brush BrushAmberText = new SolidColorBrush(Color.FromRgb(245, 158, 11));
+    private static readonly Brush BrushAmberBg = CreateFrozenBrush(Color.FromArgb(30, 245, 158, 11));
+    private static readonly Brush BrushAmberBorder = CreateFrozenBrush(Color.FromRgb(245, 158, 11));
+    private static readonly Brush BrushAmberText = CreateFrozenBrush(Color.FromRgb(245, 158, 11));
 
-    private static readonly Brush BrushRedBg = new SolidColorBrush(Color.FromArgb(35, 239, 68, 68));
-    private static readonly Brush BrushRedBorder = new SolidColorBrush(Color.FromRgb(239, 68, 68));
-    private static readonly Brush BrushRedText = new SolidColorBrush(Color.FromRgb(239, 68, 68));
+    private static readonly Brush BrushRedBg = CreateFrozenBrush(Color.FromArgb(35, 239, 68, 68));
+    private static readonly Brush BrushRedBorder = CreateFrozenBrush(Color.FromRgb(239, 68, 68));
+    private static readonly Brush BrushRedText = CreateFrozenBrush(Color.FromRgb(239, 68, 68));
 
-    private static readonly Brush BrushLedOffBg = new SolidColorBrush(Color.FromArgb(25, 100, 100, 100));
-    private static readonly Brush BrushLedOffText = new SolidColorBrush(Color.FromRgb(120, 120, 120));
+    private static readonly Brush BrushLedOffBg = CreateFrozenBrush(Color.FromArgb(25, 100, 100, 100));
+    private static readonly Brush BrushLedOffText = CreateFrozenBrush(Color.FromRgb(120, 120, 120));
 
-    private static readonly Brush BrushWhite = new SolidColorBrush(Colors.White);
+    private static readonly Brush BrushWhite = CreateFrozenBrush(Colors.White);
     #endregion
 
     #region Observable Handshake Properties

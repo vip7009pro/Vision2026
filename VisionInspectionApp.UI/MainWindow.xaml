@@ -256,6 +256,41 @@
             </Setter>
         </Style>
 
+        <!-- Main Navigation Tabs Styling: tự động ẩn tab bar khi đang Chạy liên tục -->
+        <Style x:Key="MainNavigationTabControlStyle" TargetType="TabControl" BasedOn="{StaticResource {x:Type TabControl}}">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabControl">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+
+                            <!-- Tab Headers Bar -->
+                            <Border x:Name="PART_TabHeadersBar"
+                                    Grid.Row="0"
+                                    Background="{DynamicResource PanelAltBackgroundBrush}"
+                                    BorderBrush="{DynamicResource BorderBrush}"
+                                    BorderThickness="0,0,0,1"
+                                    Padding="1,1,1,0"
+                                    Visibility="{Binding DataContext.IsMainTabBarVisible, RelativeSource={RelativeSource TemplatedParent}, Converter={StaticResource BoolToVis}}">
+                                <TabPanel IsItemsHost="True" VerticalAlignment="Bottom" />
+                            </Border>
+
+                            <!-- Content -->
+                            <Border Grid.Row="1"
+                                    Background="{DynamicResource WindowBackgroundBrush}"
+                                    Margin="0"
+                                    Padding="0">
+                                <ContentPresenter ContentSource="SelectedContent" TextElement.Foreground="{DynamicResource TextBrush}" />
+                            </Border>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style TargetType="TabItem">
             <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
             <Setter Property="Background" Value="Transparent" />
@@ -388,7 +423,10 @@
                     </MenuItem>
 
                     <!-- View / Navigation Menu -->
-                    <MenuItem Header="👁️ Màn Hình">
+                    <MenuItem x:Name="MenuViewNavigation"
+                              Header="👁️ Màn Hình"
+                              IsEnabled="{Binding IsMainTabBarVisible}"
+                              ToolTip="Chuyển đổi màn hình chức năng (tự động khóa khi đang Chạy liên tục)">
                         <MenuItem Header="🧰 1. Tool Editor (Thiết Kế Graph &amp; Tools)" Command="{Binding SwitchTabCommand}" CommandParameter="0" InputGestureText="F1" />
                         <MenuItem Header="📷 2. OQC Scanner (Quét Mã &amp; Chạy Tự Động)" Command="{Binding SwitchTabCommand}" CommandParameter="1" InputGestureText="F2" />
                         <MenuItem Header="🔍 3. Manual Inspection (Kiểm Tra Thủ Công)" Command="{Binding SwitchTabCommand}" CommandParameter="2" InputGestureText="F3" />
@@ -526,7 +564,11 @@
         <!-- =================================================================== -->
         <!-- 2. MAIN NAVIGATION TABS                                              -->
         <!-- =================================================================== -->
-        <TabControl Grid.Row="1" SelectedIndex="{Binding SelectedTabIndex, UpdateSourceTrigger=PropertyChanged}">
+        <TabControl x:Name="MainNavigationTabControl"
+                    Grid.Row="1"
+                    Style="{StaticResource MainNavigationTabControlStyle}"
+                    SelectionChanged="MainNavigationTabControl_SelectionChanged"
+                    SelectedIndex="{Binding SelectedTabIndex, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}">
             <!-- Tab 0: Tool Editor -->
             <TabItem Header="🧰 Tool Editor">
                 <ContentControl Content="{Binding ToolEditor}" />

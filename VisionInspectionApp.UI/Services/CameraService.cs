@@ -452,13 +452,14 @@ public sealed class CameraService : IDisposable
 
         try
         {
+            bool wasRemoved = false;
             if (enable)
             {
                 _activeLiveConsumers.Add(consumerId);
             }
             else
             {
-                _activeLiveConsumers.Remove(consumerId);
+                wasRemoved = _activeLiveConsumers.Remove(consumerId);
             }
 
             bool shouldGrab = _activeLiveConsumers.Count > 0;
@@ -484,7 +485,7 @@ public sealed class CameraService : IDisposable
                     _isRunning = _activeDriver.IsOpened;
                     return true;
                 }
-                else if (!shouldGrab && _activeDriver.IsGrabbing)
+                else if (wasRemoved && !shouldGrab && _activeDriver.IsGrabbing && _currentParameters.TriggerMode == CameraTriggerMode.Off)
                 {
                     await _activeDriver.StopGrabbingAsync();
                     return true;

@@ -19,7 +19,7 @@ public partial class MainWindow : Window
         DataContext = viewModel;
         Closing += MainWindow_Closing;
         StateChanged += MainWindow_StateChanged;
-        Deactivated += (_, _) => (DataContext as MainWindowViewModel)?.ToolEditor.ReleaseActiveHmiShortcutButtons();
+        Deactivated += (_, _) => (DataContext as MainWindowViewModel)?.ToolEditor?.ReleaseActiveHmiShortcutButtons();
     }
 
     protected override void OnPreviewKeyDown(KeyEventArgs e)
@@ -27,7 +27,7 @@ public partial class MainWindow : Window
         base.OnPreviewKeyDown(e);
 
         // Phím tắt HMI Button trên màn hình Tool Editor (nhận cả khi ẩn/hiện HMI)
-        if (!e.Handled && DataContext is MainWindowViewModel mainVm && mainVm.SelectedTabIndex == 0)
+        if (!e.Handled && DataContext is MainWindowViewModel mainVm && mainVm.SelectedTabIndex == 0 && mainVm.ToolEditor != null)
         {
             var actualKey = HMI.HmiShortcutHelper.ResolveActualKey(e);
             var mods = HMI.HmiShortcutHelper.NormalizeModifiers(Keyboard.Modifiers);
@@ -36,6 +36,16 @@ public partial class MainWindow : Window
                 e.Handled = true;
                 return;
             }
+        }
+
+        // Khóa mọi phím chuyển tab (Ctrl+Tab / Ctrl+PageUp / Ctrl+PageDown / F1..F4) khi đang Chạy liên tục
+        if (!e.Handled &&
+            DataContext is MainWindowViewModel navVm &&
+            navVm.IsTabSwitchingLocked &&
+            IsTabNavigationKeyGesture(e))
+        {
+            e.Handled = true;
+            return;
         }
 
         // Phím tắt Ctrl + F4: Đóng Job đang mở
@@ -55,6 +65,7 @@ public partial class MainWindow : Window
             if (Keyboard.FocusedElement is not System.Windows.Controls.Primitives.TextBoxBase &&
                 Keyboard.FocusedElement is not ComboBox { IsEditable: true } &&
                 DataContext is MainWindowViewModel vm &&
+                vm.ToolEditor != null &&
                 (vm.ToolEditor.IsCaliperNode || vm.ToolEditor.IsEdgePairDetectNode))
             {
                 vm.ToolEditor.ToggleToolOrientation();
@@ -64,11 +75,38 @@ public partial class MainWindow : Window
         }
     }
 
+    private static bool IsTabNavigationKeyGesture(KeyEventArgs e)
+    {
+        var actualKey = HMI.HmiShortcutHelper.ResolveActualKey(e);
+        if (Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
+        {
+            return actualKey is Key.Tab or Key.PageUp or Key.PageDown;
+        }
+
+        return Keyboard.Modifiers == ModifierKeys.None &&
+               actualKey is Key.F1 or Key.F2 or Key.F3 or Key.F4;
+    }
+
+    private void MainNavigationTabControl_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!ReferenceEquals(e.OriginalSource, MainNavigationTabControl))
+        {
+            return;
+        }
+
+        if (DataContext is MainWindowViewModel vm &&
+            vm.IsTabSwitchingLocked &&
+            MainNavigationTabControl.SelectedIndex != vm.SelectedTabIndex)
+        {
+            MainNavigationTabControl.SelectedIndex = vm.SelectedTabIndex;
+        }
+    }
+
     protected override void OnPreviewKeyUp(KeyEventArgs e)
     {
         base.OnPreviewKeyUp(e);
 
-        if (!e.Handled && DataContext is MainWindowViewModel mainVm && mainVm.SelectedTabIndex == 0)
+        if (!e.Handled && DataContext is MainWindowViewModel mainVm && mainVm.SelectedTabIndex == 0 && mainVm.ToolEditor != null)
         {
             var actualKey = HMI.HmiShortcutHelper.ResolveActualKey(e);
             if (mainVm.ToolEditor.TryHandleHmiShortcutKeyUp(actualKey))

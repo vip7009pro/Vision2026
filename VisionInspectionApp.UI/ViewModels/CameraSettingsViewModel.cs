@@ -1286,6 +1286,11 @@ public sealed class CameraSettingsViewModel : ObservableObject, IDisposable
 
     public void OnViewDeactivated()
     {
+        if (!IsViewActive)
+        {
+            return;
+        }
+
         IsViewActive = false;
         _ = _cameraService.RequestLiveStreamAsync("CameraSettings", false);
     }
