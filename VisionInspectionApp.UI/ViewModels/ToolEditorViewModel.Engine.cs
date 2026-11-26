@@ -588,25 +588,21 @@ namespace VisionInspectionApp.UI.ViewModels
                 var imgSourceDef = _config.ImageSources?.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
                 if (imgSourceDef is not null)
                 {
-                    Mat loadedMat;
+                    // raw đến từ _sharedImage.GetSnapshot() vốn ĐÃ qua PrepareDisplayImageForSharedContext
+                    // (tức đã Undistort đúng 1 lần khi EnableUndistort=true).
+                    // TUYỆT ĐỐI KHÔNG gọi Undistort lần thứ 2 trên raw, tránh lệch méo giữa ảnh mẫu (2x undistort)
+                    // và ảnh runtime trong InspectionService.Inspect (1x undistort).
                     if (raw is not null && !raw.IsDisposed && !raw.Empty())
                     {
-                        loadedMat = raw.Clone();
-                    }
-                    else
-                    {
-                        loadedMat = LoadImageFromSourceForPreview(imgSourceDef);
+                        return raw.Clone();
                     }
 
-                    var calib = ChessboardCalibrationService.GetEffectiveCalibration(_config);
-                    if (imgSourceDef.EnableUndistort && calib is not null && calib.IsCalibrated)
+                    using var loadedMat = LoadImageFromSourceForPreview(imgSourceDef);
+                    if (loadedMat is not null && !loadedMat.IsDisposed && !loadedMat.Empty())
                     {
-                        using (loadedMat)
-                        {
-                            return ChessboardCalibrationService.Undistort(loadedMat, calib);
-                        }
+                        return PrepareDisplayImageForSharedContext(loadedMat, imgSourceDef);
                     }
-                    return loadedMat;
+                    return new Mat();
                 }
                 return raw.Clone();
             }
@@ -656,6 +652,22 @@ namespace VisionInspectionApp.UI.ViewModels
             return rawMat.Clone();
         }
 
+        /// <summary>
+        /// Đưa ảnh RAW nguồn vào _sharedImage sau khi qua đúng 1 bước Undistort (nếu EnableUndistort bật).
+        /// Đảm bảo _sharedImage luôn đồng nhất không gian hiển thị / lấy mẫu với pipeline InspectionService.Inspect (1x Undistort).
+        /// </summary>
+        public void SetSharedImageForDisplay(Mat? rawMat, ImageSourceDefinition? sourceDef = null)
+        {
+            if (rawMat is null || rawMat.IsDisposed || rawMat.Empty())
+            {
+                _sharedImage.SetImage(null);
+                return;
+            }
+
+            var displayMat = PrepareDisplayImageForSharedContext(rawMat, sourceDef);
+            _sharedImage.SetImage(displayMat, transferOwnership: true);
+        }
+
         public void UpdateSharedImageForImageSource(ImageSourceDefinition? sourceDef)
         {
             if (sourceDef == null) return;
@@ -686,8 +698,7 @@ namespace VisionInspectionApp.UI.ViewModels
 
                 if (rawMat != null && !rawMat.IsDisposed && !rawMat.Empty())
                 {
-                    using var displayMat = PrepareDisplayImageForSharedContext(rawMat, sourceDef);
-                    _sharedImage.SetImage(displayMat);
+                    SetSharedImageForDisplay(rawMat, sourceDef);
                 }
             }
             finally
@@ -3363,9 +3374,11 @@ namespace VisionInspectionApp.UI.ViewModels
                     var mat = await _cameraService.CaptureSnapshotAsync(camIndex, rtspUrl);
                     if (mat is not null && !mat.IsDisposed && !mat.Empty())
                     {
-                        SetImageSourceCache(nodeName, "camera", mat);
-                        // Chuyển quyền sở hữu để tránh clone ảnh lớn và đảm bảo Mat được giải phóng.
-                        _sharedImage.SetImage(mat, transferOwnership: true);
+                        using (mat)
+                        {
+                            SetImageSourceCache(nodeName, "camera", mat);
+                            SetSharedImageForDisplay(mat, source);
+                        }
 
                         await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                         {
@@ -3583,8 +3596,12 @@ namespace VisionInspectionApp.UI.ViewModels
                             // Chuyển quyền sở hữu cho SharedImageContext vừa tránh clone 60MB vừa đảm bảo giải phóng.
                             int matW = mat.Width;
                             int matH = mat.Height;
-                            SetImageSourceCache(nodeName, url, mat);
-                            _sharedImage.SetImage(mat, transferOwnership: true);
+                            var srcDef = _config?.ImageSources?.FirstOrDefault(x => string.Equals(x.Name, nodeName, StringComparison.OrdinalIgnoreCase));
+                            using (mat)
+                            {
+                                SetImageSourceCache(nodeName, url, mat);
+                                SetSharedImageForDisplay(mat, srcDef);
+                            }
 
                             await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                             {
@@ -3854,8 +3871,11 @@ namespace VisionInspectionApp.UI.ViewModels
                 var mat = await CaptureAndroidCameraSnapshotAsync(source);
                 if (mat != null && !mat.Empty())
                 {
-                    SetImageSourceCache(source.Name, "android_camera", mat);
-                    _sharedImage.SetImage(mat);
+                    using (mat)
+                    {
+                        SetImageSourceCache(source.Name, "android_camera", mat);
+                        SetSharedImageForDisplay(mat, source);
+                    }
                     System.Windows.Application.Current?.Dispatcher.InvokeAsync(() =>
                     {
                         RefreshPreviews();
@@ -5354,7 +5374,7 @@ namespace VisionInspectionApp.UI.ViewModels
             }
     
             using var mat = Cv2.ImRead(dlg.FileName, ImreadModes.Color);
-            _sharedImage.SetImage(mat);
+            SetSharedImageForDisplay(mat);
         }
     
         private void OnCameraFrameCaptured(object? sender, Mat frame)
@@ -5363,7 +5383,7 @@ namespace VisionInspectionApp.UI.ViewModels
             {
                 if (frame != null && !frame.Empty())
                 {
-                    _sharedImage.SetImage(frame);
+                    SetSharedImageForDisplay(frame);
                 }
             }
         }
@@ -5382,7 +5402,7 @@ namespace VisionInspectionApp.UI.ViewModels
                     {
                         SetImageSourceCache(imgSourceDef.Name, "camera", mat);
                     }
-                    _sharedImage.SetImage(mat);
+                    SetSharedImageForDisplay(mat, imgSourceDef);
                     mat.Dispose();
                     RefreshPreviews();
                 }
@@ -5421,7 +5441,7 @@ namespace VisionInspectionApp.UI.ViewModels
                     {
                         SetImageSourceCache(imgSourceDef.Name, "camera", mat);
                     }
-                    _sharedImage.SetImage(mat);
+                    SetSharedImageForDisplay(mat, imgSourceDef);
                     RefreshPreviews();
                 }
 
@@ -5701,7 +5721,11 @@ namespace VisionInspectionApp.UI.ViewModels
                         var firstImgSource = _config?.ImageSources?.FirstOrDefault();
                         if (firstImgSource is not null)
                         {
-                            snapToUse = LoadImageFromSourceForPreview(firstImgSource);
+                            using var loaded = LoadImageFromSourceForPreview(firstImgSource);
+                            if (loaded is not null && !loaded.IsDisposed && !loaded.Empty())
+                            {
+                                snapToUse = PrepareDisplayImageForSharedContext(loaded, firstImgSource);
+                            }
                         }
                     }
 

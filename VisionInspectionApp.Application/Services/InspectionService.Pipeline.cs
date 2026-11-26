@@ -188,11 +188,20 @@ public partial class InspectionService
                 return new Roi { X = x1, Y = y1, Width = w, Height = h };
             }
 
-            static Roi WindowRoi(Point2d center, int radius)
+            static Roi WindowRoi(Point2d center, int radius, int templateWidth = 0, int templateHeight = 0)
             {
-                var x = (int)Math.Round(center.X - radius);
-                var y = (int)Math.Round(center.Y - radius);
-                var s = radius * 2;
+                // Khi có kích thước template, cửa sổ tìm kiếm dẫn hướng phải đủ lớn để chứa TRỌN template
+                // (kể cả khi xoay) cộng thêm biên dịch chuyển ±radius, tránh cắt xén template gây tụt điểm từ lần chạy thứ 2.
+                int halfSpan = radius;
+                if (templateWidth > 0 && templateHeight > 0)
+                {
+                    int halfDiag = (int)Math.Ceiling(Math.Sqrt((double)templateWidth * templateWidth + (double)templateHeight * templateHeight) / 2.0);
+                    halfSpan = halfDiag + radius;
+                }
+
+                var x = (int)Math.Round(center.X - halfSpan);
+                var y = (int)Math.Round(center.Y - halfSpan);
+                var s = halfSpan * 2;
                 return new Roi { X = x, Y = y, Width = s, Height = s };
             }
             var nodesById = (config.ToolGraph?.Nodes ?? new List<ToolGraphNode>())
@@ -1754,14 +1763,15 @@ public partial class InspectionService
                 var usedGuidedOrigin = false;
                 if (track.LastOriginPos is not null)
                 {
-                    var guide = ClampRoiToImage(WindowRoi(track.LastOriginPos.Value, guidedRadiusPx), originMat);
+                    var guide = ClampRoiToImage(WindowRoi(track.LastOriginPos.Value, guidedRadiusPx, originTempl.Width, originTempl.Height), originMat);
                     var shrunk = IntersectRoi(originDefBase.SearchRoi, guide);
-                    if (shrunk.Width > 0 && shrunk.Height > 0)
+                    if (shrunk.Width >= originTempl.Width && shrunk.Height >= originTempl.Height)
                     {
                         usedGuidedOrigin = true;
                         originDef = new PointDefinition
                         {
                             Name = originDefBase.Name,
+                            MinScore = originDefBase.MinScore,
                             MatchScoreThreshold = originDefBase.MatchScoreThreshold,
                             TemplateImageFile = originDefBase.TemplateImageFile,
                             TemplateRoi = originDefBase.TemplateRoi,
@@ -1776,7 +1786,16 @@ public partial class InspectionService
                             EdgePoint = originDefBase.EdgePoint,
                             ShapeModel = originDefBase.ShapeModel,
                             EdgeThresholdMin = originDefBase.EdgeThresholdMin,
-                            EdgeThresholdMax = originDefBase.EdgeThresholdMax
+                            EdgeThresholdMax = originDefBase.EdgeThresholdMax,
+                            MvpAutoThresh = originDefBase.MvpAutoThresh,
+                            MvpEdgeThreshold = originDefBase.MvpEdgeThreshold,
+                            MvpLengthThreshold = originDefBase.MvpLengthThreshold,
+                            MvpMaxPyramidLayers = originDefBase.MvpMaxPyramidLayers,
+                            MvpLockOriginCenter = originDefBase.MvpLockOriginCenter,
+                            MvpOriginX = originDefBase.MvpOriginX,
+                            MvpOriginY = originDefBase.MvpOriginY,
+                            MvpEraserMask = originDefBase.MvpEraserMask,
+                            MvpDetectionRoiMode = originDefBase.MvpDetectionRoiMode
                         };
                     }
                 }
@@ -1893,9 +1912,9 @@ public partial class InspectionService
                         center = new Point2d(def.SearchRoi.X + def.SearchRoi.Width / 2.0, def.SearchRoi.Y + def.SearchRoi.Height / 2.0);
                     }
 
-                    var guide = ClampRoiToImage(WindowRoi(center, guidedRadiusPx), matForPoint);
+                    var guide = ClampRoiToImage(WindowRoi(center, guidedRadiusPx, def.TemplateRoi.Width, def.TemplateRoi.Height), matForPoint);
                     var shrunk = IntersectRoi(def.SearchRoi, guide);
-                    if (shrunk.Width > 0 && shrunk.Height > 0)
+                    if (shrunk.Width >= Math.Max(1, def.TemplateRoi.Width) && shrunk.Height >= Math.Max(1, def.TemplateRoi.Height))
                     {
                         def = new PointDefinition
                         {

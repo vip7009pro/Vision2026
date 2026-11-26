@@ -256,15 +256,23 @@ namespace VisionInspectionApp.UI.ViewModels
                     var cached = GetImageSourceCache(imgSourceDef.Name);
                     if (cached != null && !cached.Empty())
                     {
-                        _sharedImage.SetImage(cached);
-                        return cached;
+                        using (cached)
+                        {
+                            var displayMat = PrepareDisplayImageForSharedContext(cached, imgSourceDef);
+                            _sharedImage.SetImage(displayMat);
+                            return displayMat;
+                        }
                     }
 
                     var loaded = LoadImageFromSourceForPreview(imgSourceDef);
                     if (loaded != null && !loaded.Empty())
                     {
-                        _sharedImage.SetImage(loaded);
-                        return loaded;
+                        using (loaded)
+                        {
+                            var displayMat = PrepareDisplayImageForSharedContext(loaded, imgSourceDef);
+                            _sharedImage.SetImage(displayMat);
+                            return displayMat;
+                        }
                     }
                 }
             }

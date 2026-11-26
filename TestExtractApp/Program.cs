@@ -178,6 +178,12 @@ class Program
             return;
         }
 
+        if (args.Length > 0 && (args[0].Equals("undistort", StringComparison.OrdinalIgnoreCase) || args[0].Equals("origin-undistort", StringComparison.OrdinalIgnoreCase)))
+        {
+            UndistortPipelineTests.RunAllTests();
+            return;
+        }
+
         if (args.Length > 0 && args[0].Equals("productassign", StringComparison.OrdinalIgnoreCase))
         {
             ProductAssignAndCodeSyncTest.RunTests();

@@ -439,8 +439,11 @@ namespace VisionInspectionApp.UI.ViewModels
                             var diskMat = TryLoadUrlImageFromDiskCache(def.ImageUrl);
                             if (diskMat != null && !diskMat.Empty())
                             {
-                                SetImageSourceCache(def.Name, def.ImageUrl, diskMat);
-                                _sharedImage.SetImage(diskMat);
+                                using (diskMat)
+                                {
+                                    SetImageSourceCache(def.Name, def.ImageUrl, diskMat);
+                                    SetSharedImageForDisplay(diskMat, def);
+                                }
                             }
                             else
                             {
@@ -449,7 +452,10 @@ namespace VisionInspectionApp.UI.ViewModels
                         }
                         else
                         {
-                            _sharedImage.SetImage(cached);
+                            using (cached)
+                            {
+                                SetSharedImageForDisplay(cached, def);
+                            }
                         }
                     }
                 }
@@ -708,8 +714,11 @@ namespace VisionInspectionApp.UI.ViewModels
                     var diskMat = TryLoadUrlImageFromDiskCache(value);
                     if (diskMat != null && !diskMat.Empty())
                     {
-                        SetImageSourceCache(def.Name, value, diskMat);
-                        _sharedImage.SetImage(diskMat);
+                        using (diskMat)
+                        {
+                            SetImageSourceCache(def.Name, value, diskMat);
+                            SetSharedImageForDisplay(diskMat, def);
+                        }
                     }
                     else
                     {
@@ -972,7 +981,7 @@ namespace VisionInspectionApp.UI.ViewModels
                     SetImageSourceCache("ImageSource1", url, mat);
                 }
 
-                _sharedImage.SetImage(mat);
+                SetSharedImageForDisplay(mat, def);
 
                 await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                 {

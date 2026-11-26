@@ -343,7 +343,7 @@ namespace VisionInspectionApp.UI.ViewModels
                     {
                         SetImageSourceCache(srcDef.Name, srcDef.ImageUrl ?? teachMatKey ?? "teach_image", loadedTeachMat);
                     }
-                    _sharedImage.SetImage(loadedTeachMat);
+                    SetSharedImageForDisplay(loadedTeachMat, srcDef);
                 }
                 else if (urlSrc != null && !string.IsNullOrWhiteSpace(urlSrc.ImageUrl))
                 {
